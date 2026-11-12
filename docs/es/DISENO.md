@@ -10,6 +10,15 @@
 > 4. Compuerta G0: ninguna hora de tronco sin una prueba sostenida de varias horas con guardado y reanudación (5.7).
 > 5. Español del 4% al 10% en el tronco y las ramas, y 25–30% en el SFT (4.9).
 > 6. Topes y diversidad para los datos sintéticos (4.10); auditoría de licencias antes de publicar pesos (10); compuertas para seguir de una fase a la siguiente (7.1).
+
+> **🟡 Propuesta v1.2, pendiente de aprobación de Pipe** (detalle y evidencia en [`BITACORA.md`](BITACORA.md) y [`../DECISIONS.md`](../DECISIONS.md#proposed-v12--waiting-for-pipes-approval)):
+> 1. **Banco v1 en 2×T4:** 26 × 1024 con 40 expertos va a **3,856 tokens/s**, unas 1,801 h para 25B (planear ~2,000 h). La forma y los 40 expertos quedan medidos. La memoria está justa: 13.8 GiB reservados de ~14.5. Entre las GPUs hay 3.2 GB/s.
+> 2. **Formato AFMoE** (`AfmoeForCausalLM`, Arcee Trinity) en lugar de Qwen3-Next. Pasa la T0.1-C en llama.cpp **sin parche**. Tiene compuerta, router sigmoide con bias, normas sándwich, 3 capas locales (ventana 2048) por 1 global sin RoPE, y 1 capa densa. Son 1.906B totales y 0.491B activos. Pierde el MTP.
+> 3. **Balanceo con SMEBU** en lugar del bias de signo fijo. **AttnRes y KDA quedan fuera de la v1**: solo existen en el formato Kimi-K3.
+> 4. **Entrenamiento:** la clase de transformers más nuestras piezas de velocidad (bmm con relleno, residuo en FP32, gradientes en FP16, prefetch, momento en la RAM opcional). Lo mide la T0.2 v2.
+>
+> Mientras no se apruebe, rige lo que dice el resto de este documento.
+
 **Leyenda:** ✅ decidido · ❓ decide Pipe · 📏 se mide antes de fijarlo · 🧪 se prueba en corrida corta · 🟢🟡🔴 licencia de datos (ver 4.8)
 
 ---

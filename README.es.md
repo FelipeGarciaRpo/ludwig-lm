@@ -14,7 +14,7 @@
 
 </div>
 
-> **Estado, 11 de noviembre de 2026.** El diseño está cerrado (v1.1). La prueba de formato (T0.1) pasó, después de encontrar y parchar una caída de llama.cpp. Lo siguiente es la T0.2: velocidad y memoria reales en 2×T4. **Todavía no hay pesos.** Este repositorio documenta el proyecto desde la primera prueba.
+> **Estado, 12 de noviembre de 2026.** El diseño v1.1 está cerrado. Un primer banco en Kaggle 2×T4 midió **3,856 tokens/s, unas 1,800 h para 25B tokens**. Hay una propuesta v1.2 pendiente de aprobación: guardar el modelo en el formato AFMoE (Arcee Trinity), que corre en llama.cpp sin parche. Lo siguiente es la T0.2 v2, el entrenamiento real en 2×T4. **Todavía no hay pesos.** Este repositorio documenta el proyecto desde la primera prueba.
 
 ## Por qué Ludwig 2
 
@@ -37,7 +37,7 @@
 | Contexto | 2K → 4K en el tronco, 16K en la v1, 32K desde 250B tokens |
 | Decodificación especulativa | 1 módulo MTP, que usa `llama-server --spec-type draft-mtp` |
 | Tamaño | ~2.2 GB en Q8_0, ~1.15 GB en Q4_0; caché KV de 26.6 KB por token (436 MB a 16K) |
-| Formato | `Qwen3NextForCausalLM` de Hugging Face con las 26 capas en `full_attention` → GGUF |
+| Formato | `Qwen3NextForCausalLM` de Hugging Face con las 26 capas en `full_attention` → GGUF. 🟡 La v1.2 propone `AfmoeForCausalLM` (ver [resultados](#t01-c-el-formato-afmoe-cpu-11-de-noviembre-de-2026)) |
 
 ```mermaid
 flowchart TB
@@ -122,9 +122,27 @@ Un modelo diminuto con exactamente la estructura de Ludwig 2 se entrena unos pas
 
 Reportes crudos: [`results/t0_1_stock.json`](results/t0_1_stock.json), [`results/t0_1_patched.json`](results/t0_1_patched.json).
 
-### T0.2: velocidad y memoria en 2×T4
+### Banco v1: velocidad y memoria en 2×T4 (Kaggle, 11 de noviembre de 2026)
 
-⏳ Lista para correr: [`notebooks/t0_2_velocidad_memoria_2xT4.ipynb`](notebooks/t0_2_velocidad_memoria_2xT4.ipynb). El modelo real de 1.96B con FSDP2, FP16, Muon y las pérdidas reales. Mide tres kernels de MoE, el tamaño del micro-batch, contexto de 2K/4K/16K, el plan B de 32 expertos, el costo del MTP y el guardado y la carga del checkpoint. El diseño estima 12.2–13.6 GiB por GPU, y el plan supone ~2,500–4,000 tokens/s.
+Una implementación aparte en PyTorch con la misma forma ([`results/banco_t4_v1/banco_t4_v1.py`](results/banco_t4_v1/banco_t4_v1.py)), con FSDP2, FP16 y Muon, sobre datos aleatorios y un entrenamiento corto sintético:
+
+| | Resultado |
+|---|---|
+| 26 × 1024, 40 expertos, 8 secuencias de 2K por GPU | **3,856 tokens/s**, pico 13.2 GiB (13.8 reservados), **1,801 h para 25B tokens** |
+| Formas más anchas (16 × 1280, 11 × 1536, 6 × 2048) | Como mucho 1.11× más rápidas: la profundidad se queda |
+| 48 / 60 expertos | −24% / −31% de velocidad: se quedan 40 |
+| Ancho de banda entre las dos T4 | 3.2 GB/s |
+| 60 pasos de entrenamiento en FP16 | Pérdida 11.27 → 1.79, sin pasos saltados ni NaN |
+
+Salida cruda: [`results/banco_t4_v1/`](results/banco_t4_v1/). Lo que deja decidido y lo que no: [`docs/es/BITACORA.md`](docs/es/BITACORA.md).
+
+### T0.1-C: el formato AFMoE (CPU, 11 de noviembre de 2026)
+
+El modelo del banco v1 (atención con compuerta + router sigmoide con bias + una primera capa densa) no cabe en el formato A ni en el B, pero sí en `AfmoeForCausalLM`, el formato de los modelos Trinity de Arcee. Un modelo diminuto en ese formato, con prompts más largos que su ventana deslizante, coincide con transformers en llama.cpp **sin cambios**: probabilidades a 5.9e-5, greedy 4/4 y el bias de los expertos respetado ([`scripts/smoke_format_afmoe.py`](scripts/smoke_format_afmoe.py), [`results/t0_1c_afmoe.json`](results/t0_1c_afmoe.json)). La configuración real es [`configs/ludwig2_afmoe.json`](configs/ludwig2_afmoe.json): 1.906B totales, 0.491B activos.
+
+### T0.2 v2: el entrenamiento real en 2×T4
+
+⏳ Lo siguiente, cuando se apruebe la v1.2: el modelo de transformers con nuestras piezas de velocidad (expertos con bmm y relleno, residuo en FP32, gradientes en FP16 entre GPUs, prefetch de FSDP2). El notebook del formato A ([`notebooks/t0_2_velocidad_memoria_2xT4.ipynb`](notebooks/t0_2_velocidad_memoria_2xT4.ipynb)) queda reemplazado.
 
 ## Datos
 
@@ -187,8 +205,11 @@ ludwig-lm/
 
 - [x] Diseño v1.1, después de una crítica externa ([`docs/es/DISENO.md`](docs/es/DISENO.md))
 - [x] **T0.1** Formato, MTP y tokenizador: pasa con el parche de llama.cpp
-- [ ] **T0.1b** Repetir la T0.1 con el tokenizador final de 64K
-- [ ] **T0.2** Velocidad y memoria en 2×T4
+- [x] **Banco v1** en 2×T4: 3,856 tokens/s, forma y número de expertos confirmados
+- [x] **T0.1-C** Formato AFMoE: pasa en llama.cpp sin cambios
+- [ ] **v1.2** Aprobar el formato AFMoE
+- [ ] **T0.1b** Repetir las pruebas del tokenizador con el tokenizador final de 64K
+- [ ] **T0.2 v2** El entrenamiento real en 2×T4
 - [ ] **T0.3** Estabilidad en FP16: 2–3K pasos con el LR pico
 - [ ] **T1** Datos: fuente de código, lector determinista con descontaminación y manifiestos
 - [ ] **T2** Learning rate (3 corridas cortas) y A/B de formato

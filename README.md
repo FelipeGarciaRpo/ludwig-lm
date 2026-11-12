@@ -14,7 +14,7 @@
 
 </div>
 
-> **Status, November 11, 2026.** The design is closed (v1.1). The format test (T0.1) passed, after finding and patching a llama.cpp crash. Next up is T0.2: real throughput and memory on 2×T4. **There are no weights yet.** This repository documents the project from its first test.
+> **Status, November 12, 2026.** Design v1.1 is closed. A first bench on Kaggle 2×T4 measured **3,856 tokens/s, about 1,800 h for 25B tokens**. A v1.2 proposal is waiting for approval: store the model in the AFMoE format (Arcee Trinity), which runs in llama.cpp unpatched. Next up is T0.2 v2, the real training stack on 2×T4. **There are no weights yet.** This repository documents the project from its first test.
 
 ## Why Ludwig 2
 
@@ -37,7 +37,7 @@
 | Context | 2K → 4K in the trunk, 16K in v1, 32K from 250B tokens |
 | Speculative decoding | 1 MTP module, used by `llama-server --spec-type draft-mtp` |
 | Size | ~2.2 GB in Q8_0, ~1.15 GB in Q4_0; KV cache 26.6 KB per token (436 MB at 16K) |
-| Format | Hugging Face `Qwen3NextForCausalLM` with all 26 layers set to `full_attention` → GGUF |
+| Format | Hugging Face `Qwen3NextForCausalLM` with all 26 layers set to `full_attention` → GGUF. 🟡 v1.2 proposes `AfmoeForCausalLM` (see [results](#t01-c-the-afmoe-format-cpu-november-11-2026)) |
 
 ```mermaid
 flowchart TB
@@ -122,9 +122,27 @@ A tiny model with exactly Ludwig 2's structure is trained for a few steps, expor
 
 Raw reports: [`results/t0_1_stock.json`](results/t0_1_stock.json), [`results/t0_1_patched.json`](results/t0_1_patched.json).
 
-### T0.2: speed and memory on 2×T4
+### Bench v1: speed and memory on 2×T4 (Kaggle, November 11, 2026)
 
-⏳ Ready to run: [`notebooks/t0_2_velocidad_memoria_2xT4.ipynb`](notebooks/t0_2_velocidad_memoria_2xT4.ipynb). The real 1.96B model with FSDP2, FP16, Muon and the real losses. It measures three MoE kernels, micro-batch size, 2K/4K/16K context, the 32-expert plan B, MTP cost and checkpoint save/load. The design estimates 12.2–13.6 GiB per GPU, and the plan assumes ~2,500–4,000 tokens/s.
+A separate PyTorch implementation of the same shape ([`results/banco_t4_v1/banco_t4_v1.py`](results/banco_t4_v1/banco_t4_v1.py)), with FSDP2, FP16 and Muon, run on random data and a short synthetic training:
+
+| | Result |
+|---|---|
+| 26 × 1024, 40 experts, 8 sequences of 2K per GPU | **3,856 tokens/s**, peak 13.2 GiB (13.8 reserved), **1,801 h for 25B tokens** |
+| Wider shapes (16 × 1280, 11 × 1536, 6 × 2048) | At most 1.11× faster: depth stays |
+| 48 / 60 experts | −24% / −31% speed: 40 stays |
+| Bandwidth between the two T4s | 3.2 GB/s |
+| 60 FP16 training steps | Loss 11.27 → 1.79, no skipped steps, no NaN |
+
+Raw output: [`results/banco_t4_v1/`](results/banco_t4_v1/). What it settles and what it does not: [`docs/es/BITACORA.md`](docs/es/BITACORA.md).
+
+### T0.1-C: the AFMoE format (CPU, November 11, 2026)
+
+The model from bench v1 (gated attention + sigmoid router with expert bias + a dense first layer) fits neither format A nor B, but it fits `AfmoeForCausalLM`, the format of Arcee's Trinity models. A tiny model in that format, with prompts longer than its sliding window, matches transformers on **stock** llama.cpp: next-token probabilities within 5.9e-5, greedy 4/4, expert bias respected ([`scripts/smoke_format_afmoe.py`](scripts/smoke_format_afmoe.py), [`results/t0_1c_afmoe.json`](results/t0_1c_afmoe.json)). The real configuration is [`configs/ludwig2_afmoe.json`](configs/ludwig2_afmoe.json): 1.906B total, 0.491B active.
+
+### T0.2 v2: the real training stack on 2×T4
+
+⏳ Next, once v1.2 is approved: the transformers model with our speed pieces (padded-bmm experts, FP32 residual stream, FP16 gradient reduce-scatter, FSDP2 prefetch). The notebook for format A ([`notebooks/t0_2_velocidad_memoria_2xT4.ipynb`](notebooks/t0_2_velocidad_memoria_2xT4.ipynb)) is superseded.
 
 ## Data
 
@@ -187,8 +205,11 @@ ludwig-lm/
 
 - [x] Design v1.1, after an external critique ([`docs/es/DISENO.md`](docs/es/DISENO.md))
 - [x] **T0.1** Format, MTP and tokenizer: passes with the llama.cpp patch
-- [ ] **T0.1b** Re-run T0.1 with the final 64K tokenizer
-- [ ] **T0.2** Speed and memory on 2×T4
+- [x] **Bench v1** on 2×T4: 3,856 tokens/s, shape and expert count confirmed
+- [x] **T0.1-C** AFMoE format: passes on stock llama.cpp
+- [ ] **v1.2** Approve the AFMoE format
+- [ ] **T0.1b** Re-run the tokenizer checks with the final 64K tokenizer
+- [ ] **T0.2 v2** The real training stack on 2×T4
 - [ ] **T0.3** FP16 stability: 2–3K steps at peak LR
 - [ ] **T1** Data: code source, deterministic loader with decontamination and manifests
 - [ ] **T2** Learning rate (3 short runs) and format A/B

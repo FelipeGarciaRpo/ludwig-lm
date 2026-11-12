@@ -1,0 +1,156 @@
+8.1s	1	0.00s - Debugger warning: It seems that frozen modules are being used, which may
+8.1s	2	0.00s - make the debugger miss breakpoints. Please pass -Xfrozen_modules=off
+8.1s	3	0.00s - to python to disable frozen modules.
+8.1s	4	0.00s - Note: Debugging will proceed. Set PYDEVD_DISABLE_FILE_VALIDATION=1 to disable this validation.
+8.7s	5	0.00s - Debugger warning: It seems that frozen modules are being used, which may
+8.7s	6	0.00s - make the debugger miss breakpoints. Please pass -Xfrozen_modules=off
+8.7s	7	0.00s - to python to disable frozen modules.
+8.7s	8	0.00s - Note: Debugging will proceed. Set PYDEVD_DISABLE_FILE_VALIDATION=1 to disable this validation.
+9.9s	9	Módulos escritos en /kaggle/working/ludwig2_t4_banco/codigo
+9.9s	10	[0:00:00] 1/8 Sistema
+21.0s	11	[0:00:11]   torch 2.11.0+cu130 · CUDA 13.0 · GPUs: ['Tesla T4', 'Tesla T4'] · RAM 31.3 GiB · CPUs 4
+21.0s	12	[0:00:11] 2/8 Eficiencia de matmul en una T4 y ancho de banda entre las dos GPUs
+24.8s	13	[0:00:14]   grande 8192x4096 @ 4096x4096: 21.8 TFLOPS
+24.8s	14	[0:00:14]   atención d1024: 16384x1024 @ 1024x2048: 24.2 TFLOPS
+24.8s	15	[0:00:14]   atención d2048: 16384x2048 @ 2048x4096: 22.2 TFLOPS
+24.8s	16	[0:00:14]   expertos d1024, 40 exp (1640 tok c/u): 27.0 TFLOPS
+24.8s	17	[0:00:14]   expertos d1024, 60 exp (1092 tok c/u): 26.7 TFLOPS
+24.8s	18	[0:00:14]   expertos d1280, 40 exp (1640 tok c/u): 25.6 TFLOPS
+24.8s	19	[0:00:14]   expertos d2048, 40 exp (1640 tok c/u): 22.1 TFLOPS
+34.7s	20	[0:00:24]   all-gather: 3.2 GB/s · P2P: True
+34.7s	21	[0:00:24] 3/8 Velocidad y memoria por forma (todas con ~0.49B activos y 40 expertos)
+34.7s	22	[0:00:24]   26 × d1024: probando 8 secuencia(s) por GPU…
+135.3s	23	[0:02:05]   ✅ 26 × d1024: 3,856 tokens/s · pico 13.2 GiB (reservado 13.8) · 1,801 h para 25B
+135.3s	24	[0:02:05]   16 × d1280: probando 8 secuencia(s) por GPU…
+225.3s	25	[0:03:35]   ✅ 16 × d1280: 4,267 tokens/s · pico 13.1 GiB (reservado 13.9) · 1,628 h para 25B
+225.3s	26	[0:03:35]   11 × d1536: probando 8 secuencia(s) por GPU…
+313.8s	27	[0:05:03]   ✅ 11 × d1536: 4,287 tokens/s · pico 13.6 GiB (reservado 14.3) · 1,620 h para 25B
+313.8s	28	[0:05:03]   6 × d2048 (≈ diseño anterior): probando 8 secuencia(s) por GPU…
+347.6s	29	[0:05:37]   ❌ 6 × d2048 (≈ diseño anterior) con 8: sin memoria
+347.6s	30	[0:05:37]   6 × d2048 (≈ diseño anterior): probando 4 secuencia(s) por GPU…
+403.6s	31	[0:06:33]   ✅ 6 × d2048 (≈ diseño anterior): 3,866 tokens/s · pico 12.5 GiB (reservado 14.3) · 1,796 h para 25B
+403.6s	32	[0:06:33] 4/8 ¿Cuántos expertos caben? (forma base)
+403.6s	33	[0:06:33]   48 expertos: probando 8 secuencia(s) por GPU…
+443.0s	34	[0:07:13]   ❌ 48 expertos con 8: sin memoria
+443.0s	35	[0:07:13]   48 expertos: probando 4 secuencia(s) por GPU…
+513.3s	36	[0:08:23]   ✅ 48 expertos: 2,926 tokens/s · pico 13.1 GiB (reservado 13.6) · 2,373 h para 25B
+513.3s	37	[0:08:23]   60 expertos: probando 8 secuencia(s) por GPU…
+533.6s	38	[0:08:43]   ❌ 60 expertos con 8: sin memoria
+533.6s	39	[0:08:43]   60 expertos: probando 4 secuencia(s) por GPU…
+923.9s	40	[0:15:13]   ❌ 60 expertos con 4: sin memoria
+923.9s	41	[0:15:13]   60 expertos: probando 2 secuencia(s) por GPU…
+949.3s	42	[0:15:39]   ❌ 60 expertos con 2: sin memoria
+949.3s	43	[0:15:39]   60 expertos: probando 1 secuencia(s) por GPU…
+972.4s	44	[0:16:02]   ❌ 60 expertos con 1: sin memoria
+972.4s	45	[0:16:02]   60 expertos no cupo; pruebo con el momento de Muon en la RAM de la CPU
+972.4s	46	[0:16:02]   60 expertos (momento en CPU): probando 8 secuencia(s) por GPU…
+992.8s	47	[0:16:22]   ❌ 60 expertos (momento en CPU) con 8: sin memoria
+992.8s	48	[0:16:22]   60 expertos (momento en CPU): probando 4 secuencia(s) por GPU…
+1072.3s	49	[0:17:42]   ✅ 60 expertos (momento en CPU): 2,670 tokens/s · pico 12.9 GiB (reservado 13.6) · 2,601 h para 25B
+1072.3s	50	[0:17:42] 5/8 MoE: bmm con relleno vs. un matmul por experto
+1072.3s	51	[0:17:42]   MoE en loop: probando 8 secuencia(s) por GPU…
+1183.3s	52	[0:19:33]   ✅ MoE en loop: 3,329 tokens/s · pico 13.0 GiB (reservado 13.6) · 2,086 h para 25B
+1183.3s	53	[0:19:33] 6/8 Costo de Attention Residuals (Block AttnRes)
+1183.3s	54	[0:19:33]   base + AttnRes: probando 8 secuencia(s) por GPU…
+1233.7s	55	[0:20:23]   ❌ base + AttnRes con 8: sin memoria
+1233.7s	56	[0:20:23]   base + AttnRes: probando 4 secuencia(s) por GPU…
+1315.3s	57	[0:21:45]   ✅ base + AttnRes: 2,389 tokens/s · pico 12.1 GiB (reservado 12.7) · 2,907 h para 25B
+1315.3s	58	[0:21:45] 7/8 Entrenamiento corto en FP16 con datos sintéticos (60 pasos)
+2119.8s	59	[0:35:09]   pérdida 11.27 → 1.79 (piso teórico ≈ 0.72) · pasos saltados 0 · NaN 0 · 2,465 tokens/s
+2605.0s	60	[0:43:15]   con AttnRes: pérdida 11.26 → 2.03 · NaN 0
+2605.0s	61	[0:43:15] 8/8 ¿Corren los kernels de KDA (Kimi Linear) en T4?
+2610.6s	62	[0:43:20]   atención con compuerta (referencia): 41.5 ms ida+vuelta
+2610.6s	63	[0:43:20]   fla.layers.KimiDeltaAttention: <module>
+2610.6s	64	    from fla.ops.utils.index import (
+2610.6s	65	    ...<3 lines>...
+2610.6s	66	    )
+2610.6s	67	ModuleNotFoundError: No module named 'fla.ops'
+2610.6s	68	
+2610.6s	69	[0:43:20]   fla.layers.kda.KimiDeltaAttention: <module>
+2610.6s	70	    from fla.ops.utils.index import (
+2610.6s	71	    ...<3 lines>...
+2610.6s	72	    )
+2610.6s	73	ModuleNotFoundError: No module named 'fla.ops'
+2610.6s	74	
+2610.6s	75	[0:43:20]   fla.layers.GatedDeltaNet: <module>
+2610.6s	76	    from fla.ops.utils.index import (
+2610.6s	77	    ...<3 lines>...
+2610.6s	78	    )
+2610.6s	79	ModuleNotFoundError: No module named 'fla.ops'
+2610.6s	80	
+2610.6s	81	
+2610.6s	82	LUDWIG 2 — BANCO DE PRUEBAS EN 2×T4
+2610.6s	83	========================================
+2610.6s	84	Modo: completo · duración 43.3 min · torch 2.11.0+cu130 · CUDA 13.0
+2610.6s	85	GPUs: Tesla T4, 15360 MiB, 580.178.04
+2610.6s	86	Tesla T4, 15360 MiB, 580.178.04
+2610.6s	87	Comunicación: 3.2 GB/s (P2P True)
+2610.6s	88	
+2610.6s	89	EFICIENCIA DE MATMUL EN UNA T4 (pico teórico 65 TFLOPS)
+2610.6s	90	caso                                    TFLOPS
+2610.6s	91	----------------------------------------------
+2610.6s	92	grande 8192x4096 @ 4096x4096            21.8  
+2610.6s	93	atención d1024: 16384x1024 @ 1024x2048  24.2  
+2610.6s	94	atención d2048: 16384x2048 @ 2048x4096  22.2  
+2610.6s	95	expertos d1024, 40 exp (1640 tok c/u)   27.0  
+2610.6s	96	expertos d1024, 60 exp (1092 tok c/u)   26.7  
+2610.6s	97	expertos d1280, 40 exp (1640 tok c/u)   25.6  
+2610.6s	98	expertos d2048, 40 exp (1640 tok c/u)   22.1  
+2610.6s	99	
+2610.6s	100	FORMAS (40 expertos)
+2610.6s	101	prueba                         params         sec/GPU  tokens/s  MFU    pico GiB  reserv. GiB  horas 25B  semanas
+2610.6s	102	-----------------------------------------------------------------------------------------------------------------
+2610.6s	103	26 × d1024                     1.90B / 0.49B  8        3,856     9.7%   13.2      13.8         1,801      12.9   
+2610.6s	104	16 × d1280                     1.81B / 0.49B  8        4,267     10.4%  13.1      13.9         1,628      11.6   
+2610.6s	105	11 × d1536                     1.77B / 0.50B  8        4,287     10.5%  13.6      14.3         1,620      11.6   
+2610.6s	106	6 × d2048 (≈ diseño anterior)  1.65B / 0.52B  4        3,866     9.6%   12.5      14.3         1,796      12.8   
+2610.6s	107	
+2610.6s	108	EXPERTOS (forma base)
+2610.6s	109	prueba                        params         sec/GPU  tokens/s  MFU   pico GiB  reserv. GiB  horas 25B  semanas
+2610.6s	110	---------------------------------------------------------------------------------------------------------------
+2610.6s	111	40 expertos (base)            1.90B / 0.49B  8        3,856     9.7%  13.2      13.8         1,801      12.9   
+2610.6s	112	48 expertos                   2.22B / 0.49B  4        2,926     7.3%  13.1      13.6         2,373      17.0   
+2610.6s	113	60 expertos                                           no cupo                                                  
+2610.6s	114	60 expertos (momento en CPU)  2.69B / 0.49B  4        2,670     6.7%  12.9      13.6         2,601      18.6   
+2610.6s	115	
+2610.6s	116	OTRAS PRUEBAS
+2610.6s	117	prueba          params         sec/GPU  tokens/s  MFU   pico GiB  reserv. GiB  horas 25B  semanas
+2610.6s	118	-------------------------------------------------------------------------------------------------
+2610.6s	119	MoE en loop     1.90B / 0.49B  8        3,329     8.4%  13.0      13.6         2,086      14.9   
+2610.6s	120	base + AttnRes  1.90B / 0.49B  4        2,389     6.0%  12.1      12.7         2,907      20.8   
+2610.6s	121	
+2610.6s	122	ENTRENAMIENTO CORTO (datos sintéticos)
+2610.6s	123	paso  pérdida  norma   escala FP16  carga máx/media  muertos  |h| máx
+2610.6s	124	---------------------------------------------------------------------
+2610.6s	125	0     11.271   10.262  16384        1.47             0        0.854  
+2610.6s	126	5     5.396    4.615   16384        2.27             0        1.06   
+2610.6s	127	10    3.321    2.245   16384        3.46             0        1.92   
+2610.6s	128	15    2.642    1.257   16384        2.73             0        2.74   
+2610.6s	129	20    2.350    0.978   16384        5.40             0        3.65   
+2610.6s	130	25    2.181    0.694   16384        5.53             0        4.72   
+2610.6s	131	30    2.070    0.536   16384        7.96             1        5.94   
+2610.6s	132	35    1.972    0.489   16384        7.63             1        7.24   
+2610.6s	133	40    1.956    0.642   16384        7.45             0        8.55   
+2610.6s	134	45    1.868    0.377   16384        7.66             1        10     
+2610.6s	135	50    1.863    0.365   16384        8.87             0        11.8   
+2610.6s	136	55    1.857    0.348   16384        8.63             1        13.6   
+2610.6s	137	59    1.791    0.333   16384        8.39             0        14.5   
+2610.6s	138	
+2610.6s	139	DECISIONES
+2610.6s	140	- FORMA: 26 × d1024: es 1.11× más lenta que la más rápida (11 × d1536), dentro del límite de 1.4× que acordamos. La profundidad se queda.
+2610.6s	141	- EXPERTOS: 40 expertos (1.90B totales): 3,856 tokens/s, reservado 13.8 GiB — JUSTO de memoria; para un entrenamiento largo conviene bajar uno.
+2610.6s	142	- MOE: bmm: loop 3,329 vs bmm 3,856 tokens/s.
+2610.6s	143	- ATTNRES: cuesta 38.1% de velocidad y -1.1 GiB. Más caro de lo esperado (~4%); revisar antes del duelo.
+2610.6s	144	- KDA: los kernels no corren en FP16 en T4 → KDA queda descartada para Ludwig 2.
+2610.6s	145	- ESTABILIDAD: sana: pérdida 11.27 → 1.79, 0 pasos saltados por FP16, carga máx/media 8.39, expertos sin tokens 0, |h| máx 14.5.
+2610.6s	146	- HORAS: Con 40 expertos: 1,801 h de 2×T4 para 25B tokens ≈ 12.9 semanas de relevo a 140 h/semana (MFU 9.7%).
+2610.6s	147	
+2610.6s	148	Archivos: resultados.json (todo), logs/ (salida de cada prueba).
+2613.1s	149	/usr/local/lib/python3.13/dist-packages/mistune.py:435: SyntaxWarning: invalid escape sequence '\|'
+2613.1s	150	  cells[i][c] = re.sub('\\\\\|', '|', cell)
+2613.3s	151	/usr/local/lib/python3.13/dist-packages/nbconvert/filters/filter_links.py:36: SyntaxWarning: invalid escape sequence '\_'
+2613.3s	152	  text = re.sub(r'_', '\_', text) # Escape underscores in display text
+2614.2s	153	[NbConvertApp] Converting notebook __notebook__.ipynb to notebook
+2614.2s	154	[NbConvertApp] Writing 85425 bytes to __notebook__.ipynb
+2616.8s	155	[NbConvertApp] Converting notebook __notebook__.ipynb to html
+2617.4s	156	[NbConvertApp] Writing 470520 bytes to __results__.html
