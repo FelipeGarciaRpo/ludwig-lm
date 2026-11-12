@@ -1,0 +1,43 @@
+{
+  "llama_cpp": "dd6b945be2188da875ab05a259ce94c6b2736e64 Thu Nov 12 02:01:19 2026 +0100",
+  "llama_cpp_patched": false,
+  "torch": "2.15.0+cu132",
+  "transformers": "5.22.2",
+  "A1_export_reload": {
+    "pass": true,
+    "max_abs_diff": 0.0
+  },
+  "A2_convert": {
+    "pass": true,
+    "log_tail": "rd length = 256\nINFO:hf-to-gguf:Set model quantization version\nINFO:hf-to-gguf:Set model tokenizer\nWARNING:hf-to-gguf:\n\nWARNING:hf-to-gguf:**************************************************************************************\nWARNING:hf-to-gguf:** WARNING: The BPE pre-tokenizer was not recognized!\nWARNING:hf-to-gguf:**          There are 2 possible reasons for this:\nWARNING:hf-to-gguf:**          - the model has not been added to convert_hf_to_gguf_update.py yet\nWARNING:hf-to-gguf:**          - the pre-tokenization config has changed upstream\nWARNING:hf-to-gguf:**          Check your model files and convert_hf_to_gguf_update.py and update them accordingly.\nWARNING:hf-to-gguf:** ref:     https://github.com/ggml-org/llama.cpp/pull/6920\nWARNING:hf-to-gguf:**\nWARNING:hf-to-gguf:** chkhsh:  55417c5d3cd388b07df60a56393ad62b68d16c7541898377d4e2f1a7b8441bbd\nWARNING:hf-to-gguf:**************************************************************************************\nWARNING:hf-to-gguf:\n\nINFO:gguf.vocab:Adding 281 merge(s).\nINFO:gguf.vocab:Setting special token type eos to 0\nINFO:gguf.vocab:Setting special token type pad to 3\nINFO:gguf.gguf_writer:Writing the following files:\nINFO:gguf.gguf_writer:/home/user/ludwig-lm/work/t0_1/tiny-f32.gguf: n_tensors = 54, total_size = 4.8M\n\nWriting:   0%|          | 0.00/4.75M [00:00<?, ?byte/s]\nWriting: 100%|██████████| 4.75M/4.75M [00:00<00:00, 496Mbyte/s]\nINFO:hf-to-gguf:Model successfully exported to /home/user/ludwig-lm/work/t0_1/tiny-f32.gguf\n"
+  },
+  "A3_next_token_probs": {
+    "pass": false,
+    "error": "llama-server exited: /tmp/llamacpp/ggml/src/ggml-backend.cpp:345: GGML_ASSERT(buffer) failed",
+    "log_tail": "nst*) () from /tmp/llamacpp/build/bin/libllama.so.0\n#7  0x00007ff0c0c700bc in llama_context::process_ubatch(llama_ubatch const&, llm_graph_type, llama_memory_context_i*, ggml_status&) () from /tmp/llamacpp/build/bin/libllama.so.0\n#8  0x00007ff0c0c7a8f6 in llama_context::decode(llama_batch_ext const&) () from /tmp/llamacpp/build/bin/libllama.so.0\n#9  0x00007ff0c148ab21 in common_init_from_params(common_params&, bool) () from /tmp/llamacpp/build/bin/libllama-common.so.0\n#10 0x00007ff0c21da9b3 in server_context_impl::load_model(common_params&) () from /tmp/llamacpp/build/bin/libllama-server-impl.so\n#11 0x00007ff0c20f5e26 in server_run(common_params&, int, char**, server_role&, server_run_opts const&) () from /tmp/llamacpp/build/bin/libllama-server-impl.so\n#12 0x00007ff0c20f6b90 in llama_server(int, char**) () from /tmp/llamacpp/build/bin/libllama-server-impl.so\n#13 0x00007ff0c182a1ca in __libc_start_call_main (main=main@entry=0x55779570c270 <main>, argc=argc@entry=14, argv=argv@entry=0x7ffdfe9d9348) at ../sysdeps/nptl/libc_start_call_main.h:58\nwarning: 58\t../sysdeps/nptl/libc_start_call_main.h: No such file or directory\n#14 0x00007ff0c182a28b in __libc_start_main_impl (main=0x55779570c270 <main>, argc=14, argv=0x7ffdfe9d9348, init=<optimized out>, fini=<optimized out>, rtld_fini=<optimized out>, stack_end=0x7ffdfe9d9338) at ../csu/libc-start.c:360\nwarning: 360\t../csu/libc-start.c: No such file or directory\n#15 0x000055779570c2a5 in _start ()\n[Inferior 1 (process 9430) detached]\n"
+  },
+  "A4_greedy": {
+    "pass": false,
+    "error": "llama-server exited: /tmp/llamacpp/ggml/src/ggml-backend.cpp:345: GGML_ASSERT(buffer) failed",
+    "log_tail": "nst*) () from /tmp/llamacpp/build/bin/libllama.so.0\n#7  0x00007ff0c0c700bc in llama_context::process_ubatch(llama_ubatch const&, llm_graph_type, llama_memory_context_i*, ggml_status&) () from /tmp/llamacpp/build/bin/libllama.so.0\n#8  0x00007ff0c0c7a8f6 in llama_context::decode(llama_batch_ext const&) () from /tmp/llamacpp/build/bin/libllama.so.0\n#9  0x00007ff0c148ab21 in common_init_from_params(common_params&, bool) () from /tmp/llamacpp/build/bin/libllama-common.so.0\n#10 0x00007ff0c21da9b3 in server_context_impl::load_model(common_params&) () from /tmp/llamacpp/build/bin/libllama-server-impl.so\n#11 0x00007ff0c20f5e26 in server_run(common_params&, int, char**, server_role&, server_run_opts const&) () from /tmp/llamacpp/build/bin/libllama-server-impl.so\n#12 0x00007ff0c20f6b90 in llama_server(int, char**) () from /tmp/llamacpp/build/bin/libllama-server-impl.so\n#13 0x00007ff0c182a1ca in __libc_start_call_main (main=main@entry=0x55779570c270 <main>, argc=argc@entry=14, argv=argv@entry=0x7ffdfe9d9348) at ../sysdeps/nptl/libc_start_call_main.h:58\nwarning: 58\t../sysdeps/nptl/libc_start_call_main.h: No such file or directory\n#14 0x00007ff0c182a28b in __libc_start_main_impl (main=0x55779570c270 <main>, argc=14, argv=0x7ffdfe9d9348, init=<optimized out>, fini=<optimized out>, rtld_fini=<optimized out>, stack_end=0x7ffdfe9d9338) at ../csu/libc-start.c:360\nwarning: 360\t../csu/libc-start.c: No such file or directory\n#15 0x000055779570c2a5 in _start ()\n[Inferior 1 (process 9430) detached]\n"
+  },
+  "A5_mtp_speculative": {
+    "pass": false,
+    "error": "llama-server exited: /tmp/llamacpp/ggml/src/ggml-backend.cpp:345: GGML_ASSERT(buffer) failed",
+    "log_tail": "nst*) () from /tmp/llamacpp/build/bin/libllama.so.0\n#7  0x00007ff0c0c700bc in llama_context::process_ubatch(llama_ubatch const&, llm_graph_type, llama_memory_context_i*, ggml_status&) () from /tmp/llamacpp/build/bin/libllama.so.0\n#8  0x00007ff0c0c7a8f6 in llama_context::decode(llama_batch_ext const&) () from /tmp/llamacpp/build/bin/libllama.so.0\n#9  0x00007ff0c148ab21 in common_init_from_params(common_params&, bool) () from /tmp/llamacpp/build/bin/libllama-common.so.0\n#10 0x00007ff0c21da9b3 in server_context_impl::load_model(common_params&) () from /tmp/llamacpp/build/bin/libllama-server-impl.so\n#11 0x00007ff0c20f5e26 in server_run(common_params&, int, char**, server_role&, server_run_opts const&) () from /tmp/llamacpp/build/bin/libllama-server-impl.so\n#12 0x00007ff0c20f6b90 in llama_server(int, char**) () from /tmp/llamacpp/build/bin/libllama-server-impl.so\n#13 0x00007ff0c182a1ca in __libc_start_call_main (main=main@entry=0x55779570c270 <main>, argc=argc@entry=14, argv=argv@entry=0x7ffdfe9d9348) at ../sysdeps/nptl/libc_start_call_main.h:58\nwarning: 58\t../sysdeps/nptl/libc_start_call_main.h: No such file or directory\n#14 0x00007ff0c182a28b in __libc_start_main_impl (main=0x55779570c270 <main>, argc=14, argv=0x7ffdfe9d9348, init=<optimized out>, fini=<optimized out>, rtld_fini=<optimized out>, stack_end=0x7ffdfe9d9338) at ../csu/libc-start.c:360\nwarning: 360\t../csu/libc-start.c: No such file or directory\n#15 0x000055779570c2a5 in _start ()\n[Inferior 1 (process 9430) detached]\n"
+  },
+  "T1_tiny_pretokenizer": {
+    "pass": true,
+    "chkhsh": "55417c5d3cd388b07df60a56393ad62b68d16c7541898377d4e2f1a7b8441bbd",
+    "hash_known_to_llama_cpp": false,
+    "split_regex": "(?i:'s|'t|'re|'ve|'m|'ll|'d)|[^\\r\\n\\p{L}\\p{N}]?\\p{L}+|\\p{N}| ?[^\\s\\p{L}\\p{N}]+[\\r\\n]*|\\s*[\\r\\n]+|\\s+(?!\\S)|\\s+",
+    "mapped_pre": "qwen2"
+  },
+  "T2_tiny_parity": {
+    "pass": true,
+    "n_strings": 9,
+    "mismatches": []
+  },
+  "all_pass": false,
+  "minutes": 0.3
+}

@@ -1,0 +1,15 @@
+cff-version: 1.2.0
+message: "If you use Ludwig 2, please cite it as below."
+title: "Ludwig 2: a 2B-parameter open MoE language model trained on free GPUs"
+type: software
+version: 0.1.0
+authors:
+  - family-names: "García"
+    given-names: "Felipe"
+license: Apache-2.0
+keywords:
+  - language model
+  - mixture of experts
+  - open source
+  - Kaggle
+  - Spanish
