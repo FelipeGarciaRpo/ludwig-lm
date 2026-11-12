@@ -164,3 +164,13 @@ Todo lo que se corre, se mide o se decide, en orden. Cada entrada dice qué se h
   - Al inicio, la carga máxima quedó en 1.5–1.8× el promedio, en vez de 4× (modelo diminuto).
   - La atención causal directa da los mismos logits.
 - **Siguiente:** subir el código nuevo como versión del dataset y repetir la T0.2 v2.
+
+## 2026-11-12 · T0.2 v2, primer intento: lo que agrega el log completo
+
+- **Qué:** la entrada anterior se escribió antes de que terminara la corrida. El log completo (`results/t0_2v2_intento1/salida_kaggle.txt`) muestra que se quedaron sin memoria **las 13 mediciones**, no solo de la A a la F:
+  - G (4 secuencias) completó el paso 0, con la carga máxima en 10.00× el promedio (el máximo posible con top-4 de 40), y se cayó en el paso 1 pidiendo 542 MiB.
+  - J, K, L y M pidieron los mismos 1.25 GiB que la A.
+  - H (4K) pidió 1 GiB, e I (16K), 16 GiB.
+- **Dónde:** PC de Pipe, leyendo el log. No corrió nada.
+- **Pregunta abierta:** los 16 GiB de la I son 1 × 16 × 16,384² × 4 bytes, una matriz de atención completa en FP32, y el 1 GiB de la H no cuadra con ninguna de las dos causas. El patch 0004 solo quita la máscara cuando la ventana cubre toda la secuencia (hasta 2K): a 4K y 16K las capas locales siguen recibiendo una máscara explícita, y su memoria en la T4 no se ha medido.
+- **Siguiente:** en el segundo intento, mirar primero la H y la I.
