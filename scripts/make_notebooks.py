@@ -203,7 +203,7 @@ La base lleva todas las piezas de velocidad. Cada medición de B a F quita o cam
 | K, L, M | 60 pasos de entrenamiento con el texto sintético del banco v1 | Balanceo de expertos: signo fijo (como el banco v1) contra SMEBU |
 
 **Kaggle:** acelerador *GPU T4 x2*, Internet *On*. Tarda **~1–1.25 h**. Cada medición escribe su línea en `results/t0_2v2.jsonl` apenas termina: si la sesión se corta, lo medido no se pierde."""),
-    code(r'''REPO_URL = "https://github.com/TU_USUARIO/ludwig-lm.git"   # o "" si subiste el repo como dataset'''),
+    code(r'''REPO_URL = "https://github.com/FelipeGarciaRpo/ludwig-lm.git"   # o "" si subiste el repo como dataset'''),
     code(SETUP + "\n!nvidia-smi --query-gpu=name,memory.total,power.limit --format=csv\n!df -h /tmp /kaggle/working | tail -2"),
     code(RUN_HELPER.replace("@RESULTS@", "results/t0_2v2.jsonl").replace("@SCRIPT@", "scripts/bench_afmoe.py")),
     md("## A–I. Velocidad y memoria"),
