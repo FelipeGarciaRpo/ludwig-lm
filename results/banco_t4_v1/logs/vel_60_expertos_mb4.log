@@ -1,0 +1,87 @@
+[rank1]:[E1112 00:35:18.440581383 ProcessGroupNCCL.cpp:689] [Rank 1] Watchdog caught collective operation timeout: WorkNCCL(SeqNum=619, OpType=_ALLGATHER_BASE, NumelIn=52167744, NumelOut=104335488, Timeout(ms)=300000) ran for 300010 milliseconds before timing out.
+[rank1]:[E1112 00:35:18.442654393 ProcessGroupNCCL.cpp:2303] [PG ID 0 PG GUID 0(default_pg) Rank 1]  failure detected by watchdog at work sequence id: 619 PG status: last enqueued work: 620, last completed work: 618
+[rank1]:[E1112 00:35:18.445582157 ProcessGroupNCCL.cpp:733] Stack trace of the failed collective: 
+#0 all_gather_into_tensor from /usr/local/lib/python3.13/dist-packages/torch/distributed/distributed_c10d.py:4186
+#1 wrapper from /usr/local/lib/python3.13/dist-packages/torch/distributed/c10d_logger.py:83
+#2 __call__ from /usr/local/lib/python3.13/dist-packages/torch/distributed/fsdp/_fully_shard/_fsdp_collectives.py:89
+#3 foreach_all_gather from /usr/local/lib/python3.13/dist-packages/torch/distributed/fsdp/_fully_shard/_fsdp_collectives.py:276
+#4 decorate_context from /usr/local/lib/python3.13/dist-packages/torch/utils/_contextlib.py:124
+#5 unshard from /usr/local/lib/python3.13/dist-packages/torch/distributed/fsdp/_fully_shard/_fsdp_param_group.py:339
+#6 pre_forward from /usr/local/lib/python3.13/dist-packages/torch/distributed/fsdp/_fully_shard/_fsdp_param_group.py:449
+#7 _pre_forward from /usr/local/lib/python3.13/dist-packages/torch/distributed/fsdp/_fully_shard/_fsdp_state.py:268
+#8 _fn from /usr/local/lib/python3.13/dist-packages/torch/_dynamo/eval_frame.py:1263
+#9 fsdp_hook_wrapper from /usr/local/lib/python3.13/dist-packages/torch/distributed/fsdp/_fully_shard/_fsdp_state.py:64
+#10 inner from /usr/local/lib/python3.13/dist-packages/torch/nn/modules/module.py:1812
+#11 _call_impl from /usr/local/lib/python3.13/dist-packages/torch/nn/modules/module.py:1885
+#12 _wrapped_call_impl from /usr/local/lib/python3.13/dist-packages/torch/nn/modules/module.py:1779
+#13 forward from /kaggle/working/ludwig2_t4_banco/codigo/modelo.py:340
+#14 inner from /usr/local/lib/python3.13/dist-packages/torch/nn/modules/module.py:1833
+#15 _call_impl from /usr/local/lib/python3.13/dist-packages/torch/nn/modules/module.py:1885
+#16 _wrapped_call_impl from /usr/local/lib/python3.13/dist-packages/torch/nn/modules/module.py:1779
+#17 micro from /kaggle/working/ludwig2_t4_banco/codigo/worker.py:77
+#18 velocidad from /kaggle/working/ludwig2_t4_banco/codigo/worker.py:139
+#19 main from /kaggle/working/ludwig2_t4_banco/codigo/worker.py:196
+#20 <module> from /kaggle/working/ludwig2_t4_banco/codigo/worker.py:214
+
+[rank1]:[E1112 00:35:18.445678532 ProcessGroupNCCL.cpp:2636] [PG ID 0 PG GUID 0(default_pg) Rank 1] First PG on this rank to signal dumping.
+[rank1]:[E1112 00:35:19.986975060 ProcessGroupNCCL.cpp:1914] [PG ID 0 PG GUID 0(default_pg) Rank 1] Received a dump signal due to a collective timeout from this local rank and we will try our best to dump the debug info. Last enqueued NCCL work: 620, last completed NCCL work: 618.This is most likely caused by incorrect usages of collectives, e.g., wrong sizes used across ranks, the order of collectives is not same for all ranks or the scheduled collective, for some reason, didn't run. Additionally, this can be caused by GIL deadlock or other reasons such as network errors or bugs in the communications library (e.g. NCCL), etc. 
+[rank1]:[E1112 00:35:19.987250064 ProcessGroupNCCL.cpp:1628] [PG ID 0 PG GUID 0(default_pg) Rank 1] ProcessGroupNCCL preparing to dump debug info. Include stack trace: 1, only active collectives: 0
+terminate called after throwing an instance of 'c10::Error'
+  what():  Should never been called
+Exception raised from dummyHasPrimaryContext at /pytorch/c10/cuda/CUDAFunctions.cpp:186 (most recent call first):
+frame #0: c10::Error::Error(c10::SourceLocation, std::__cxx11::basic_string<char, std::char_traits<char>, std::allocator<char> >) + 0x9d (0x7c656a17305d in /usr/local/lib/python3.13/dist-packages/torch/lib/libc10.so)
+frame #1: c10::detail::torchCheckFail(char const*, char const*, unsigned int, char const*) + 0x69 (0x7c656a1077d3 in /usr/local/lib/python3.13/dist-packages/torch/lib/libc10.so)
+frame #2: <unknown function> + 0x46513 (0x7c656a53a513 in /usr/local/lib/python3.13/dist-packages/torch/lib/libc10_cuda.so)
+frame #3: c10::cuda::MaybeSetDevice(signed char) + 0x13 (0x7c656a53b363 in /usr/local/lib/python3.13/dist-packages/torch/lib/libc10_cuda.so)
+frame #4: <unknown function> + 0xa9971b (0x7c64a862e71b in /usr/local/lib/python3.13/dist-packages/torch/lib/libtorch_cuda.so)
+frame #5: <unknown function> + 0x688d26 (0x7c64a821dd26 in /usr/local/lib/python3.13/dist-packages/torch/lib/libtorch_cuda.so)
+frame #6: c10d::ProcessGroupNCCL::WorkNCCL::abort() + 0x20 (0x7c64a8a89dd0 in /usr/local/lib/python3.13/dist-packages/torch/lib/libtorch_cuda.so)
+frame #7: c10d::ProcessGroupNCCL::Watchdog::runLoop() + 0x8e9 (0x7c64a8a9c0f9 in /usr/local/lib/python3.13/dist-packages/torch/lib/libtorch_cuda.so)
+frame #8: c10d::ProcessGroupNCCL::Watchdog::run() + 0x157 (0x7c64a8a9e3b7 in /usr/local/lib/python3.13/dist-packages/torch/lib/libtorch_cuda.so)
+frame #9: <unknown function> + 0xecdb4 (0x7c653a86edb4 in /lib/x86_64-linux-gnu/libstdc++.so.6)
+frame #10: <unknown function> + 0x9cb84 (0x7c656b4f5b84 in /lib/x86_64-linux-gnu/libc.so.6)
+frame #11: __clone + 0x44 (0x7c656b582cc4 in /lib/x86_64-linux-gnu/libc.so.6)
+
+E1112 00:36:19.751000 281 torch/distributed/elastic/multiprocessing/api.py:986] failed (exitcode: -6) local_rank: 1 (pid: 287) of binary: /usr/bin/python3
+Traceback (most recent call last):
+  File "<frozen runpy>", line 203, in _run_module_as_main
+  File "<frozen runpy>", line 88, in _run_code
+  File "/usr/local/lib/python3.13/dist-packages/torch/distributed/run.py", line 994, in <module>
+    main()
+    ~~~~^^
+  File "/usr/local/lib/python3.13/dist-packages/torch/distributed/elastic/multiprocessing/errors/__init__.py", line 362, in wrapper
+    return f(*args, **kwargs)
+  File "/usr/local/lib/python3.13/dist-packages/torch/distributed/run.py", line 990, in main
+    run(args)
+    ~~~^^^^^^
+  File "/usr/local/lib/python3.13/dist-packages/torch/distributed/run.py", line 981, in run
+    elastic_launch(
+    ~~~~~~~~~~~~~~~
+        config=config,
+        ~~~~~~~~~~~~~~
+        entrypoint=cmd,
+        ~~~~~~~~~~~~~~~
+    )(*cmd_args)
+    ~^^^^^^^^^^^
+  File "/usr/local/lib/python3.13/dist-packages/torch/distributed/launcher/api.py", line 170, in __call__
+    return launch_agent(self._config, self._entrypoint, list(args))
+  File "/usr/local/lib/python3.13/dist-packages/torch/distributed/launcher/api.py", line 317, in launch_agent
+    raise ChildFailedError(
+    ...<2 lines>...
+    )
+torch.distributed.elastic.multiprocessing.errors.ChildFailedError: 
+========================================================
+/kaggle/working/ludwig2_t4_banco/codigo/worker.py FAILED
+--------------------------------------------------------
+Failures:
+  <NO_OTHER_FAILURES>
+--------------------------------------------------------
+Root Cause (first observed failure):
+[0]:
+  time      : 2026-11-12_00:36:19
+  host      : 2d3423f308f2
+  rank      : 1 (local_rank: 1)
+  exitcode  : -6 (pid: 287)
+  error_file: <N/A>
+  traceback : Signal 6 (SIGABRT) received by PID 287
+========================================================
