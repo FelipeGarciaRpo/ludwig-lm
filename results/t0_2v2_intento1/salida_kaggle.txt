@@ -1,0 +1,87 @@
+Time
+#
+Log Message
+8.0s	1	0.00s - Debugger warning: It seems that frozen modules are being used, which may
+8.0s	2	0.00s - make the debugger miss breakpoints. Please pass -Xfrozen_modules=off
+8.0s	3	0.00s - to python to disable frozen modules.
+8.0s	4	0.00s - Note: Debugging will proceed. Set PYDEVD_DISABLE_FILE_VALIDATION=1 to disable this validation.
+8.6s	5	0.00s - Debugger warning: It seems that frozen modules are being used, which may
+8.6s	6	0.00s - make the debugger miss breakpoints. Please pass -Xfrozen_modules=off
+8.6s	7	0.00s - to python to disable frozen modules.
+8.6s	8	0.00s - Note: Debugging will proceed. Set PYDEVD_DISABLE_FILE_VALIDATION=1 to disable this validation.
+45.5s	9	torch 2.11.0+cu130 | transformers 5.22.2 | CPUs 4 | GPUs 2
+45.5s	10	name, memory.total [MiB], power.limit [W]
+45.5s	11	Tesla T4, 15360 MiB, 70.00 W
+45.5s	12	Tesla T4, 15360 MiB, 70.00 W
+45.7s	13	overlay         8.0T  7.1T  967G  89% /
+45.7s	14	/dev/loop2       20G  704K   20G   1% /kaggle/working
+45.8s	15	>> PYTORCH_CUDA_ALLOC_CONF=expandable_segments:True torchrun --nproc_per_node 2 scripts/bench_afmoe.py --tag A-base --out results/t0_2v2.jsonl --seq 2048 --micro 8 --accum 1 --steps 4
+63.7s	16	[model] AFMoE total 1.906B, active 0.491B | built+sharded in 1s | moe=padded_bmm residual=fp32 reduce=fp16 prefetch=True momentum=gpu | world=2 device=cuda
+73.2s	17	[result] A-base status=oom tokens/s=None peak=13.98 GiB  25B≈None h
+73.2s	18	CUDA out of memory. Tried to allocate 1.25 GiB. GPU 0 has a total capacity of 14.56 GiB of which 938.81 MiB is free. Including non-PyTorch memory, this process has 13.64 GiB memory in use. Of the allocated memory 13.20 GiB is allocated by PyTorch, and 215.31 MiB is reserved by PyTorch but unallocate
+77.8s	19	>> PYTORCH_CUDA_ALLOC_CONF=expandable_segments:True torchrun --nproc_per_node 2 scripts/bench_afmoe.py --tag B-loop --out results/t0_2v2.jsonl --seq 2048 --micro 8 --accum 1 --steps 4 --moe-impl grouped_mm
+88.2s	20	[model] AFMoE total 1.906B, active 0.491B | built+sharded in 1s | moe=grouped_mm residual=fp32 reduce=fp16 prefetch=True momentum=gpu | world=2 device=cuda
+93.5s	21	[result] B-loop status=oom tokens/s=None peak=14.14 GiB  25B≈None h
+93.5s	22	CUDA out of memory. Tried to allocate 2.00 GiB. GPU 0 has a total capacity of 14.56 GiB of which 1.29 GiB is free. Including non-PyTorch memory, this process has 13.27 GiB memory in use. Of the allocated memory 12.82 GiB is allocated by PyTorch, and 224.06 MiB is reserved by PyTorch but unallocated.
+95.7s	23	>> PYTORCH_CUDA_ALLOC_CONF=expandable_segments:True torchrun --nproc_per_node 2 scripts/bench_afmoe.py --tag C-residuo-fp16 --out results/t0_2v2.jsonl --seq 2048 --micro 8 --accum 1 --steps 4 --residual fp16
+106.0s	24	[model] AFMoE total 1.906B, active 0.491B | built+sharded in 1s | moe=padded_bmm residual=fp16 reduce=fp16 prefetch=True momentum=gpu | world=2 device=cuda
+113.6s	25	[result] C-residuo-fp16 status=oom tokens/s=None peak=14.31 GiB  25B≈None h
+113.6s	26	CUDA out of memory. Tried to allocate 640.00 MiB. GPU 0 has a total capacity of 14.56 GiB of which 498.81 MiB is free. Including non-PyTorch memory, this process has 14.07 GiB memory in use. Of the allocated memory 13.61 GiB is allocated by PyTorch, and 234.81 MiB is reserved by PyTorch but unalloca
+115.6s	27	>> PYTORCH_CUDA_ALLOC_CONF=expandable_segments:True torchrun --nproc_per_node 2 scripts/bench_afmoe.py --tag D-grad-fp32 --out results/t0_2v2.jsonl --seq 2048 --micro 8 --accum 1 --steps 4 --reduce fp32
+125.9s	28	[model] AFMoE total 1.906B, active 0.491B | built+sharded in 1s | moe=padded_bmm residual=fp32 reduce=fp32 prefetch=True momentum=gpu | world=2 device=cuda
+133.6s	29	[result] D-grad-fp32 status=oom tokens/s=None peak=13.98 GiB  25B≈None h
+133.6s	30	CUDA out of memory. Tried to allocate 1.25 GiB. GPU 0 has a total capacity of 14.56 GiB of which 838.81 MiB is free. Including non-PyTorch memory, this process has 13.74 GiB memory in use. Of the allocated memory 13.34 GiB is allocated by PyTorch, and 176.22 MiB is reserved by PyTorch but unallocate
+135.5s	31	>> PYTORCH_CUDA_ALLOC_CONF=expandable_segments:True torchrun --nproc_per_node 2 scripts/bench_afmoe.py --tag E-sin-prefetch --out results/t0_2v2.jsonl --seq 2048 --micro 8 --accum 1 --steps 4 --no-prefetch
+145.9s	32	[model] AFMoE total 1.906B, active 0.491B | built+sharded in 1s | moe=padded_bmm residual=fp32 reduce=fp16 prefetch=False momentum=gpu | world=2 device=cuda
+153.6s	33	[result] E-sin-prefetch status=oom tokens/s=None peak=13.98 GiB  25B≈None h
+153.6s	34	CUDA out of memory. Tried to allocate 1.25 GiB. GPU 0 has a total capacity of 14.56 GiB of which 938.81 MiB is free. Including non-PyTorch memory, this process has 13.64 GiB memory in use. Of the allocated memory 13.20 GiB is allocated by PyTorch, and 215.31 MiB is reserved by PyTorch but unallocate
+155.5s	35	>> PYTORCH_CUDA_ALLOC_CONF=expandable_segments:True torchrun --nproc_per_node 2 scripts/bench_afmoe.py --tag F-momento-cpu --out results/t0_2v2.jsonl --seq 2048 --micro 8 --accum 1 --steps 4 --momentum-device cpu
+165.9s	36	[model] AFMoE total 1.906B, active 0.491B | built+sharded in 1s | moe=padded_bmm residual=fp32 reduce=fp16 prefetch=True momentum=cpu | world=2 device=cuda
+173.7s	37	[result] F-momento-cpu status=oom tokens/s=None peak=13.98 GiB  25B≈None h
+173.7s	38	CUDA out of memory. Tried to allocate 1.25 GiB. GPU 0 has a total capacity of 14.56 GiB of which 938.81 MiB is free. Including non-PyTorch memory, this process has 13.64 GiB memory in use. Of the allocated memory 13.20 GiB is allocated by PyTorch, and 215.31 MiB is reserved by PyTorch but unallocate
+175.5s	39	>> PYTORCH_CUDA_ALLOC_CONF=expandable_segments:True torchrun --nproc_per_node 2 scripts/bench_afmoe.py --tag G-4-secuencias --out results/t0_2v2.jsonl --seq 2048 --micro 4 --accum 2 --steps 4
+185.8s	40	[model] AFMoE total 1.906B, active 0.491B | built+sharded in 1s | moe=padded_bmm residual=fp32 reduce=fp16 prefetch=True momentum=gpu | world=2 device=cuda
+209.0s	41	  step  0  micro  10.48s  optimizer  2.26s  ce=11.366  load max/mean=10.00  skipped=0
+223.3s	42	[result] G-4-secuencias status=oom tokens/s=None peak=14.32 GiB  25B≈None h
+223.3s	43	CUDA out of memory. Tried to allocate 542.00 MiB. GPU 0 has a total capacity of 14.56 GiB of which 352.81 MiB is free. Including non-PyTorch memory, this process has 14.21 GiB memory in use. Of the allocated memory 13.81 GiB is allocated by PyTorch, and 175.75 MiB is reserved by PyTorch but unalloca
+225.6s	44	>> PYTORCH_CUDA_ALLOC_CONF=expandable_segments:True torchrun --nproc_per_node 2 scripts/bench_afmoe.py --tag H-4k --out results/t0_2v2.jsonl --seq 4096 --micro 4 --accum 1 --steps 4
+236.0s	45	[model] AFMoE total 1.906B, active 0.491B | built+sharded in 1s | moe=padded_bmm residual=fp32 reduce=fp16 prefetch=True momentum=gpu | world=2 device=cuda
+239.7s	46	[result] H-4k status=oom tokens/s=None peak=14.33 GiB  25B≈None h
+239.7s	47	CUDA out of memory. Tried to allocate 1024.00 MiB. GPU 0 has a total capacity of 14.56 GiB of which 828.81 MiB is free. Including non-PyTorch memory, this process has 13.75 GiB memory in use. Of the allocated memory 13.44 GiB is allocated by PyTorch, and 98.25 MiB is reserved by PyTorch but unalloca
+241.5s	48	>> PYTORCH_CUDA_ALLOC_CONF=expandable_segments:True torchrun --nproc_per_node 2 scripts/bench_afmoe.py --tag I-16k --out results/t0_2v2.jsonl --seq 16384 --micro 1 --accum 1 --steps 3
+252.0s	49	[model] AFMoE total 1.906B, active 0.491B | built+sharded in 1s | moe=padded_bmm residual=fp32 reduce=fp16 prefetch=True momentum=gpu | world=2 device=cuda
+253.9s	50	[result] I-16k status=oom tokens/s=None peak=10.07 GiB  25B≈None h
+253.9s	51	CUDA out of memory. Tried to allocate 16.00 GiB. GPU 0 has a total capacity of 14.56 GiB of which 8.06 GiB is free. Including non-PyTorch memory, this process has 6.50 GiB memory in use. Of the allocated memory 6.15 GiB is allocated by PyTorch, and 136.16 MiB is reserved by PyTorch but unallocated. 
+256.1s	52	Momento en la CPU para el checkpoint: False
+256.1s	53	>> PYTORCH_CUDA_ALLOC_CONF=expandable_segments:True torchrun --nproc_per_node 2 scripts/bench_afmoe.py --tag J-checkpoint --out results/t0_2v2.jsonl --seq 2048 --micro 8 --accum 1 --steps 2 --ckpt-test --ckpt-dir /tmp/ludwig_ckpt_test --momentum-device gpu
+266.5s	54	[model] AFMoE total 1.906B, active 0.491B | built+sharded in 1s | moe=padded_bmm residual=fp32 reduce=fp16 prefetch=True momentum=gpu | world=2 device=cuda
+274.9s	55	[result] J-checkpoint status=oom tokens/s=None peak=13.98 GiB  25B≈None h
+274.9s	56	CUDA out of memory. Tried to allocate 1.25 GiB. GPU 0 has a total capacity of 14.56 GiB of which 938.81 MiB is free. Including non-PyTorch memory, this process has 13.64 GiB memory in use. Of the allocated memory 13.20 GiB is allocated by PyTorch, and 215.31 MiB is reserved by PyTorch but unallocate
+276.7s	57	>> PYTORCH_CUDA_ALLOC_CONF=expandable_segments:True torchrun --nproc_per_node 2 scripts/bench_afmoe.py --tag K-signo --out results/t0_2v2.jsonl --seq 2048 --micro 8 --accum 1 --train-steps 60 --balance sign --gamma 0.001
+287.0s	58	[model] AFMoE total 1.906B, active 0.491B | built+sharded in 1s | moe=padded_bmm residual=fp32 reduce=fp16 prefetch=True momentum=gpu | world=2 device=cuda
+295.7s	59	[result] K-signo status=oom tokens/s=None peak=13.98 GiB  25B≈None h
+295.7s	60	CUDA out of memory. Tried to allocate 1.25 GiB. GPU 0 has a total capacity of 14.56 GiB of which 938.81 MiB is free. Including non-PyTorch memory, this process has 13.64 GiB memory in use. Of the allocated memory 13.20 GiB is allocated by PyTorch, and 215.31 MiB is reserved by PyTorch but unallocate
+297.8s	61	>> PYTORCH_CUDA_ALLOC_CONF=expandable_segments:True torchrun --nproc_per_node 2 scripts/bench_afmoe.py --tag L-smebu-1e-2 --out results/t0_2v2.jsonl --seq 2048 --micro 8 --accum 1 --train-steps 60 --balance smebu --lam 0.01
+308.2s	62	[model] AFMoE total 1.906B, active 0.491B | built+sharded in 1s | moe=padded_bmm residual=fp32 reduce=fp16 prefetch=True momentum=gpu | world=2 device=cuda
+316.9s	63	[result] L-smebu-1e-2 status=oom tokens/s=None peak=13.98 GiB  25B≈None h
+316.9s	64	CUDA out of memory. Tried to allocate 1.25 GiB. GPU 0 has a total capacity of 14.56 GiB of which 938.81 MiB is free. Including non-PyTorch memory, this process has 13.64 GiB memory in use. Of the allocated memory 13.20 GiB is allocated by PyTorch, and 215.31 MiB is reserved by PyTorch but unallocate
+319.0s	65	>> PYTORCH_CUDA_ALLOC_CONF=expandable_segments:True torchrun --nproc_per_node 2 scripts/bench_afmoe.py --tag M-smebu-1e-3 --out results/t0_2v2.jsonl --seq 2048 --micro 8 --accum 1 --train-steps 60 --balance smebu --lam 0.001
+329.4s	66	[model] AFMoE total 1.906B, active 0.491B | built+sharded in 1s | moe=padded_bmm residual=fp32 reduce=fp16 prefetch=True momentum=gpu | world=2 device=cuda
+338.2s	67	[result] M-smebu-1e-3 status=oom tokens/s=None peak=13.98 GiB  25B≈None h
+338.2s	68	CUDA out of memory. Tried to allocate 1.25 GiB. GPU 0 has a total capacity of 14.56 GiB of which 938.81 MiB is free. Including non-PyTorch memory, this process has 13.64 GiB memory in use. Of the allocated memory 13.20 GiB is allocated by PyTorch, and 215.31 MiB is reserved by PyTorch but unallocate
+341.2s	69	  H: H-4k -> oom, None tokens/s, 14.33 GiB
+341.2s	70	  I: I-16k -> oom, None tokens/s, 10.07 GiB
+341.2s	71	  J: J-checkpoint -> oom, None tokens/s, 13.98 GiB, checkpoint None GiB, exacto=None
+341.2s	72	
+341.2s	73	Balanceo (60 pasos):
+341.2s	74	  K: oom
+341.2s	75	  L: oom
+341.2s	76	  M: oom
+344.4s	77	/usr/local/lib/python3.13/dist-packages/mistune.py:435: SyntaxWarning: invalid escape sequence '\|'
+344.4s	78	  cells[i][c] = re.sub('\\\\\|', '|', cell)
+344.6s	79	/usr/local/lib/python3.13/dist-packages/nbconvert/filters/filter_links.py:36: SyntaxWarning: invalid escape sequence '\_'
+344.6s	80	  text = re.sub(r'_', '\_', text) # Escape underscores in display text
+345.4s	81	[NbConvertApp] Converting notebook __notebook__.ipynb to notebook
+345.5s	82	[NbConvertApp] Writing 38290 bytes to __notebook__.ipynb
+348.1s	83	[NbConvertApp] Converting notebook __notebook__.ipynb to html
+348.6s	84	[NbConvertApp] Writing 335808 bytes to __results__.html

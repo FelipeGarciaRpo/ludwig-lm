@@ -145,3 +145,22 @@ Todo lo que se corre, se mide o se decide, en orden. Cada entrada dice qué se h
   - 16K de contexto.
 - **Un cambio de memoria:** la pérdida va en bloques de 1,024 tokens, no de 4,096. Con 64K de vocabulario, un bloque de 4,096 pide ~3.8 GB temporales.
 - **Siguiente:** correr el notebook en Kaggle (GPU T4 x2) y guardar `results/t0_2v2.jsonl`.
+
+## 2026-11-12 · T0.2 v2, primer intento: sin memoria
+
+- **Dónde:** Kaggle, 2× T4, torch 2.11 + CUDA 13.0, código `10a7d88` subido como dataset.
+- **Resultado:** las mediciones de la A a la F se quedaron sin memoria en el primer micro-paso, antes de medir nada. Salida: `results/t0_2v2_intento1/`.
+- **Causas** (dos errores del código, no de la T4):
+  1. transformers inicia el router de AFMoE en cero. Todos los puntajes valen 0.5, así que los 16,384 tokens eligen los mismos 4 expertos, y el bmm con relleno reservó espacio para 16,384 tokens en los 40 expertos: 1.25 GiB por buffer (A, D, E, F) y 640 MiB (C).
+  2. En la T4, SDPA con `enable_gqa` cae a un kernel que guarda los pesos de atención B×H×T×T en FP32: los 2.00 GiB de la medición B, en la primera capa global.
+- **Arreglo** (patch 0004):
+  - El router arranca con N(0, 0.02).
+  - En GPUs anteriores a Ampere se repiten las cabezas KV en vez de usar `enable_gqa`.
+  - Atención causal directa cuando la ventana cubre la secuencia.
+  - Loop por experto si el más cargado pasa de 2× el promedio.
+  - El notebook baja a 4 secuencias si 8 no caben, y los entrenamientos van con 4 × 2.
+- **Probado en CPU:**
+  - El bmm y el loop dan exactamente lo mismo que transformers, en salidas y gradientes.
+  - Al inicio, la carga máxima quedó en 1.5–1.8× el promedio, en vez de 4× (modelo diminuto).
+  - La atención causal directa da los mismos logits.
+- **Siguiente:** subir el código nuevo como versión del dataset y repetir la T0.2 v2.
