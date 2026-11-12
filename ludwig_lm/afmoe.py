@@ -17,7 +17,11 @@ Everything here works around the model, never changes its parameters or their na
 * ``LudwigAfmoe.forward``: chunked cross-entropy with the tied head, output z-loss,
   sequence-wise auxiliary loss (DeepSeek-V3), router z-loss. With ``fp32_residual`` the residual
   stream stays in FP32 when the caller runs it under FP16 autocast.
-* ``init_ludwig``: depth-scaled sandwich norm (Trinity): output-norm gains start at 1/sqrt(L).
+* ``init_ludwig``: depth-scaled sandwich norm (Trinity): output-norm gains start at 1/sqrt(L); the router
+  starts random (transformers starts it at zero, which sends every token to the same 4 experts).
+* T4 fixes for transformers' SDPA path (pre-Ampere GPUs): repeat the KV heads instead of asking SDPA for
+  native GQA, which there can fall back to the math kernel and store B*H*T*T attention weights in FP32;
+  and use plain causal attention when a sliding window covers the whole sequence (it is the same mask).
 """
 from __future__ import annotations
 
@@ -31,6 +35,8 @@ import torch.distributed as dist
 import torch.nn as nn
 import torch.nn.functional as F
 from transformers import AfmoeConfig, AfmoeForCausalLM
+from transformers import masking_utils as mu
+from transformers.integrations import sdpa_attention as sa
 from transformers.integrations.moe import ExpertsInterface
 from transformers.models.afmoe import modeling_afmoe as am
 
@@ -49,7 +55,49 @@ def load_config(path: str, **overrides) -> AfmoeConfig:
     return cfg
 
 
+# --------------------------------------------------------------------------- attention on the T4
+_use_gqa_in_sdpa = sa.use_gqa_in_sdpa
+
+
+def _use_gqa_unless_pre_ampere(attention_mask, key, value):
+    if key.is_cuda and torch.cuda.get_device_capability(key.device)[0] < 8:
+        return False                       # repeat_kv: 4x the K/V of one layer, ~70 MB at 8 x 2K
+    return _use_gqa_in_sdpa(attention_mask, key, value)
+
+
+sa.use_gqa_in_sdpa = _use_gqa_unless_pre_ampere
+
+_ignore_causal_mask_sdpa = mu._ignore_causal_mask_sdpa
+
+
+def _window_covers_sequence(padding_mask, q_length, kv_length, q_offset, kv_offset, local_attention_size=None):
+    # transformers' window keeps keys with kv_idx > q_idx - window: with kv_length <= window and no offsets
+    # that is every causal key, so SDPA can use is_causal instead of an explicit B x T x T mask
+    if local_attention_size is not None and kv_length <= local_attention_size and q_offset == 0 and kv_offset == 0:
+        local_attention_size = None
+    return _ignore_causal_mask_sdpa(padding_mask, q_length, kv_length, q_offset, kv_offset, local_attention_size)
+
+
+mu._ignore_causal_mask_sdpa = _window_covers_sequence
+
+
 # --------------------------------------------------------------------------- experts kernel
+MAX_PADDED_IMBALANCE = 2.0   # above this max/mean load, a layer skips the padding and loops over its experts
+
+
+def _sorted_loop(self, x, exp_sorted, tok, w_sorted, counts, dt):
+    """Dropless fallback without padding: one pair of matmuls per expert over its sorted tokens."""
+    ys, start = [], 0
+    for e, c in enumerate(counts.tolist()):
+        if c == 0:
+            continue
+        xe = x[tok[start:start + c]]
+        gate, up = F.linear(xe, self.gate_up_proj[e].to(dt)).chunk(2, dim=-1)
+        ys.append(F.linear(self.act_fn(gate) * up, self.down_proj[e].to(dt)) * w_sorted[start:start + c, None])
+        start += c
+    return torch.cat(ys)
+
+
 def padded_bmm_experts_forward(self, hidden_states, top_k_index, top_k_weights):
     """Same result as transformers' eager experts; weights stay in their (E, out, in) layout."""
     n_tok, d = hidden_states.shape
@@ -63,15 +111,20 @@ def padded_bmm_experts_forward(self, hidden_states, top_k_index, top_k_weights):
     exp_sorted = flat[order]
     counts = torch.bincount(flat, minlength=n_exp)
     cap = int(counts.max().item())                   # one host sync per layer
+    tok = order // k
+    w_sorted = top_k_weights.reshape(-1)[order].to(dt)
+    if cap > MAX_PADDED_IMBALANCE * flat.numel() / n_exp:
+        # padding every expert to the busiest one would multiply this layer's memory: loop instead
+        y = _sorted_loop(self, x, exp_sorted, tok, w_sorted, counts, dt)
+        return x.new_zeros(n_tok, d).index_add_(0, tok, y).to(hidden_states.dtype)
     cap = max(8, (cap + 7) // 8 * 8)                 # multiple of 8 for the tensor cores
     start = torch.cumsum(counts, 0) - counts
     pos = torch.arange(flat.numel(), device=flat.device) - start[exp_sorted]
-    tok = order // k
     xpad = x.new_zeros(n_exp, cap, d)
     xpad[exp_sorted, pos] = x[tok]
     gate, up = torch.bmm(xpad, self.gate_up_proj.to(dt).transpose(1, 2)).chunk(2, dim=-1)
     ypad = torch.bmm(self.act_fn(gate) * up, self.down_proj.to(dt).transpose(1, 2))
-    y = ypad[exp_sorted, pos] * top_k_weights.reshape(-1)[order].unsqueeze(-1).to(dt)
+    y = ypad[exp_sorted, pos] * w_sorted.unsqueeze(-1)
     out = x.new_zeros(n_tok, d).index_add_(0, tok, y)
     return out.to(hidden_states.dtype)
 
@@ -122,6 +175,8 @@ def init_ludwig(lm: AfmoeForCausalLM):
         layer.post_mlp_layernorm.weight.fill_(g)
     for m in moe_blocks(lm):
         m.expert_bias.zero_()
+        # transformers starts the router at zero: every score is 0.5 and every token picks the same top-k
+        m.router.gate.weight.normal_(0.0, lm.config.initializer_range)
 
 
 # --------------------------------------------------------------------------- losses

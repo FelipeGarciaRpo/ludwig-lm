@@ -207,32 +207,39 @@ La base lleva todas las piezas de velocidad. Cada medición de B a F quita o cam
     code(SETUP + "\n!nvidia-smi --query-gpu=name,memory.total,power.limit --format=csv\n!df -h /tmp /kaggle/working | tail -2"),
     code(RUN_HELPER.replace("@RESULTS@", "results/t0_2v2.jsonl").replace("@SCRIPT@", "scripts/bench_afmoe.py")),
     md("## A–I. Velocidad y memoria"),
-    code(r'''BASE = dict(seq=2048, micro=8, accum=1, steps=4)
+    code(r'''ok = lambda r: bool(r) and r.get("status") == "ok"
+BASE = dict(seq=2048, micro=8, accum=1, steps=4)
 R = {}
 R["A"] = run("A-base", **BASE)
+if not ok(R["A"]):
+    # 8 secuencias no caben: el resto mide con 4 (y 2 micro-pasos, los mismos 32K tokens por paso)
+    print(">> 8 secuencias por GPU no caben; el resto usa 4")
+    BASE = dict(BASE, micro=4, accum=2)
+    R["A4"] = run("A-base-4-secuencias", **BASE)
 R["B"] = run("B-loop", **BASE, moe_impl="grouped_mm")
 R["C"] = run("C-residuo-fp16", **BASE, residual="fp16")
 R["D"] = run("D-grad-fp32", **BASE, reduce="fp32")
 R["E"] = run("E-sin-prefetch", **BASE, no_prefetch=True)
 R["F"] = run("F-momento-cpu", **BASE, momentum_device="cpu")
-R["G"] = run("G-4-secuencias", **dict(BASE, micro=4, accum=2))
-R["H"] = run("H-4k", **dict(BASE, seq=4096, micro=4))
+if BASE["micro"] == 8:
+    R["G"] = run("G-4-secuencias", **dict(BASE, micro=4, accum=2))
+R["H"] = run("H-4k", **dict(BASE, seq=4096, micro=BASE["micro"] // 2))
 R["I"] = run("I-16k", **dict(BASE, seq=16384, micro=1, steps=3))'''),
     md("## J. Checkpoint completo: guardar y cargar\n\nVa con el momento en la CPU si F liberó más de 1 GiB sin perder más de 3% de velocidad, porque así sería el entrenamiento real. El checkpoint (~12 GB) va a `/tmp`, no a `/kaggle/working`, que guarda la salida del notebook y tiene un tope de ~20 GB."),
-    code(r'''ok = lambda r: bool(r) and r.get("status") == "ok"
-usar_cpu = (ok(R["A"]) and ok(R["F"]) and R["A"]["peak_reserved_GiB"] - R["F"]["peak_reserved_GiB"] > 1.0
-            and R["F"]["tokens_per_s"] >= 0.97 * R["A"]["tokens_per_s"])
+    code(r'''base = next((R[k] for k in ("A", "A4") if ok(R.get(k))), None)
+usar_cpu = (base is not None and ok(R["F"]) and base["peak_reserved_GiB"] - R["F"]["peak_reserved_GiB"] > 1.0
+            and R["F"]["tokens_per_s"] >= 0.97 * base["tokens_per_s"])
 print("Momento en la CPU para el checkpoint:", usar_cpu)
 R["J"] = run("J-checkpoint", **dict(BASE, steps=2), ckpt_test=True, ckpt_dir="/tmp/ludwig_ckpt_test",
              momentum_device="cpu" if usar_cpu else "gpu")
 !rm -rf /tmp/ludwig_ckpt_test'''),
     md("""## K–M. Balanceo de expertos en un entrenamiento corto
 
-Son 60 pasos de 32K tokens con el texto sintético del banco v1 (una cadena de Markov de 4,096 tokens, donde la segunda mitad de cada secuencia copia la primera). Allá, el bias con signo fijo de 0.001 dejó al experto más cargado en **8.4×** el promedio.
+Son 60 pasos de 32K tokens (4 secuencias por GPU y 2 micro-pasos, como el banco v1) con el texto sintético del banco v1 (una cadena de Markov de 4,096 tokens, donde la segunda mitad de cada secuencia copia la primera). Allá, el bias con signo fijo de 0.001 dejó al experto más cargado en **8.4×** el promedio.
 
 - **K:** el mismo signo fijo de 0.001, ahora en AFMoE, para comparar.
 - **L, M:** SMEBU con pasos de 0.01 y 0.001."""),
-    code(r'''TRAIN = dict(seq=2048, micro=8, accum=1, train_steps=60)
+    code(r'''TRAIN = dict(seq=2048, micro=4, accum=2, train_steps=60)   # 32K tokens por paso, como el banco v1
 R["K"] = run("K-signo", timeout_min=40, **TRAIN, balance="sign", gamma=1e-3)
 R["L"] = run("L-smebu-1e-2", timeout_min=40, **TRAIN, balance="smebu", lam=1e-2)
 R["M"] = run("M-smebu-1e-3", timeout_min=40, **TRAIN, balance="smebu", lam=1e-3)'''),
@@ -243,13 +250,15 @@ cols = ["tag", "status", "seq", "micro", "moe_impl", "residual", "reduce", "pref
         "tokens_per_s", "mfu", "peak_alloc_GiB", "peak_reserved_GiB", "hours_for_25B", "weeks_at_140h",
         "loss_scale_skips", "ckpt_save_s", "ckpt_GiB", "ckpt_restore_exact"]
 display(df[[c for c in cols if c in df.columns]])
-base = R["A"] if ok(R["A"]) else None
+base = next((R[k] for k in ("A", "A4") if ok(R.get(k))), None)
 if base:
     print(f"Base: {base['tokens_per_s']:,} tokens/s, pico reservado {base['peak_reserved_GiB']} GiB, "
           f"~{base['hours_for_25B']:,} h para 25B ({base['weeks_at_140h']} semanas a 140 h/semana)")
     for k, nombre in [("B", "loop en vez de bmm"), ("C", "residuo FP16"), ("D", "gradientes FP32"),
                       ("E", "sin prefetch"), ("F", "momento en CPU"), ("G", "4 secuencias por GPU")]:
         r = R.get(k)
+        if k not in R:
+            continue
         if ok(r):
             print(f"  {k} {nombre:22s}: {100 * (r['tokens_per_s'] / base['tokens_per_s'] - 1):+5.1f}% tokens/s, "
                   f"{r['peak_reserved_GiB'] - base['peak_reserved_GiB']:+.2f} GiB reservados")
