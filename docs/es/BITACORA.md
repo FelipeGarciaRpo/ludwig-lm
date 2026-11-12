@@ -99,3 +99,49 @@ Todo lo que se corre, se mide o se decide, en orden. Cada entrada dice qué se h
 - **Archivos:** `results/banco_t4_v1/resultados.json`, `results/banco_t4_v1/reporte.txt` y `results/banco_t4_v1/logs/` (22 logs; 10 salieron vacíos de Kaggle).
 - **Conclusión:** la evidencia del banco v1 queda completa. Ojo con una línea: `reporte.txt` dice que los kernels de KDA no corren en FP16, pero el error real fue `ModuleNotFoundError: No module named 'fla.ops'` (`salida_kaggle.txt`, líneas 61–79). Vale lo de la entrada del banco v1: KDA no se probó.
 - **Siguiente paso:** sigue pendiente el visto bueno de Pipe a la propuesta v1.2.
+
+## 2026-11-12 · v1.2 aprobada
+
+- Pipe aprobó la propuesta v1.2.
+- **Formato:** AFMoE.
+- **Balanceo:** SMEBU más una pérdida pequeña por secuencia.
+- **Fuera de la v1:** el MTP, AttnRes y KDA.
+- **Entrenamiento:** la clase de transformers más las piezas de velocidad.
+- `docs/DECISIONS.md` marca con ⛔ las decisiones que quedan reemplazadas (D02, D03, la RoPE parcial de D04, el router de D05 y D07). El cuerpo de `DISENO.md` se reescribe con los números de la T0.2 v2.
+
+## 2026-11-12 · T0.2 v2 lista para Kaggle
+
+- **Qué se construyó:**
+  - **`ludwig_lm/afmoe.py`.** Envuelve `AfmoeForCausalLM` sin cambiar el formato del checkpoint:
+    - kernel de expertos con bmm y relleno, registrado en la interfaz de expertos de transformers;
+    - router en FP32 que anota sus decisiones sin contarlas dos veces cuando el checkpointing recalcula;
+    - `expert_bias` como buffer replicado;
+    - balanceador SMEBU o de signo;
+    - pérdidas: CE por bloques con la cabeza atada, z-loss de salida, pérdida por secuencia y z-loss del router;
+    - inicialización con las normas de salida en 1/√26.
+  - **`ludwig_lm/muon.py`.**
+    - Distingue el `q_proj` de AFMoE, que no trae la compuerta adentro.
+    - Manda el router a AdamW.
+    - Puede guardar el momento en la RAM de la CPU como DTensor sobre una malla de CPU, para que el checkpoint distribuido lo guarde completo.
+  - **`scripts/bench_afmoe.py`.** Banco del entrenamiento real:
+    - modelo construido directo en cada GPU y luego fragmentado;
+    - FSDP2 con gradientes en FP16 y prefetch explícito;
+    - residuo en FP32 con autocast;
+    - modo de 60 pasos con el texto de Markov del banco v1;
+    - prueba del checkpoint completo, que incluye el bias y el momento del balanceador.
+  - **`notebooks/t0_2v2_afmoe_2xT4.ipynb`**, generado como siempre desde `scripts/make_notebooks.py`.
+- **Probado en CPU** (sandbox del chat de diseño, 2 procesos gloo, modelo diminuto):
+  - El bmm con relleno da **exactamente** lo mismo que los expertos de transformers.
+  - El router anota una vez por capa MoE aunque el checkpointing lo recalcule.
+  - Con autocast, el residuo se queda en FP32.
+  - SMEBU y el signo mueven el bias en la dirección correcta.
+  - Las tres variantes de kernel y precisión corren.
+  - El checkpoint se restaura exacto: pesos, bias y momento del balanceador.
+  - En 40 pasos con texto de Markov, SMEBU (λ = 0.01) terminó con la carga máxima en 2.27× el promedio y 0 expertos sin tokens. El signo fijo (0.001) terminó en 3.63× con 1 experto sin tokens.
+- **Lo que solo se puede probar en las T4:**
+  - el momento en la CPU (memoria fijada y malla de CPU);
+  - los gradientes en FP16 por NCCL;
+  - la memoria real con 8 secuencias de 2K;
+  - 16K de contexto.
+- **Un cambio de memoria:** la pérdida va en bloques de 1,024 tokens, no de 4,096. Con 64K de vocabulario, un bloque de 4,096 pide ~3.8 GB temporales.
+- **Siguiente:** correr el notebook en Kaggle (GPU T4 x2) y guardar `results/t0_2v2.jsonl`.

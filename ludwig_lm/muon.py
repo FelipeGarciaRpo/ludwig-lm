@@ -11,6 +11,11 @@
 * 2-D DTensors are sharded by rows: the update is all-gathered, orthogonalised
   and the local rows are kept.
 * Momentum is stored in bf16 by default (saves ~1.8 GiB per T4 for Ludwig 2).
+  ``momentum_device="cpu"`` keeps it in pinned CPU RAM instead (another ~1.7 GiB per T4):
+  each step copies it to the GPU and back. It stays a DTensor on a CPU mesh, so distributed
+  checkpoints still save every shard.
+* ``fused_qgate``: True for Qwen3-Next (``q_proj`` = [query | gate]); False for AFMoE, whose gate
+  is its own matrix.
 """
 from __future__ import annotations
 
@@ -64,8 +69,8 @@ def _orthogonalize(u: torch.Tensor, kind: str, n_heads: int, head_dim: int, ns_d
     return ns(u)
 
 
-def _kind(name: str) -> str:
-    if name.endswith("self_attn.q_proj.weight"):
+def _kind(name: str, fused_qgate: bool = True) -> str:
+    if fused_qgate and name.endswith("self_attn.q_proj.weight"):
         return "qgate"
     if name.endswith("experts.gate_up_proj"):
         return "halves"
@@ -78,14 +83,17 @@ def _local(t):
 
 class Muon(torch.optim.Optimizer):
     def __init__(self, named_params, lr=1e-3, momentum=0.95, nesterov=True, weight_decay=0.1,
-                 n_heads=16, head_dim=64, momentum_dtype=torch.bfloat16, ns_dtype=torch.float16):
+                 n_heads=16, head_dim=64, momentum_dtype=torch.bfloat16, ns_dtype=torch.float16,
+                 fused_qgate=True, momentum_device=None, cpu_mesh=None):
         named_params = list(named_params)
         params = [p for _, p in named_params]
         super().__init__(params, dict(lr=lr, momentum=momentum, nesterov=nesterov, weight_decay=weight_decay))
-        self._kinds = {p: _kind(n) for n, p in named_params}
+        self._kinds = {p: _kind(n, fused_qgate) for n, p in named_params}
         self._names = {p: n for n, p in named_params}
         self.n_heads, self.head_dim = n_heads, head_dim
         self.momentum_dtype, self.ns_dtype = momentum_dtype, ns_dtype
+        self.momentum_cpu = momentum_device == "cpu"
+        self.cpu_mesh = cpu_mesh
 
     @torch.no_grad()
     def step(self, closure=None):
@@ -97,12 +105,18 @@ class Muon(torch.optim.Optimizer):
                 g = _local(p.grad).float()
                 state = self.state[p]
                 if "momentum_buffer" not in state:
-                    zeros = torch.zeros_like(g, dtype=self.momentum_dtype)
+                    on_cpu = self.momentum_cpu and g.device.type != "cpu"
+                    zeros = torch.zeros(g.shape, dtype=self.momentum_dtype, device="cpu" if on_cpu else g.device,
+                                        pin_memory=on_cpu)
                     if isinstance(p, DTensor):  # keep it a DTensor so distributed checkpoints save every shard
-                        zeros = DTensor.from_local(zeros, p.device_mesh, p.placements, shape=p.shape, stride=p.stride())
+                        mesh = self.cpu_mesh if on_cpu else p.device_mesh
+                        zeros = DTensor.from_local(zeros, mesh, p.placements, shape=p.shape, stride=p.stride())
                     state["momentum_buffer"] = zeros
-                buf = _local(state["momentum_buffer"])
+                stored = _local(state["momentum_buffer"])
+                buf = stored.to(g.device, non_blocking=True) if stored.device != g.device else stored
                 buf.mul_(mu).add_(g.to(buf.dtype))
+                if buf is not stored:
+                    stored.copy_(buf, non_blocking=True)
                 u = g.add(buf.float(), alpha=mu) if group["nesterov"] else buf.float()
 
                 kind = self._kinds[p]
@@ -131,7 +145,7 @@ def split_params(model):
             continue
         is_matrix = p.ndim >= 2
         is_special = ("embed_tokens" in n or "lm_head" in n or n.endswith("mlp.gate.weight")
-                      or "shared_expert_gate" in n)
+                      or n.endswith("router.gate.weight") or "shared_expert_gate" in n)
         if is_matrix and not is_special:
             muon.append((n, p))
         elif is_matrix:
@@ -142,13 +156,15 @@ def split_params(model):
 
 
 def build_optimizers(model, lr: float, weight_decay: float = 0.1, n_heads: int = 16, head_dim: int = 64,
-                     momentum_dtype=torch.bfloat16):
+                     momentum_dtype=torch.bfloat16, fused_qgate: bool = True, adamw_lr: float | None = None,
+                     momentum_device=None, cpu_mesh=None):
     muon_p, decay_p, no_decay_p = split_params(model)
     muon = Muon(muon_p, lr=lr, weight_decay=weight_decay, n_heads=n_heads, head_dim=head_dim,
-                momentum_dtype=momentum_dtype)
+                momentum_dtype=momentum_dtype, fused_qgate=fused_qgate, momentum_device=momentum_device,
+                cpu_mesh=cpu_mesh)
     adamw = torch.optim.AdamW(
         [{"params": decay_p, "weight_decay": weight_decay}, {"params": no_decay_p, "weight_decay": 0.0}],
-        lr=lr, betas=(0.9, 0.95), eps=1e-8, foreach=False,
+        lr=lr if adamw_lr is None else adamw_lr, betas=(0.9, 0.95), eps=1e-8, foreach=False,
     )
     return muon, adamw
 

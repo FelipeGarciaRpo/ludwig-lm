@@ -2,11 +2,11 @@
 
 Every design decision, why it was taken, and the evidence or test behind it. The full reasoning, with numbers and sources, is in the design document (Spanish): [`docs/es/DISENO.md`](es/DISENO.md), v1.1.
 
-**Status:** ✅ decided · 📏 fixed by a measurement · ⏳ open, with the test that closes it · 🟡 proposed, waiting for approval
+**Status:** ✅ decided · 📏 fixed by a measurement · ⏳ open, with the test that closes it · ⛔ superseded
 
 ---
 
-## Proposed v1.2 (🟡 waiting for Pipe's approval)
+## v1.2 (✅ approved by Pipe on November 12, 2026)
 
 Two pieces of evidence came in on November 11, 2026 (details in [`docs/es/BITACORA.md`](es/BITACORA.md)):
 
@@ -21,7 +21,7 @@ Two pieces of evidence came in on November 11, 2026 (details in [`docs/es/BITACO
 | P4 | Keep Block AttnRes and KDA out of v1. In llama.cpp they exist only inside the Kimi-K3 architecture (MLA + KDA + latent MoE), and transformers has no native class for them. | — |
 | P5 | Train with the transformers class plus our own speed pieces: padded-bmm experts registered through transformers' experts interface, FP32 residual stream, FP16 gradient reduce-scatter, explicit FSDP2 prefetch, and optional Muon momentum in CPU RAM. Measured in **T0.2 v2**. | D10 details |
 
-If approved, the entries below are rewritten. Until then they stand.
+P1–P4 are decided. P5 is decided as the plan and 📏 measured piece by piece in T0.2 v2 (`notebooks/t0_2v2_afmoe_2xT4.ipynb`, `scripts/bench_afmoe.py`, `ludwig_lm/afmoe.py`). The entries below marked ⛔ are replaced by them; the rest still stand.
 
 ---
 
@@ -36,26 +36,26 @@ If approved, the entries below are rewritten. Until then they stand.
 - **Plan B:** 32 experts (1.64B total) if T0.2 leaves less than 1.5 GiB free per GPU.
 
 ### D02. File format
-✅ Stored as Hugging Face `Qwen3NextForCausalLM` with `layer_types` = 26 × `full_attention` (**format A**).
+⛔ *Replaced by P1 (AFMoE).* Stored as Hugging Face `Qwen3NextForCausalLM` with `layer_types` = 26 × `full_attention` (**format A**).
 
 - **Why:** that class already has every piece we want (gated attention, QK-norm, shared expert, MTP weights) in a format transformers loads and llama.cpp converts. We maintain no modeling code of our own that could drift.
 - **Evidence (T0.1, CPU):** exported and reloaded logits are identical; the GGUF converts with the MTP layer. **Stock llama.cpp crashes on load** (`GGML_ASSERT(buffer)`); with a 3-line patch, every check passes: next-token probabilities within 1.9e-6, greedy 4/4 identical, MTP speculative decoding 4/4 identical. See [`patches/README.md`](../patches/README.md).
 - **Known limit:** llama.cpp still treats the model as hybrid: no context shift, and prompt reuse goes through checkpoints.
 
 ### D03. Format A/B
-⏳ Two identical short runs of the real model (~0.3B tokens, same data order, same LR), in T2:
+⛔ *Not needed: AFMoE has the gate of A and runs unpatched like B (P1).* Two identical short runs of the real model (~0.3B tokens, same data order, same LR), in T2:
 
 - **A** = Qwen3-Next format: output gate + softmax router with a global balancing loss.
 - **B** = GLM-4.5 format (`Glm4MoeForCausalLM`): no gate; sigmoid router with a bias and no auxiliary loss (DeepSeek-style, MobileMoE's recipe); QK-norm; partial RoPE; MTP. Runs in llama.cpp without patches.
 - **Rule:** A goes if it beats B by ≥1.5% in validation loss, or if B is unstable in FP16. Otherwise B goes, because it runs everywhere unpatched. Expert balance, router entropy, under-used experts, loss spikes and tokens/s are also compared.
 
 ### D04. Attention
-✅ QK-norm (RMSNorm per head on q and k); an elementwise sigmoid gate on the attention output (`q_proj` outputs the query and the gate); partial RoPE on 50% of the dimensions with θ = 500,000.
+✅ QK-norm and the gate stay. ⛔ *Partial RoPE everywhere is replaced by RoPE on local layers only (P1).* QK-norm (RMSNorm per head on q and k); an elementwise sigmoid gate on the attention output (`q_proj` outputs the query and the gate); partial RoPE on 50% of the dimensions with θ = 500,000.
 
 - **Why:** QK-norm bounds attention logits, which matters in FP16. The gate removes attention sinks and massive activations and tolerates a higher LR (Qwen, *Gated Attention*, NeurIPS 2025). Partial RoPE makes context extension smoother.
 
 ### D05. Mixture of experts
-✅ 40 routed experts (SwiGLU, 512 wide), top-4 with normalized weights, plus one shared expert (SwiGLU, 2048) with a sigmoid gate. FFN expansion (40 × 512 + 2048) / (4 × 512 + 2048) = 5.5, inside MobileMoE's useful range of 4–8.
+✅ Experts, shared expert and kernel stay. ⛔ *The softmax router and its global balancing loss are replaced by P1–P2.* 40 routed experts (SwiGLU, 512 wide), top-4 with normalized weights, plus one shared expert (SwiGLU, 2048) with a sigmoid gate. FFN expansion (40 × 512 + 2048) / (4 × 512 + 2048) = 5.5, inside MobileMoE's useful range of 4–8.
 
 - **Router:** softmax computed in FP32.
 - **Balancing:** global-batch load-balancing loss (coefficient 1e-3; expert frequencies are summed across GPUs with one all-reduce) + router z-loss 1e-4. No token dropping.
@@ -70,7 +70,7 @@ If approved, the entries below are rewritten. Until then they stand.
 - **Constraint:** the pre-tokenizer regex must be one llama.cpp implements. T0.1 checks it (T1–T2) and must be re-run with the final tokenizer. ⏳
 
 ### D07. MTP head
-✅ One multi-token-prediction module (projection 2048 → 1024, two norms, one decoder layer, the shared head), used as the draft model for speculative decoding (`llama-server --spec-type draft-mtp`).
+⛔ *Dropped (P3): AFMoE has no MTP in llama.cpp.* One multi-token-prediction module (projection 2048 → 1024, two norms, one decoder layer, the shared head), used as the draft model for speculative decoding (`llama-server --spec-type draft-mtp`).
 
 - **Training:** only on the last ~1B tokens of the v1 branch, with stop-gradient into the trunk, the embeddings and the head. It learns from the model's representations but cannot make the model worse.
 - **Evidence:** T0.1 A5, outputs identical with and without speculation; 64% of drafts accepted on the tiny test model.

@@ -25,6 +25,43 @@ import torch, transformers
 print("torch", torch.__version__, "| transformers", transformers.__version__, "| CPUs", os.cpu_count(),
       "| GPUs", torch.cuda.device_count())'''
 
+RUN_HELPER = r'''import threading, time
+RESULTS = "@RESULTS@"
+KEEP = ("[model]", "  step", "[result]", "[ckpt]", "Error", "OutOfMemory", "out of memory", "Traceback")
+
+def run(tag, timeout_min=25, **kw):
+    """Lanza una medición con torchrun en las 2 GPUs, muestra el progreso y devuelve su fila de resultados."""
+    args = " ".join(f"--{k.replace('_', '-')}" + ("" if v is True else f" {v}") for k, v in kw.items())
+    cmd = (f"PYTORCH_CUDA_ALLOC_CONF=expandable_segments:True torchrun --nproc_per_node 2 "
+           f"@SCRIPT@ --tag {tag} --out {RESULTS} {args}")
+    print(">>", cmd, flush=True)
+    p = subprocess.Popen(cmd, shell=True, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True,
+                         start_new_session=True)
+    killed = []
+    def kill():  # torchrun runs each worker in its own session: kill by command line, TERM first, then KILL
+        killed.append(True)
+        subprocess.run(["pkill", "-TERM", "-f", "@SCRIPT@"])
+        time.sleep(20)
+        subprocess.run(["pkill", "-KILL", "-f", "@SCRIPT@"])
+    timer = threading.Timer(timeout_min * 60, kill)
+    timer.start()
+    tail = []
+    for line in p.stdout:
+        tail = (tail + [line])[-30:]
+        if any(k in line for k in KEEP):
+            print(line, end="", flush=True)
+    p.wait()
+    timer.cancel()
+    if p.returncode != 0:
+        print(f"[{tag}] terminó con código {p.returncode}; últimas líneas:\n" + "".join(tail[-12:]))
+    rows = [json.loads(l) for l in open(RESULTS)] if os.path.exists(RESULTS) else []
+    row = next((r for r in reversed(rows) if r["tag"] == tag), None)
+    if row is None:  # se cayó o se pasó del tiempo antes de escribir su fila: se anota igual para el resumen
+        row = {"tag": tag, "status": "timeout" if killed else f"crash (código {p.returncode})", **kw}
+        with open(RESULTS, "a") as f:
+            f.write(json.dumps(row) + "\n")
+    return row'''
+
 # ----------------------------------------------------------------------------- T0.1
 t01 = nbf.v4.new_notebook()
 t01.cells = [
@@ -101,42 +138,7 @@ Mide con el **modelo real** (1.96B totales / 0.49B activos), FSDP2 entre las dos
 **Kaggle:** acelerador *GPU T4 x2*, Internet *On*. Tarda ~45–75 min. Cada medición escribe una línea en `results/t0_2.jsonl`, así que si la sesión se corta no se pierde lo ya medido."""),
     code(r'''REPO_URL = "https://github.com/FelipeGarciaRpo/ludwig-lm.git"   # o "" si subiste el repo como dataset'''),
     code(SETUP + "\n!nvidia-smi --query-gpu=name,memory.total,power.limit --format=csv\n!df -h /tmp /kaggle/working | tail -2"),
-    code(r'''import threading, time
-RESULTS = "results/t0_2.jsonl"
-KEEP = ("[model]", "  step", "[result]", "[ckpt]", "Error", "OutOfMemory", "out of memory", "Traceback")
-
-def run(tag, timeout_min=25, **kw):
-    """Lanza una medición con torchrun en las 2 GPUs, muestra el progreso y devuelve su fila de resultados."""
-    args = " ".join(f"--{k.replace('_', '-')}" + ("" if v is True else f" {v}") for k, v in kw.items())
-    cmd = (f"PYTORCH_CUDA_ALLOC_CONF=expandable_segments:True torchrun --nproc_per_node 2 "
-           f"scripts/bench_train.py --tag {tag} --out {RESULTS} {args}")
-    print(">>", cmd, flush=True)
-    p = subprocess.Popen(cmd, shell=True, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True,
-                         start_new_session=True)
-    killed = []
-    def kill():  # torchrun runs each worker in its own session: kill by command line, TERM first, then KILL
-        killed.append(True)
-        subprocess.run(["pkill", "-TERM", "-f", "scripts/bench_train.py"])
-        time.sleep(20)
-        subprocess.run(["pkill", "-KILL", "-f", "scripts/bench_train.py"])
-    timer = threading.Timer(timeout_min * 60, kill)
-    timer.start()
-    tail = []
-    for line in p.stdout:
-        tail = (tail + [line])[-30:]
-        if any(k in line for k in KEEP):
-            print(line, end="", flush=True)
-    p.wait()
-    timer.cancel()
-    if p.returncode != 0:
-        print(f"[{tag}] terminó con código {p.returncode}; últimas líneas:\n" + "".join(tail[-12:]))
-    rows = [json.loads(l) for l in open(RESULTS)] if os.path.exists(RESULTS) else []
-    row = next((r for r in reversed(rows) if r["tag"] == tag), None)
-    if row is None:  # se cayó o se pasó del tiempo antes de escribir su fila: se anota igual para el resumen
-        row = {"tag": tag, "status": "timeout" if killed else f"crash (código {p.returncode})", **kw}
-        with open(RESULTS, "a") as f:
-            f.write(json.dumps(row) + "\n")
-    return row'''),
+    code(RUN_HELPER.replace("@RESULTS@", "results/t0_2.jsonl").replace("@SCRIPT@", "scripts/bench_train.py")),
     md("""## A. Kernel de MoE (2K de contexto, micro-batch 4)
 
 En la T4 (SM75), `grouped_mm` no tiene el kernel nativo de PyTorch (pide SM80+): transformers usa su respaldo, que ordena los tokens por experto y hace una multiplicación por experto. `batched_mm` y `eager` son las otras dos formas."""),
@@ -177,7 +179,102 @@ else:
 Descarga `results/t0_2.jsonl` y súbelo al repo. Con esos números se fijan el kernel de MoE, el micro-batch, si 16K cabe y si van 40 o 32 expertos. Después viene la compuerta G0: una prueba sostenida de ≥6 h con datos reales, con guardado y reanudación en otra cuenta."""),
 ]
 
-for nb, name in [(t01, "t0_1_formato_mtp_tokenizador.ipynb"), (t02, "t0_2_velocidad_memoria_2xT4.ipynb")]:
+
+# ----------------------------------------------------------------------------- T0.2 v2 (AFMoE)
+t02v2 = nbf.v4.new_notebook()
+t02v2.cells = [
+    md("""# Ludwig 2 · T0.2 v2: el entrenamiento real en AFMoE, en 2×T4
+
+Mide el paso de entrenamiento de verdad: el modelo de 1.906B parámetros totales y 0.491B activos en el formato AFMoE (`configs/ludwig2_afmoe.json`), FSDP2 entre las dos T4, FP16 con escalado de pérdida, Muon + AdamW, la pérdida por bloques con la cabeza atada, las pérdidas de balanceo y el bias de los expertos. Solo los datos son sintéticos.
+
+La base lleva todas las piezas de velocidad. Cada medición de B a F quita o cambia **una sola** pieza, para ver cuánto vale:
+
+| Medición | Qué cambia frente a la base | Qué decide |
+|---|---|---|
+| A | Nada: bmm con relleno, residuo en FP32, gradientes en FP16, prefetch, 8 secuencias de 2K por GPU | Tokens/s y memoria de referencia |
+| B | Un matmul por experto (`grouped_mm`, que en la T4 cae a un loop) | Si el bmm con relleno vale la pena |
+| C | Residuo en FP16 | Cuánto cuesta en velocidad y memoria mantenerlo en FP32 |
+| D | Gradientes en FP32 entre las GPUs | Cuánto ahorra mandarlos en FP16 |
+| E | Sin prefetch explícito de FSDP2 | Si el prefetch tapa la comunicación |
+| F | Momento de Muon en la RAM de la CPU | Cuánta memoria libera y qué cuesta |
+| G | 4 secuencias por GPU | El costo de partir el micro-lote, que el banco v1 dedujo pero no midió |
+| H, I | 4K y 16K de contexto | Si caben y a qué velocidad |
+| J | Guardar y cargar el checkpoint completo | Tiempo, tamaño y restauración exacta |
+| K, L, M | 60 pasos de entrenamiento con el texto sintético del banco v1 | Balanceo de expertos: signo fijo (como el banco v1) contra SMEBU |
+
+**Kaggle:** acelerador *GPU T4 x2*, Internet *On*. Tarda **~1–1.25 h**. Cada medición escribe su línea en `results/t0_2v2.jsonl` apenas termina: si la sesión se corta, lo medido no se pierde."""),
+    code(r'''REPO_URL = "https://github.com/TU_USUARIO/ludwig-lm.git"   # o "" si subiste el repo como dataset'''),
+    code(SETUP + "\n!nvidia-smi --query-gpu=name,memory.total,power.limit --format=csv\n!df -h /tmp /kaggle/working | tail -2"),
+    code(RUN_HELPER.replace("@RESULTS@", "results/t0_2v2.jsonl").replace("@SCRIPT@", "scripts/bench_afmoe.py")),
+    md("## A–I. Velocidad y memoria"),
+    code(r'''BASE = dict(seq=2048, micro=8, accum=1, steps=4)
+R = {}
+R["A"] = run("A-base", **BASE)
+R["B"] = run("B-loop", **BASE, moe_impl="grouped_mm")
+R["C"] = run("C-residuo-fp16", **BASE, residual="fp16")
+R["D"] = run("D-grad-fp32", **BASE, reduce="fp32")
+R["E"] = run("E-sin-prefetch", **BASE, no_prefetch=True)
+R["F"] = run("F-momento-cpu", **BASE, momentum_device="cpu")
+R["G"] = run("G-4-secuencias", **dict(BASE, micro=4, accum=2))
+R["H"] = run("H-4k", **dict(BASE, seq=4096, micro=4))
+R["I"] = run("I-16k", **dict(BASE, seq=16384, micro=1, steps=3))'''),
+    md("## J. Checkpoint completo: guardar y cargar\n\nVa con el momento en la CPU si F liberó más de 1 GiB sin perder más de 3% de velocidad, porque así sería el entrenamiento real. El checkpoint (~12 GB) va a `/tmp`, no a `/kaggle/working`, que guarda la salida del notebook y tiene un tope de ~20 GB."),
+    code(r'''ok = lambda r: bool(r) and r.get("status") == "ok"
+usar_cpu = (ok(R["A"]) and ok(R["F"]) and R["A"]["peak_reserved_GiB"] - R["F"]["peak_reserved_GiB"] > 1.0
+            and R["F"]["tokens_per_s"] >= 0.97 * R["A"]["tokens_per_s"])
+print("Momento en la CPU para el checkpoint:", usar_cpu)
+R["J"] = run("J-checkpoint", **dict(BASE, steps=2), ckpt_test=True, ckpt_dir="/tmp/ludwig_ckpt_test",
+             momentum_device="cpu" if usar_cpu else "gpu")
+!rm -rf /tmp/ludwig_ckpt_test'''),
+    md("""## K–M. Balanceo de expertos en un entrenamiento corto
+
+Son 60 pasos de 32K tokens con el texto sintético del banco v1 (una cadena de Markov de 4,096 tokens, donde la segunda mitad de cada secuencia copia la primera). Allá, el bias con signo fijo de 0.001 dejó al experto más cargado en **8.4×** el promedio.
+
+- **K:** el mismo signo fijo de 0.001, ahora en AFMoE, para comparar.
+- **L, M:** SMEBU con pasos de 0.01 y 0.001."""),
+    code(r'''TRAIN = dict(seq=2048, micro=8, accum=1, train_steps=60)
+R["K"] = run("K-signo", timeout_min=40, **TRAIN, balance="sign", gamma=1e-3)
+R["L"] = run("L-smebu-1e-2", timeout_min=40, **TRAIN, balance="smebu", lam=1e-2)
+R["M"] = run("M-smebu-1e-3", timeout_min=40, **TRAIN, balance="smebu", lam=1e-3)'''),
+    md("## Resumen"),
+    code(r'''import pandas as pd
+df = pd.DataFrame([json.loads(l) for l in open(RESULTS)])
+cols = ["tag", "status", "seq", "micro", "moe_impl", "residual", "reduce", "prefetch", "momentum_device",
+        "tokens_per_s", "mfu", "peak_alloc_GiB", "peak_reserved_GiB", "hours_for_25B", "weeks_at_140h",
+        "loss_scale_skips", "ckpt_save_s", "ckpt_GiB", "ckpt_restore_exact"]
+display(df[[c for c in cols if c in df.columns]])
+base = R["A"] if ok(R["A"]) else None
+if base:
+    print(f"Base: {base['tokens_per_s']:,} tokens/s, pico reservado {base['peak_reserved_GiB']} GiB, "
+          f"~{base['hours_for_25B']:,} h para 25B ({base['weeks_at_140h']} semanas a 140 h/semana)")
+    for k, nombre in [("B", "loop en vez de bmm"), ("C", "residuo FP16"), ("D", "gradientes FP32"),
+                      ("E", "sin prefetch"), ("F", "momento en CPU"), ("G", "4 secuencias por GPU")]:
+        r = R.get(k)
+        if ok(r):
+            print(f"  {k} {nombre:22s}: {100 * (r['tokens_per_s'] / base['tokens_per_s'] - 1):+5.1f}% tokens/s, "
+                  f"{r['peak_reserved_GiB'] - base['peak_reserved_GiB']:+.2f} GiB reservados")
+        else:
+            print(f"  {k} {nombre:22s}: {(r or {}).get('status')}")
+for k in ["H", "I", "J"]:
+    r = R.get(k) or {}
+    print(f"  {k}: {r.get('tag')} -> {r.get('status')}, {r.get('tokens_per_s')} tokens/s, {r.get('peak_reserved_GiB')} GiB"
+          + (f", checkpoint {r.get('ckpt_GiB')} GiB, exacto={r.get('ckpt_restore_exact')}" if k == "J" else ""))
+print("\nBalanceo (60 pasos):")
+for k in ["K", "L", "M"]:
+    r = R.get(k) or {}
+    if ok(r):
+        print(f"  {r['tag']:14s}: pérdida {r['ce_first']:.2f} -> {r['ce_last']:.2f} (piso ~{r['ce_floor']}), "
+              f"carga máx/media al final {r['load_max_over_mean_last']:.2f} (pico {r['load_max_over_mean_peak']:.2f}), "
+              f"pasos saltados {r['loss_scale_skips']}, {r['tokens_per_s']:,.0f} tokens/s")
+    else:
+        print(f"  {k}: {r.get('status')}")'''),
+    md("""## Qué hacer con el resultado
+
+Descarga `results/t0_2v2.jsonl` (panel *Output*), guárdalo en `results/` y anota la entrada en la bitácora. Con esos números se fijan las piezas que van al entrenamiento real, el micro-lote, si 16K cabe y la regla de balanceo. Después vienen la T0.3 (estabilidad en FP16 con el LR pico) y la compuerta G0."""),
+]
+
+for nb, name in [(t01, "t0_1_formato_mtp_tokenizador.ipynb"), (t02, "t0_2_velocidad_memoria_2xT4.ipynb"),
+                 (t02v2, "t0_2v2_afmoe_2xT4.ipynb")]:
     for i, cell in enumerate(nb.cells):
         cell.id = f"cell-{i:02d}"          # stable ids: regenerating gives an identical file
     nb.metadata["kernelspec"] = {"name": "python3", "display_name": "Python 3", "language": "python"}

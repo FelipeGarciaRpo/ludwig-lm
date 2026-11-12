@@ -6,7 +6,7 @@
 
 ![License](https://img.shields.io/badge/license-Apache--2.0-blue)
 ![Status](https://img.shields.io/badge/status-phase%20T0-orange)
-![Parameters](https://img.shields.io/badge/params-1.96B%20total%20%2F%200.49B%20active-6f42c1)
+![Parameters](https://img.shields.io/badge/params-1.91B%20total%20%2F%200.49B%20active-6f42c1)
 ![Hardware](https://img.shields.io/badge/trained%20on-Kaggle%202%C3%97T4-20BEFF)
 ![Languages](https://img.shields.io/badge/languages-EN%20%2B%20ES-2ea44f)
 
@@ -14,11 +14,11 @@
 
 </div>
 
-> **Status, November 12, 2026.** Design v1.1 is closed. A first bench on Kaggle 2×T4 measured **3,856 tokens/s, about 1,800 h for 25B tokens**. A v1.2 proposal is waiting for approval: store the model in the AFMoE format (Arcee Trinity), which runs in llama.cpp unpatched. Next up is T0.2 v2, the real training stack on 2×T4. **There are no weights yet.** This repository documents the project from its first test.
+> **Status, November 12, 2026.** Design v1.2 is approved: Ludwig 2 is stored in the AFMoE format of Arcee's Trinity models, which runs in llama.cpp unpatched. A first bench on 2×T4 measured **3,856 tokens/s, about 1,800 h for 25B tokens**. Next up is T0.2 v2, the real training stack on 2×T4 ([notebook](notebooks/t0_2v2_afmoe_2xT4.ipynb)). **There are no weights yet.** This repository documents the project from its first test.
 
 ## Why Ludwig 2
 
-- **Made for your PC.** 0.49B active parameters per token, ~1.2 GB at 4-bit, and an MTP head for speculative decoding in llama.cpp.
+- **Made for your PC.** 0.49B active parameters per token, ~1.1 GB at 4-bit, and a KV cache 3× smaller than full attention at 16K, because 20 of its 26 layers only look at the last 2,048 tokens.
 - **Trained on free compute.** Two T4 GPUs on Kaggle, relayed between friends who each run turns on their own account.
 - **English and Spanish.** 10% Spanish in pretraining and 25–30% in fine-tuning. [Why not 4% or 50%?](#why-10-spanish)
 - **Reasons, at its scale.** `<think>` from day one, 10–22% math, Python as a calculator, and short chain-of-thought fine-tuning.
@@ -28,55 +28,57 @@
 
 | | |
 |---|---|
-| Parameters | **1.963B total, 0.491B active** per token, +75M in the MTP head |
-| Shape | 26 layers × width 1024 |
-| Attention | GQA (16 query / 4 KV heads of 64), QK-norm, sigmoid output gate, partial RoPE (50%, θ = 500K) |
-| Feed-forward | MoE in every layer: 40 routed experts (SwiGLU 512), top-4, + 1 shared expert (SwiGLU 2048) |
-| Router | Softmax in FP32, global load-balancing loss, no token dropping |
-| Vocabulary | 64K, own BPE, tied embeddings |
+| Parameters | **1.906B total, 0.491B active** per token |
+| Shape | 26 layers × width 1024: the first is dense, the other 25 are MoE |
+| Attention | GQA (16 query / 4 KV heads of 64), QK-norm, sigmoid output gate |
+| Local and global layers | 3 local layers (sliding window of 2,048 tokens, RoPE θ = 10K) per global layer (no positional encoding): 20 local, 6 global |
+| Feed-forward | 40 routed experts (SwiGLU 512), top-4, + 1 shared expert (SwiGLU 2048). The dense first layer is a SwiGLU 4096 |
+| Router | Sigmoid in FP32 with an expert bias updated by SMEBU (no auxiliary loss needed for balance), plus a small sequence-wise loss. No token dropping |
+| Norms | Depth-scaled sandwich norm: an RMSNorm before and after every sublayer |
+| Vocabulary | 64K, own BPE, tied embeddings (scaled by √d at the input) |
 | Context | 2K → 4K in the trunk, 16K in v1, 32K from 250B tokens |
-| Speculative decoding | 1 MTP module, used by `llama-server --spec-type draft-mtp` |
-| Size | ~2.2 GB in Q8_0, ~1.15 GB in Q4_0; KV cache 26.6 KB per token (436 MB at 16K) |
-| Format | Hugging Face `Qwen3NextForCausalLM` with all 26 layers set to `full_attention` → GGUF. 🟡 v1.2 proposes `AfmoeForCausalLM` (see [results](#t01-c-the-afmoe-format-cpu-november-11-2026)) |
+| Size | ~2.0 GB in Q8_0, ~1.1 GB in Q4_0. KV cache 136 MiB at 16K, against 416 MiB if every layer were global |
+| Format | Hugging Face `AfmoeForCausalLM` (Arcee Trinity) → GGUF with stock llama.cpp |
 
 ```mermaid
 flowchart TB
-    E["64K embeddings, tied to the output head"]
-    subgraph L["decoder layer, × 26"]
+    E["64K embeddings × √d, tied to the output head"]
+    subgraph L["decoder layer, × 26 · 3 local : 1 global"]
         direction TB
-        N1["RMSNorm"] --> ATT["gated GQA attention<br/>16 q / 4 kv heads · QK-norm<br/>partial RoPE · sigmoid output gate"]
-        ATT --> A1(("+"))
+        N1["RMSNorm"] --> ATT["gated GQA attention<br/>16 q / 4 kv heads · QK-norm<br/>local: window 2048 + RoPE · global: no RoPE"]
+        ATT --> P1["RMSNorm"]
+        P1 --> A1(("+"))
         A1 --> N2["RMSNorm"]
-        N2 --> R["router · FP32 softmax<br/>top-4 of 40 experts"]
+        N2 --> R["router · FP32 sigmoid + expert bias<br/>top-4 of 40 experts"]
         R --> EX["4 routed experts<br/>SwiGLU 512"]
-        N2 --> SH["shared expert<br/>SwiGLU 2048 · sigmoid gate"]
+        N2 --> SH["shared expert<br/>SwiGLU 2048"]
         EX --> A2(("+"))
         SH --> A2
-        A1 --> A2
+        A2 --> P2["RMSNorm"]
+        P2 --> A3(("+"))
+        A1 --> A3
     end
     E --> N1
     E --> A1
-    A2 --> H["final norm → LM head: token t+1"]
-    A2 --> M["MTP module: draft of token t+2"]
+    A3 --> H["final norm → LM head: token t+1"]
 ```
 
-### Compared with MobileMoE-M
+### Where it comes from
 
-Ludwig 2 takes the shape of Meta's MobileMoE-M and changes what a free, open project can change:
+Ludwig 2 takes its **shape** from Meta's MobileMoE-M (deep and thin) and its **block** from Arcee's Trinity Nano, a 6B-total, 1B-active MoE with the same width of 1024, trained with Muon on 10T tokens. Against MobileMoE-M:
 
 | | MobileMoE-M (Meta) | Ludwig 2 |
 |---|---|---|
 | Shape | 26 × 1024, GQA 16/4 | Same |
-| Total / active | 2.82B / 528M | 1.96B / 491M |
+| Total / active | 2.82B / 528M | 1.91B / 491M |
 | Vocabulary | 128K (Llama 3) | 64K, half the head |
 | QK-norm, output gate | Not mentioned | Both |
-| Router | Sigmoid, no auxiliary loss | Softmax + global balancing (see [D03](docs/DECISIONS.md#d03-format-ab)) |
+| Router | Sigmoid, no auxiliary loss | Sigmoid with an expert bias updated by SMEBU |
 | Optimizer, schedule | AdamW, cosine | Muon, WSD |
-| Precision | BF16 | FP16 (T4) |
+| Precision | BF16 | FP16 (T4) with an FP32 residual stream |
 | Training tokens | ~6T + 500B mid-training | 25B (v1) → 1T |
 | Context | 8K | 16K → 32K |
-| Speculative decoding | No | MTP |
-| Runs in | ExecuTorch, custom op | transformers and llama.cpp |
+| Runs in | ExecuTorch, custom op | transformers and stock llama.cpp |
 
 Meta trained ~260 times more tokens than our v1, so Ludwig 2 v1 will be compared token for token with public intermediate checkpoints (for example OLMoE and Pythia at ~25B tokens), not head to head with MobileMoE-M.
 
@@ -105,22 +107,9 @@ Before each new phase, five checks must pass: previous version published, valida
 
 ## Results so far
 
-### T0.1: format, MTP and tokenizer (CPU, November 11, 2026)
+### T0.1: the first format (CPU, November 11, 2026)
 
-A tiny model with exactly Ludwig 2's structure is trained for a few steps, exported, converted to GGUF and compared between transformers and llama.cpp ([`scripts/smoke_format.py`](scripts/smoke_format.py)).
-
-| Check | Stock llama.cpp | With [our patch](patches/README.md) |
-|---|---|---|
-| A1 Export and reload in transformers | ✅ identical logits | ✅ |
-| A2 Convert to GGUF, MTP included | ✅ | ✅ |
-| A3 Next-token probabilities, llama.cpp vs transformers | ❌ crashes on load | ✅ max diff 1.9e-6 |
-| A4 Greedy decoding, token by token | ❌ | ✅ 4/4 identical |
-| A5 Speculative decoding with the MTP head | ❌ | ✅ 4/4 identical, 64% of drafts accepted |
-| T1–T2 Tokenizer recognized, same tokens as Hugging Face | ✅ | ✅ |
-
-**What we found:** llama.cpp treats `qwen3next` as a hybrid model even when no layer is recurrent, and it crashes on a recurrent-state buffer that was never allocated (`GGML_ASSERT(buffer)`). A 3-line patch fixes it. Because of this, the final format is decided with data: an A/B against GLM-4.5's format, which runs unpatched ([D03](docs/DECISIONS.md#d03-format-ab)).
-
-Raw reports: [`results/t0_1_stock.json`](results/t0_1_stock.json), [`results/t0_1_patched.json`](results/t0_1_patched.json).
+v1.1 stored the model as `Qwen3NextForCausalLM` with every layer in full attention (format A). A tiny model in that format converts to GGUF, but **stock llama.cpp crashes on load**: it treats `qwen3next` as a hybrid model even when no layer is recurrent, and asserts on a buffer that was never allocated (`GGML_ASSERT(buffer)`). With a 3-line patch everything passes: probabilities within 1.9e-6, greedy 4/4, MTP speculative decoding 4/4 ([`patches/README.md`](patches/README.md), [`results/t0_1_stock.json`](results/t0_1_stock.json), [`results/t0_1_patched.json`](results/t0_1_patched.json)). A model that only runs on a patched llama.cpp does not run in Ollama or LM Studio, so v1.2 moved to a format that needs no patch.
 
 ### Bench v1: speed and memory on 2×T4 (Kaggle, November 11, 2026)
 
@@ -132,17 +121,17 @@ A separate PyTorch implementation of the same shape ([`results/banco_t4_v1/banco
 | Wider shapes (16 × 1280, 11 × 1536, 6 × 2048) | At most 1.11× faster: depth stays |
 | 48 / 60 experts | −24% / −31% speed: 40 stays |
 | Bandwidth between the two T4s | 3.2 GB/s |
-| 60 FP16 training steps | Loss 11.27 → 1.79, no skipped steps, no NaN |
+| 60 FP16 training steps | Loss 11.27 → 1.79, no skipped steps, no NaN; but the busiest expert reached 8.4× the mean load |
 
 Raw output: [`results/banco_t4_v1/`](results/banco_t4_v1/). What it settles and what it does not: [`docs/es/BITACORA.md`](docs/es/BITACORA.md).
 
 ### T0.1-C: the AFMoE format (CPU, November 11, 2026)
 
-The model from bench v1 (gated attention + sigmoid router with expert bias + a dense first layer) fits neither format A nor B, but it fits `AfmoeForCausalLM`, the format of Arcee's Trinity models. A tiny model in that format, with prompts longer than its sliding window, matches transformers on **stock** llama.cpp: next-token probabilities within 5.9e-5, greedy 4/4, expert bias respected ([`scripts/smoke_format_afmoe.py`](scripts/smoke_format_afmoe.py), [`results/t0_1c_afmoe.json`](results/t0_1c_afmoe.json)). The real configuration is [`configs/ludwig2_afmoe.json`](configs/ludwig2_afmoe.json): 1.906B total, 0.491B active.
+A tiny `AfmoeForCausalLM` with Ludwig 2's layout, run with prompts longer than its sliding window and a deliberately large expert bias, matches transformers on **stock** llama.cpp: next-token probabilities within 5.9e-5, greedy 4/4, expert bias respected ([`scripts/smoke_format_afmoe.py`](scripts/smoke_format_afmoe.py), [`results/t0_1c_afmoe.json`](results/t0_1c_afmoe.json)). Two settings are mandatory for that: `mup_enabled` (llama.cpp always scales the embeddings by √d) and `route_norm`.
 
 ### T0.2 v2: the real training stack on 2×T4
 
-⏳ Next, once v1.2 is approved: the transformers model with our speed pieces (padded-bmm experts, FP32 residual stream, FP16 gradient reduce-scatter, FSDP2 prefetch). The notebook for format A ([`notebooks/t0_2_velocidad_memoria_2xT4.ipynb`](notebooks/t0_2_velocidad_memoria_2xT4.ipynb)) is superseded.
+⏳ Ready to run: [`notebooks/t0_2v2_afmoe_2xT4.ipynb`](notebooks/t0_2v2_afmoe_2xT4.ipynb), ~1–1.25 h. It trains the real 1.906B model in the transformers class plus our speed pieces: padded-bmm experts, FP32 residual stream, FP16 gradients between the GPUs, FSDP2 prefetch, and Muon's momentum in CPU RAM as an option. Each piece is switched off once to measure what it is worth. It also measures 4K and 16K context, a full checkpoint save and load, and 60 training steps that compare SMEBU with the fixed-sign bias update.
 
 ## Data
 
@@ -171,51 +160,51 @@ The model from bench v1 (gated attention + sigmoid router with expert bias + a d
 git clone https://github.com/FelipeGarciaRpo/ludwig-lm && cd ludwig-lm
 pip install -r requirements.txt
 
-# T0.1: clones and builds llama.cpp the first time (~15–25 min), then ~1 min per run
-python scripts/smoke_format.py --patch
+# T0.1-C: the AFMoE format against llama.cpp (clones and builds llama.cpp the first time, ~15–25 min)
+python scripts/smoke_format_afmoe.py
 
-# FSDP2 + Muon + checkpoint logic, 2 processes on CPU with a tiny model
-torchrun --nproc_per_node 2 scripts/bench_train.py --config configs/tiny.json \
-    --seq 64 --micro 2 --steps 3 --mtp 1.0 --ckpt-test --out /tmp/t0_2_cpu.jsonl
+# The training stack (FSDP2, Muon, balancing, checkpoint), 2 processes on CPU with a tiny model
+torchrun --nproc_per_node 2 scripts/bench_afmoe.py --config configs/tiny_afmoe.json \
+    --seq 64 --micro 2 --steps 2 --ckpt-test --out /tmp/t0_2v2_cpu.jsonl
 ```
 
 ### Run them on Kaggle
 
 | Notebook | Accelerator | Time | What you get |
 |---|---|---|---|
-| [`t0_1_formato_mtp_tokenizador.ipynb`](notebooks/t0_1_formato_mtp_tokenizador.ipynb) | None (CPU) | ~15–25 min | `results/t0_1_stock.json`, `results/t0_1_patched.json` |
-| [`t0_2_velocidad_memoria_2xT4.ipynb`](notebooks/t0_2_velocidad_memoria_2xT4.ipynb) | GPU T4 x2 | ~45–75 min | `results/t0_2.jsonl` |
+| [`t0_2v2_afmoe_2xT4.ipynb`](notebooks/t0_2v2_afmoe_2xT4.ipynb) | GPU T4 x2 | ~1–1.25 h | `results/t0_2v2.jsonl` |
+| [`t0_1_formato_mtp_tokenizador.ipynb`](notebooks/t0_1_formato_mtp_tokenizador.ipynb) | None (CPU) | ~15–25 min | Format A and **tokenizer** checks; only the tokenizer part still matters |
 
-In each notebook set `REPO_URL` to your clone (or upload the repo as a Kaggle dataset and leave it empty), turn **Internet on**, and run all cells. Internet access requires a phone-verified Kaggle account.
+In each notebook set `REPO_URL` to your clone (or upload the repo as a Kaggle dataset and leave it empty), turn **Internet on**, and run all cells. Internet access requires a phone-verified Kaggle account. `t0_2_velocidad_memoria_2xT4.ipynb` measured format A and is kept only as a record.
 
 ## Repository
 
 ```
 ludwig-lm/
-├── ludwig_lm/      # model (Qwen3-Next in full attention + MTP + losses) and the Muon optimizer
-├── configs/        # ludwig2.json (the real model) and tiny.json (tests)
-├── scripts/        # smoke_format.py (T0.1), bench_train.py (T0.2), convert_gguf.py, make_notebooks.py
+├── ludwig_lm/      # afmoe.py: the model (AFMoE), its kernel, losses and balancer · muon.py · model.py: format A (fallback)
+├── configs/        # ludwig2_afmoe.json (the real model), tiny_afmoe.json (tests); ludwig2.json, tiny.json (format A)
+├── scripts/        # smoke_format_afmoe.py (T0.1-C), bench_afmoe.py (T0.2 v2), make_notebooks.py, convert_gguf.py, format-A tools
 ├── notebooks/      # Kaggle notebooks, generated by scripts/make_notebooks.py
-├── patches/        # llama.cpp patch and its technical note
-├── results/        # raw JSON reports of every test: the evidence behind each claim
-└── docs/           # DECISIONS.md (English), es/DISENO.md (full design, Spanish)
+├── patches/        # llama.cpp patch for format A and its technical note
+├── results/        # raw reports of every test: the evidence behind each claim
+└── docs/           # DECISIONS.md (English), es/DISENO.md (full design), es/BITACORA.md (log of every run)
 ```
 
 ## Roadmap to v1
 
 - [x] Design v1.1, after an external critique ([`docs/es/DISENO.md`](docs/es/DISENO.md))
-- [x] **T0.1** Format, MTP and tokenizer: passes with the llama.cpp patch
+- [x] **T0.1** Format A: crashes stock llama.cpp, passes with a patch
 - [x] **Bench v1** on 2×T4: 3,856 tokens/s, shape and expert count confirmed
 - [x] **T0.1-C** AFMoE format: passes on stock llama.cpp
-- [ ] **v1.2** Approve the AFMoE format
+- [x] **v1.2** AFMoE format approved
+- [ ] **T0.2 v2** The real training stack on 2×T4 ([notebook](notebooks/t0_2v2_afmoe_2xT4.ipynb))
 - [ ] **T0.1b** Re-run the tokenizer checks with the final 64K tokenizer
-- [ ] **T0.2 v2** The real training stack on 2×T4
 - [ ] **T0.3** FP16 stability: 2–3K steps at peak LR
 - [ ] **T1** Data: code source, deterministic loader with decontamination and manifests
-- [ ] **T2** Learning rate (3 short runs) and format A/B
+- [ ] **T2** Learning rate: 3 short runs
 - [ ] **G0** Gate: ≥6 h sustained, save, resume on another account, 16K
 - [ ] **T3** Trunk to 22.5B tokens
-- [ ] **T4** v1 branch: 2.5B tokens, 16K, MTP
+- [ ] **T4** v1 branch: 2.5B tokens, 16K
 - [ ] **T5** SFT, GGUF, evaluation: **Ludwig 2 · 25B released**
 
 ## How to help
@@ -229,7 +218,8 @@ ludwig-lm/
 
 - [`docs/DECISIONS.md`](docs/DECISIONS.md): every decision, why, and the evidence behind it (English).
 - [`docs/es/DISENO.md`](docs/es/DISENO.md): the full design document with numbers and sources (Spanish).
-- [`patches/README.md`](patches/README.md): the llama.cpp crash, its cause, and the fix.
+- [`docs/es/BITACORA.md`](docs/es/BITACORA.md): every run and decision, in order (Spanish).
+- [`patches/README.md`](patches/README.md): the llama.cpp crash with format A, its cause, and the fix.
 
 ## The name
 
@@ -252,4 +242,4 @@ Code: [Apache-2.0](LICENSE). Weights: Apache-2.0 is the plan, decided per releas
 
 ## Acknowledgements
 
-Built on [PyTorch](https://pytorch.org), [transformers](https://github.com/huggingface/transformers) and [llama.cpp](https://github.com/ggml-org/llama.cpp). The design leans on published work by Meta (MobileMoE, MobileLLM-R1), Qwen (Qwen3-Next, gated attention), DeepSeek (MTP, R1), Moonshot AI (Muon at scale) and Hugging Face (FineWeb, SmolLM). The full source list is in [`docs/es/DISENO.md`](docs/es/DISENO.md) §13.
+Built on [PyTorch](https://pytorch.org), [transformers](https://github.com/huggingface/transformers) and [llama.cpp](https://github.com/ggml-org/llama.cpp). The design leans on published work by Meta (MobileMoE, MobileLLM-R1), Arcee (Trinity and its AFMoE block), Qwen (gated attention), DeepSeek (aux-loss-free balancing, R1), Moonshot AI (Muon at scale) and Hugging Face (FineWeb, SmolLM). The full source list is in [`docs/es/DISENO.md`](docs/es/DISENO.md) §13.
