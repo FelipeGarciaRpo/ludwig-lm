@@ -44,7 +44,7 @@ Prueba, **sin gastar horas de GPU**, que un modelo con la estructura exacta de L
 **Se corre dos veces:** con llama.cpp sin cambios (se espera que A3–A5 fallen porque llama.cpp se cae con este formato) y con el parche de Ludwig (todo debe pasar).
 
 **Kaggle:** acelerador *None* (CPU), Internet *On*. Tarda ~15–25 min, casi todo compilando llama.cpp."""),
-    code(f'''REPO_URL = "https://github.com/TU_USUARIO/ludwig-lm.git"   # o "" si subiste el repo como dataset
+    code(f'''REPO_URL = "https://github.com/FelipeGarciaRpo/ludwig-lm.git"   # o "" si subiste el repo como dataset
 TOKENIZER_DIR = None   # p. ej. "/kaggle/input/ludwig-tokenizer-64k" (carpeta con tokenizer.json)
 LLAMA_REF = "{LLAMA_TESTED}"   # commit con el que se obtuvieron los resultados del repo; "master" = el último'''),
     code(SETUP),
@@ -99,7 +99,7 @@ Mide con el **modelo real** (1.96B totales / 0.49B activos), FSDP2 entre las dos
 | G | Guardado y carga del checkpoint distribuido: tiempo, tamaño y restauración exacta |
 
 **Kaggle:** acelerador *GPU T4 x2*, Internet *On*. Tarda ~45–75 min. Cada medición escribe una línea en `results/t0_2.jsonl`, así que si la sesión se corta no se pierde lo ya medido."""),
-    code(r'''REPO_URL = "https://github.com/TU_USUARIO/ludwig-lm.git"   # o "" si subiste el repo como dataset'''),
+    code(r'''REPO_URL = "https://github.com/FelipeGarciaRpo/ludwig-lm.git"   # o "" si subiste el repo como dataset'''),
     code(SETUP + "\n!nvidia-smi --query-gpu=name,memory.total,power.limit --format=csv\n!df -h /tmp /kaggle/working | tail -2"),
     code(r'''import threading, time
 RESULTS = "results/t0_2.jsonl"

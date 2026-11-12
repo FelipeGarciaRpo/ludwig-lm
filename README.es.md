@@ -168,7 +168,7 @@ El modelo del banco v1 (atención con compuerta + router sigmoide con bias + una
 ### Correr las pruebas en tu máquina (CPU)
 
 ```bash
-git clone https://github.com/<tu-usuario>/ludwig-lm && cd ludwig-lm
+git clone https://github.com/FelipeGarciaRpo/ludwig-lm && cd ludwig-lm
 pip install -r requirements.txt
 
 # T0.1: la primera vez clona y compila llama.cpp (~15–25 min); después ~1 min por corrida
@@ -246,7 +246,7 @@ Código: [Apache-2.0](LICENSE). Pesos: el plan es Apache-2.0, y se decide en cad
   author = {García, Felipe},
   title  = {Ludwig 2: a 2B-parameter open MoE language model trained on free GPUs},
   year   = {2026},
-  note   = {https://github.com/<tu-usuario>/ludwig-lm}
+  note   = {https://github.com/FelipeGarciaRpo/ludwig-lm}
 }
 ```
 

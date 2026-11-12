@@ -168,7 +168,7 @@ The model from bench v1 (gated attention + sigmoid router with expert bias + a d
 ### Run the tests on your machine (CPU)
 
 ```bash
-git clone https://github.com/<you>/ludwig-lm && cd ludwig-lm
+git clone https://github.com/FelipeGarciaRpo/ludwig-lm && cd ludwig-lm
 pip install -r requirements.txt
 
 # T0.1: clones and builds llama.cpp the first time (~15–25 min), then ~1 min per run
@@ -246,7 +246,7 @@ Code: [Apache-2.0](LICENSE). Weights: Apache-2.0 is the plan, decided per releas
   author = {García, Felipe},
   title  = {Ludwig 2: a 2B-parameter open MoE language model trained on free GPUs},
   year   = {2026},
-  note   = {https://github.com/<you>/ludwig-lm}
+  note   = {https://github.com/FelipeGarciaRpo/ludwig-lm}
 }
 ```
 
