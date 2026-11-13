@@ -252,3 +252,11 @@ Todo lo que se corre, se mide o se decide, en orden. Cada entrada dice qué se h
   Calentamiento de 100 pasos y enfriamiento en el último 20%, como en el Ludwig 1.
 - Dónde: chat de diseño; test_train_cpu.py da PASS, con una prueba nueva del weight decay.
 - Resuelto: el pendiente del LR pico del Ludwig 1 de la entrada anterior.
+
+## 2026-11-13 · Pruebas en CPU de los patches 0005–0007 en el PC
+
+- **Qué:** las pruebas que piden las reglas del repo antes del push: pyflakes, la prueba lógica de `bench_afmoe.py` con `--ckpt-test` y `scripts/test_train_cpu.py`.
+- **Dónde:** PC de Pipe, Windows sin GPU: Python 3.12, torch 2.15.0+cpu, transformers 5.22.2, 2 procesos con gloo.
+- **Resultado:** todo pasa. pyflakes, sin errores; `bench_afmoe.py`, `status=ok` y checkpoint restaurado exacto; `test_train_cpu.py`, **PASS** en todas sus comprobaciones, incluidas la del weight decay de Muon y la reanudación bit a bit.
+- **Problema de Windows:** `torchrun` no arranca con torch 2.15. Sus dos formas de coordinar los procesos (`--standalone` y la estática) crean el `TCPStore` sin pasar `use_libuv`, y torch para Windows no trae libuv; `USE_LIBUV=0` solo lo lee `init_process_group`. Las pruebas se corrieron lanzando los 2 procesos a mano con las variables que pone `torchrun` (`RANK`, `WORLD_SIZE`, `MASTER_ADDR`, `MASTER_PORT`) y `PYTHONUTF8=1` (la consola de Windows no imprime el "≈" de la línea `[result]`), sin cambiar el código ni las comprobaciones. En Kaggle, que es Linux, no aplica.
+- **Siguiente:** las tres corridas de la T0.3 + T2 en Kaggle.
