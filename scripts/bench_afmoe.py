@@ -42,7 +42,7 @@ import torch.distributed as dist
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
 from ludwig_lm.afmoe import (ExpertBalancer, LossWeights, LudwigAfmoe, count_params,  # noqa: E402
-                             flops_per_token, load_config)
+                             flops_per_token, load_config, shard_model)
 from ludwig_lm.muon import DynamicLossScaler, build_optimizers  # noqa: E402
 
 T4_PEAK_TFLOPS = 65.0
@@ -133,9 +133,9 @@ def main():
 
     from torch.distributed.device_mesh import init_device_mesh
     try:
-        from torch.distributed.fsdp import MixedPrecisionPolicy, fully_shard
+        from torch.distributed.fsdp import MixedPrecisionPolicy
     except ImportError:  # torch < 2.6
-        from torch.distributed._composable.fsdp import MixedPrecisionPolicy, fully_shard
+        from torch.distributed._composable.fsdp import MixedPrecisionPolicy
 
     # ---------------------------------------------------------------- model
     overrides = {} if args.experts is None else {"num_experts": args.experts}
@@ -154,16 +154,7 @@ def main():
         model = LudwigAfmoe(cfg, fp32_residual=fp32_residual)
     if not args.no_act_ckpt:
         model.lm.gradient_checkpointing_enable(gradient_checkpointing_kwargs={"use_reentrant": False})
-    layers = list(model.lm.model.layers)
-    for layer in layers:
-        fully_shard(layer, mesh=mesh, mp_policy=mp)
-    # the root keeps embeddings/head unsharded through backward: the checkpointed chunked loss uses the tied head
-    fully_shard(model, mesh=mesh, mp_policy=mp, reshard_after_forward=False)
-    if not args.no_prefetch:
-        for i in range(len(layers) - 1):
-            layers[i].set_modules_to_forward_prefetch([layers[i + 1]])
-        for i in range(1, len(layers)):
-            layers[i].set_modules_to_backward_prefetch([layers[i - 1]])
+    shard_model(model, mesh, mp, prefetch=not args.no_prefetch)
     if use_cuda:
         torch.cuda.empty_cache()
         torch.cuda.reset_peak_memory_stats()
@@ -321,6 +312,9 @@ def main():
         sync()
         t = time.time()
         dcp.load(state, checkpoint_id=args.ckpt_dir)
+        # dcp.load already restored everything in place. set_state_dict also casts the optimizer state to the
+        # parameter dtype (Muon's bf16 momentum becomes FP32): scripts/train.py does not call it
+        # (ludwig_lm/checkpoint.py). It stays here so this test is the one T0.2 v2 ran.
         set_state_dict(model, [muon, adamw], model_state_dict=state["model"], optim_state_dict=state["optim"])
         balancer.load_state_dict(state["balancer"])
         sync()

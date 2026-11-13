@@ -18,7 +18,9 @@ Everything here works around the model, never changes its parameters or their na
   sequence-wise auxiliary loss (DeepSeek-V3), router z-loss. With ``fp32_residual`` the residual
   stream stays in FP32 when the caller runs it under FP16 autocast.
 * ``init_ludwig``: depth-scaled sandwich norm (Trinity): output-norm gains start at 1/sqrt(L); the router
-  starts random (transformers starts it at zero, which sends every token to the same 4 experts).
+  starts random (transformers starts it at zero, which sends every token to the same 4 experts); and the
+  EOS embedding trains like any other row (transformers makes pad_token_id = 0 = EOS a frozen padding row).
+* ``shard_model``: the FSDP2 layout T0.2 v2 measured, shared by the bench and the training script.
 * T4 fixes for transformers' SDPA path (pre-Ampere GPUs): repeat the KV heads instead of asking SDPA for
   native GQA, which there can fall back to the math kernel and store B*H*T*T attention weights in FP32;
   and use plain causal attention when a sliding window covers the whole sequence (it is the same mask).
@@ -177,6 +179,33 @@ def init_ludwig(lm: AfmoeForCausalLM):
         m.expert_bias.zero_()
         # transformers starts the router at zero: every score is 0.5 and every token picks the same top-k
         m.router.gate.weight.normal_(0.0, lm.config.initializer_range)
+    emb = lm.model.embed_tokens
+    if emb.padding_idx is not None:
+        # transformers passes pad_token_id (0, our EOS) as padding_idx: that row starts at zero and its lookup
+        # gets no gradient. Packed training never pads, and EOS is an input at every document boundary.
+        # The checkpoint format does not change: padding_idx is not a weight.
+        emb.weight[emb.padding_idx].normal_(0.0, lm.config.initializer_range)
+        emb.padding_idx = None
+
+
+def shard_model(model, mesh, mp_policy, prefetch: bool = True):
+    """FSDP2 with one unit per decoder layer. The root keeps embeddings and head unsharded through backward,
+    because the checkpointed chunked loss uses the tied head. With ``prefetch`` each layer all-gathers the
+    next one (forward) or the previous one (backward) while it computes."""
+    try:
+        from torch.distributed.fsdp import fully_shard
+    except ImportError:  # torch < 2.6
+        from torch.distributed._composable.fsdp import fully_shard
+    layers = list(model.lm.model.layers)
+    for layer in layers:
+        fully_shard(layer, mesh=mesh, mp_policy=mp_policy)
+    fully_shard(model, mesh=mesh, mp_policy=mp_policy, reshard_after_forward=False)
+    if prefetch:
+        for i in range(len(layers) - 1):
+            layers[i].set_modules_to_forward_prefetch([layers[i + 1]])
+        for i in range(1, len(layers)):
+            layers[i].set_modules_to_backward_prefetch([layers[i - 1]])
+    return model
 
 
 # --------------------------------------------------------------------------- losses
@@ -188,18 +217,24 @@ class LossWeights:
 
 
 def moe_losses(records, batch: int, seq: int, n_exp: int, k: int):
-    """Sequence-wise auxiliary loss and router z-loss, averaged over the MoE layers."""
+    """Sequence-wise auxiliary loss and router z-loss, averaged over the MoE layers; plus the mean entropy of
+    each token's normalized router scores (a log; at most ln E)."""
     aux = torch.zeros((), device=records[0][0].device)
     rz = torch.zeros((), device=records[0][0].device)
+    ent = torch.zeros((), device=records[0][0].device)
     for logits, chosen in records:
         s = torch.sigmoid(logits)
-        p = (s / s.sum(-1, keepdim=True)).view(batch, seq, n_exp).mean(1)                # (B, E)
+        pt = s / s.sum(-1, keepdim=True)                                                 # (B*T, E)
+        p = pt.view(batch, seq, n_exp).mean(1)                                           # (B, E)
         cnt = torch.zeros(batch, n_exp, device=logits.device)
         cnt.scatter_add_(1, chosen.view(batch, -1), torch.ones(batch, seq * k, device=logits.device))
         aux = aux + ((cnt * (n_exp / (k * seq))) * p).sum(-1).mean()
         rz = rz + torch.logsumexp(logits, -1).pow(2).mean()
+        with torch.no_grad():
+            q = pt.detach()
+            ent = ent + (-(q * torch.log(q.clamp_min(1e-20))).sum(-1).mean())
     n = len(records)
-    return aux / n, rz / n
+    return aux / n, rz / n, ent / n
 
 
 # --------------------------------------------------------------------------- model
@@ -225,10 +260,10 @@ class LudwigAfmoe(nn.Module):
         finally:
             _RECORD = previous
         ce, z = chunked_cross_entropy(h[:, :-1], self.lm.lm_head.weight, input_ids[:, 1:], ce_chunk)
-        aux, rz = moe_losses(records, batch, seq, cfg.num_experts, cfg.num_experts_per_tok)
+        aux, rz, ent = moe_losses(records, batch, seq, cfg.num_experts, cfg.num_experts_per_tok)
         loss = ce + weights.output_z * z + weights.seq_aux * aux + weights.router_z * rz
         metrics = {"ce": ce.detach(), "z_out": z.detach(), "seq_aux": aux.detach(), "z_router": rz.detach(),
-                   "chosen": [c for _, c in records]}
+                   "router_entropy": ent, "chosen": [c for _, c in records]}
         return loss, metrics
 
 
@@ -268,6 +303,7 @@ class ExpertBalancer:
         dev = self.blocks[0].expert_bias.device if self.blocks else torch.device("cpu")
         self.momentum = torch.zeros(len(self.blocks), self.n_exp, device=dev)
         self.counts = torch.zeros(len(self.blocks), self.n_exp, device=dev)
+        self.window = torch.zeros(len(self.blocks), self.n_exp, device=dev)   # since the last window_stats()
 
     @torch.no_grad()
     def accumulate(self, chosen_per_layer):
@@ -294,8 +330,29 @@ class ExpertBalancer:
         stats = {"load_max_over_mean": float(load.max()), "load_min_over_mean": float(load.min()),
                  "dead_experts": int((c == 0).sum()),
                  "bias_abs_max": float(max(b.expert_bias.abs().max() for b in self.blocks))}
+        self.window += c
         self.counts.zero_()
         return stats
+
+    @torch.no_grad()
+    def window_stats(self) -> dict:
+        """Per-layer load over every step since the previous call (already summed over ranks), then reset.
+        An expert with no tokens over many steps is really dead; one step can miss it by chance."""
+        w = self.window
+        if not len(w) or float(w.sum()) == 0:          # no step since the last call
+            return {"layer_load_max_over_mean": None, "layer_load_min_over_mean": None, "dead_experts_window": None,
+                    "window_assignments_per_layer": 0.0}
+        mean = w.mean(1, keepdim=True).clamp_min(1.0)
+        stats = {"layer_load_max_over_mean": [round(float(x), 3) for x in (w / mean).max(1).values],
+                 "layer_load_min_over_mean": [round(float(x), 3) for x in (w / mean).min(1).values],
+                 "dead_experts_window": int((w == 0).sum()),
+                 "window_assignments_per_layer": float(w[0].sum())}   # tokens × top-k
+        self.window.zero_()
+        return stats
+
+    def skip(self):
+        """Forget the counts of a step that is not applied (a skipped loss spike)."""
+        self.counts.zero_()
 
     def state_dict(self):
         return {"momentum": self.momentum.clone(), "rule": self.rule, "lam": self.lam, "gamma": self.gamma}

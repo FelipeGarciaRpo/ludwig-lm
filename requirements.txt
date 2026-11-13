@@ -1,11 +1,13 @@
 # Ludwig 2. Tested with Python 3.13, torch 2.15 and transformers 5.22.2 (November 2026).
 torch>=2.6            # FSDP2 (fully_shard)
-transformers==5.22.2  # the Qwen3-Next implementation the checkpoint format depends on
+transformers==5.22.2  # the AFMoE implementation the checkpoint format depends on
 safetensors
 tokenizers
 sentencepiece
 protobuf
 numpy
+pyarrow               # the data reader (parquet)
+huggingface_hub       # downloads: data, tokenizers and, later, checkpoints
 
 # llama.cpp's GGUF converter (gguf-py itself is loaded from the llama.cpp checkout)
 pyyaml
@@ -14,4 +16,5 @@ requests
 
 # notebooks and reports
 pandas
+matplotlib
 nbformat
