@@ -223,3 +223,32 @@ Todo lo que se corre, se mide o se decide, en orden. Cada entrada dice qué se h
   - **MFU:** 7.37% en la base, 8.65% con el loop y 3.59% a 16K.
 - **Pregunta abierta:** la G0 (5.7) no dice si su tope de 13.5 GiB es de memoria reservada o asignada. Con la asignada, todas las mediciones lo cumplen; con la reservada, solo F, G y los entrenamientos de 4 × 2. El banco v1 usaba la reservada.
 - **Siguiente:** el mismo de la entrada anterior.
+
+## 2026-11-13 · Respuestas a la T0.2 v2 y bucle de entrenamiento (patches 0005 y 0006)
+
+- Qué: el chat de diseño respondió las preguntas de la T0.2 v2 y mandó el bucle de entrenamiento real.
+- Respuestas:
+  1. Piezas: loop por experto + residuo FP32 + gradientes FP16 + prefetch + momento de Muon en la RAM,
+     8 × 2K por GPU. Sin el momento en la RAM el loop reserva 14.3 GiB y no pasa la G0. Juntas: ~3,300 tokens/s
+     y ~12.7 GiB esperados; la T0.3 + T2 mide la combinación.
+  2. SMEBU λ = 0.01 queda; se revisa con texto real (sigue si la carga máx/media < 3 y no muere ningún experto).
+  3. El tope de 13.5 GiB de la G0 es memoria reservada, como el banco v1.
+- Cambios: scripts/train.py (bucle real), ludwig_lm/data.py (lector provisional hasta la T1),
+  ludwig_lm/checkpoint.py (reanudación verificada bit a bit + hash del primer lote), scripts/test_train_cpu.py,
+  notebooks/t0_3_t2_lr_2xT4.ipynb; DECISIONS (P2a, P5a, D16a, P6–P8), DISENO y READMEs.
+- Errores corregidos (P8): el embedding del EOS (id 0) quedaba fijo por padding_idx; set_state_dict pasaba el
+  momento de Muon a FP32 al cargar (la prueba J de la T0.2 v2 no revisaba su tipo).
+- Dónde: chat de diseño; probado en CPU, 2 procesos, modelo diminuto: test_train_cpu.py da PASS.
+- Pendiente: el LR pico de Ludwig 1 (el barrido está centrado en 1e-3 / 3e-4, los de Trinity Nano).
+- Siguiente: 3 corridas en paralelo (cuentas 1–3): lr-x0.5/0.5, lr-x1/1.0, lr-x2/2.0.
+
+## 2026-11-13 · El barrido de la T2 usa el LR del Ludwig 1 (patch 0007)
+
+- Qué: la receta del Ludwig 1 es el ×1: Muon 1.5e-3 (3× la base; el A/B del 31 de octubre eligió ×3),
+  AdamW 5e-4, weight decay 0.1 aplicado con el LR de AdamW también a las matrices de Muon. Antes el decay de
+  Muon usaba su propio LR: con estos picos habría decaído 3 veces más rápido que en el Ludwig 1.
+- La escala de Muon ya era la misma en los dos (Moonlight, 0.2·√max(filas, columnas)): los LR se comparan directo.
+- Corridas: lr-x0.5 = 7.5e-4 / 2.5e-4 · lr-x1 = 1.5e-3 / 5e-4 · lr-x2 = 3e-3 / 1e-3 (Muon / AdamW).
+  Calentamiento de 100 pasos y enfriamiento en el último 20%, como en el Ludwig 1.
+- Dónde: chat de diseño; test_train_cpu.py da PASS, con una prueba nueva del weight decay.
+- Resuelto: el pendiente del LR pico del Ludwig 1 de la entrada anterior.
