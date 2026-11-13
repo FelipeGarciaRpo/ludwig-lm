@@ -260,3 +260,17 @@ Todo lo que se corre, se mide o se decide, en orden. Cada entrada dice qué se h
 - **Resultado:** todo pasa. pyflakes, sin errores; `bench_afmoe.py`, `status=ok` y checkpoint restaurado exacto; `test_train_cpu.py`, **PASS** en todas sus comprobaciones, incluidas la del weight decay de Muon y la reanudación bit a bit.
 - **Problema de Windows:** `torchrun` no arranca con torch 2.15. Sus dos formas de coordinar los procesos (`--standalone` y la estática) crean el `TCPStore` sin pasar `use_libuv`, y torch para Windows no trae libuv; `USE_LIBUV=0` solo lo lee `init_process_group`. Las pruebas se corrieron lanzando los 2 procesos a mano con las variables que pone `torchrun` (`RANK`, `WORLD_SIZE`, `MASTER_ADDR`, `MASTER_PORT`) y `PYTHONUTF8=1` (la consola de Windows no imprime el "≈" de la línea `[result]`), sin cambiar el código ni las comprobaciones. En Kaggle, que es Linux, no aplica.
 - **Siguiente:** las tres corridas de la T0.3 + T2 en Kaggle.
+
+## 2026-11-13 · El repo pasa a público
+
+- **Qué:** el repo se publica en GitHub, en `FelipeGarciaRpo/ludwig-lm`. Antes se rehízo el repositorio de GitHub desde cero y se limpió el historial: salió un archivo de notas de trabajo, que queda solo en el PC de Pipe, y se ajustó la redacción de unas frases de la bitácora, de los notebooks y del encabezado de la copia del banco v1. No cambió ningún dato, resultado ni línea de código.
+- **Dónde:** PC de Pipe.
+- **Identificadores:** al limpiar el historial cambiaron los de todos los commits menos el primero. Los zips del código que se subieron a Kaggle se armaron con los identificadores viejos:
+
+| Antes | Ahora | Qué es |
+|---|---|---|
+| `cc3dbd4` | `10a7d88` | código del primer intento de la T0.2 v2 |
+| `5735d38` | `60a341f` | código del segundo intento de la T0.2 v2 |
+| `51f037e` | `52f5b0e` | código de las tres corridas de la T0.3 + T2 |
+
+- **Siguiente:** el chat de diseño trabaja sobre el repo público en vez de recibir bundles. Los resultados de la T0.3 + T2 se registran con el código `52f5b0e`.
