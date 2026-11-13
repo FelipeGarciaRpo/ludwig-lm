@@ -174,3 +174,41 @@ Todo lo que se corre, se mide o se decide, en orden. Cada entrada dice qué se h
 - **Dónde:** PC de Pipe, leyendo el log. No corrió nada.
 - **Pregunta abierta:** los 16 GiB de la I son 1 × 16 × 16,384² × 4 bytes, una matriz de atención completa en FP32, y el 1 GiB de la H no cuadra con ninguna de las dos causas. El patch 0004 solo quita la máscara cuando la ventana cubre toda la secuencia (hasta 2K): a 4K y 16K las capas locales siguen recibiendo una máscara explícita, y su memoria en la T4 no se ha medido.
 - **Siguiente:** en el segundo intento, mirar primero la H y la I.
+
+## 2026-11-12 · T0.2 v2, segundo intento: todo cabe
+
+- **Qué:** la T0.2 v2 completa con el código `60a341f` (patch 0004). Un primer arranque se cayó a los 10 s porque el dataset no estaba agregado al notebook (`IndexError` al buscar `ludwig_lm/`) y no midió nada.
+- **Dónde:** Kaggle, 2× T4, torch 2.11 + CUDA 13.0, código subido como dataset. Duró 68 min.
+- **Archivos:** `results/t0_2v2_intento2/salida_kaggle.txt` (el log, copiado del visor de Kaggle). Falta agregar el `t0_2v2.jsonl` de la salida del notebook.
+- **Resultado:** las 13 mediciones terminaron bien, con 0 pasos saltados en FP16. En los entrenamientos de 60 pasos, la escala de la pérdida se quedó en 32,768 y no hubo expertos muertos.
+
+| Medición | tokens/s | Frente a A | Pico reservado |
+|---|---|---|---|
+| A · base: bmm con relleno, residuo FP32, gradientes FP16, prefetch, 8 × 2K por GPU | 2,930 | — | 14.33 GiB |
+| B · loop por experto | 3,436 | +17.3% | 14.3 GiB |
+| C · residuo FP16 | 2,918 | −0.4% | 13.67 GiB |
+| D · gradientes FP32 | 2,762 | −5.7% | 14.33 GiB |
+| E · sin prefetch | 2,734 | −6.7% | 14.33 GiB |
+| F · momento en la RAM de la CPU | 2,831 | −3.4% | 12.76 GiB |
+| G · 4 secuencias por GPU | 2,242 | −23.5% | 12.77 GiB |
+| H · 4K, 4 secuencias | 2,240 | | 14.33 GiB |
+| I · 16K, 1 secuencia | 1,228 | | 14.33 GiB |
+| J · checkpoint completo | 2,754 | | 14.32 GiB |
+
+- **Checkpoint (J):** 11.29 GiB; guardar tomó 53.6 s y cargar 47.8 s; la restauración fue exacta.
+- **Balanceo** (60 pasos de texto de Markov, 4 secuencias × 2 micro-pasos):
+
+| | Pérdida | Carga máx/media al final (pico) | tokens/s |
+|---|---|---|---|
+| K · signo fijo, 0.001 | 11.35 → 1.86 | 7.57 (7.97) | 1,995 |
+| L · SMEBU, λ = 0.01 | 11.35 → 1.87 | 2.41 (6.47) | 2,318 |
+| M · SMEBU, λ = 0.001 | 11.35 → 1.86 | 6.86 (7.64) | 1,991 |
+
+- **Lo que muestran los números:**
+  - La pregunta abierta de la entrada anterior queda respondida: 4K y 16K caben.
+  - La base da ~2,370 h para 25B (16.9 semanas a 140 h/semana), dentro del rango del diseño (1,750–2,800 h).
+  - El loop por experto le gana al bmm con relleno por 17.3%. En el banco v1, con otro modelo, había sido al revés.
+  - A, B, D, E, H, I y J llegan a 14.3 GiB reservados o más: la alarma del diseño (5.4) y casi el techo de la T4 (14.56 GiB). La G0 pide un pico ≤ 13.5 GiB: en estas pruebas cortas solo lo cumplen F, G y los entrenamientos de 4 × 2. F también pasa los 2,600 tokens/s de la G0.
+  - Solo SMEBU con λ = 0.01 mantiene el balanceo (2.41× al final), y es el más rápido entrenando. La pérdida es la misma en los tres.
+- **Preguntas para el chat de diseño:** qué piezas van al entrenamiento real (B y F no se midieron juntas), con cuánto margen de memoria, y si SMEBU con λ = 0.01 queda fijo.
+- **Siguiente:** el chat de diseño fija las piezas, el micro-lote y el balanceo. Después viene la T0.3 (estabilidad en FP16 con el LR pico).

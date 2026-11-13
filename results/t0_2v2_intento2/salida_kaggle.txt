@@ -1,0 +1,177 @@
+Time
+#
+Log Message
+10.8s	1	0.00s - Debugger warning: It seems that frozen modules are being used, which may
+10.8s	2	0.00s - make the debugger miss breakpoints. Please pass -Xfrozen_modules=off
+10.8s	3	0.00s - to python to disable frozen modules.
+10.8s	4	0.00s - Note: Debugging will proceed. Set PYDEVD_DISABLE_FILE_VALIDATION=1 to disable this validation.
+11.5s	5	0.00s - Debugger warning: It seems that frozen modules are being used, which may
+11.5s	6	0.00s - make the debugger miss breakpoints. Please pass -Xfrozen_modules=off
+11.5s	7	0.00s - to python to disable frozen modules.
+11.5s	8	0.00s - Note: Debugging will proceed. Set PYDEVD_DISABLE_FILE_VALIDATION=1 to disable this validation.
+62.7s	9	torch 2.11.0+cu130 | transformers 5.22.2 | CPUs 4 | GPUs 2
+62.7s	10	name, memory.total [MiB], power.limit [W]
+62.7s	11	Tesla T4, 15360 MiB, 70.00 W
+62.7s	12	Tesla T4, 15360 MiB, 70.00 W
+62.9s	13	overlay         8.0T  7.1T  967G  89% /
+62.9s	14	/dev/loop2       20G  732K   20G   1% /kaggle/working
+63.0s	15	>> PYTORCH_CUDA_ALLOC_CONF=expandable_segments:True torchrun --nproc_per_node 2 scripts/bench_afmoe.py --tag A-base --out results/t0_2v2.jsonl --seq 2048 --micro 8 --accum 1 --steps 4
+82.1s	16	[model] AFMoE total 1.906B, active 0.491B | built+sharded in 1s | moe=padded_bmm residual=fp32 reduce=fp16 prefetch=True momentum=gpu | world=2 device=cuda
+98.6s	17	  step  0  micro  13.95s  optimizer  2.53s  ce=11.365  load max/mean=2.12  skipped=0
+110.6s	18	  step  1  micro  10.10s  optimizer  1.85s  ce=11.359  load max/mean=2.25  skipped=0
+123.5s	19	  step  2  micro  11.03s  optimizer  1.90s  ce=11.359  load max/mean=2.22  skipped=0
+136.1s	20	  step  3  micro  10.64s  optimizer  1.94s  ce=11.344  load max/mean=2.77  skipped=0
+149.4s	21	  step  4  micro  11.34s  optimizer  2.00s  ce=11.335  load max/mean=3.11  skipped=0
+162.7s	22	  step  5  micro  11.22s  optimizer  2.09s  ce=11.315  load max/mean=3.37  skipped=0
+162.7s	23	[result] A-base status=ok tokens/s=2930 peak=14.33 GiB  25B≈2370 h
+169.5s	24	>> PYTORCH_CUDA_ALLOC_CONF=expandable_segments:True torchrun --nproc_per_node 2 scripts/bench_afmoe.py --tag B-loop --out results/t0_2v2.jsonl --seq 2048 --micro 8 --accum 1 --steps 4 --moe-impl grouped_mm
+179.8s	25	[model] AFMoE total 1.906B, active 0.491B | built+sharded in 1s | moe=grouped_mm residual=fp32 reduce=fp16 prefetch=True momentum=gpu | world=2 device=cuda
+192.4s	26	  step  0  micro  10.03s  optimizer  2.57s  ce=11.365  load max/mean=2.12  skipped=0
+204.3s	27	  step  1  micro   9.73s  optimizer  2.17s  ce=11.359  load max/mean=2.25  skipped=0
+216.3s	28	  step  2  micro   9.90s  optimizer  2.11s  ce=11.359  load max/mean=2.22  skipped=0
+227.8s	29	  step  3  micro   9.45s  optimizer  2.02s  ce=11.344  load max/mean=2.74  skipped=0
+239.0s	30	  step  4  micro   9.18s  optimizer  1.99s  ce=11.335  load max/mean=3.09  skipped=0
+250.1s	31	  step  5  micro   9.11s  optimizer  1.99s  ce=11.315  load max/mean=3.34  skipped=0
+250.1s	32	[result] B-loop status=ok tokens/s=3436 peak=14.3 GiB  25B≈2021 h
+252.0s	33	>> PYTORCH_CUDA_ALLOC_CONF=expandable_segments:True torchrun --nproc_per_node 2 scripts/bench_afmoe.py --tag C-residuo-fp16 --out results/t0_2v2.jsonl --seq 2048 --micro 8 --accum 1 --steps 4 --residual fp16
+262.3s	34	[model] AFMoE total 1.906B, active 0.491B | built+sharded in 1s | moe=padded_bmm residual=fp16 reduce=fp16 prefetch=True momentum=gpu | world=2 device=cuda
+275.8s	35	  step  0  micro  10.90s  optimizer  2.55s  ce=11.365  load max/mean=2.11  skipped=0
+288.7s	36	  step  1  micro  10.77s  optimizer  2.13s  ce=11.359  load max/mean=2.26  skipped=0
+302.4s	37	  step  2  micro  11.51s  optimizer  2.15s  ce=11.359  load max/mean=2.22  skipped=0
+315.5s	38	  step  3  micro  11.06s  optimizer  2.06s  ce=11.344  load max/mean=2.77  skipped=0
+328.6s	39	  step  4  micro  11.06s  optimizer  2.01s  ce=11.335  load max/mean=3.09  skipped=0
+341.4s	40	  step  5  micro  10.78s  optimizer  1.99s  ce=11.315  load max/mean=3.40  skipped=0
+341.4s	41	[result] C-residuo-fp16 status=ok tokens/s=2918 peak=13.67 GiB  25B≈2380 h
+343.6s	42	>> PYTORCH_CUDA_ALLOC_CONF=expandable_segments:True torchrun --nproc_per_node 2 scripts/bench_afmoe.py --tag D-grad-fp32 --out results/t0_2v2.jsonl --seq 2048 --micro 8 --accum 1 --steps 4 --reduce fp32
+353.6s	43	[model] AFMoE total 1.906B, active 0.491B | built+sharded in 1s | moe=padded_bmm residual=fp32 reduce=fp32 prefetch=True momentum=gpu | world=2 device=cuda
+367.3s	44	  step  0  micro  11.17s  optimizer  2.53s  ce=11.365  load max/mean=2.12  skipped=0
+380.7s	45	  step  1  micro  11.30s  optimizer  2.11s  ce=11.359  load max/mean=2.25  skipped=0
+395.1s	46	  step  2  micro  12.23s  optimizer  2.18s  ce=11.359  load max/mean=2.22  skipped=0
+408.9s	47	  step  3  micro  11.71s  optimizer  2.08s  ce=11.344  load max/mean=2.77  skipped=0
+422.7s	48	  step  4  micro  11.80s  optimizer  2.02s  ce=11.335  load max/mean=3.10  skipped=0
+435.9s	49	  step  5  micro  11.20s  optimizer  1.99s  ce=11.315  load max/mean=3.37  skipped=0
+435.9s	50	[result] D-grad-fp32 status=ok tokens/s=2762 peak=14.33 GiB  25B≈2514 h
+437.7s	51	>> PYTORCH_CUDA_ALLOC_CONF=expandable_segments:True torchrun --nproc_per_node 2 scripts/bench_afmoe.py --tag E-sin-prefetch --out results/t0_2v2.jsonl --seq 2048 --micro 8 --accum 1 --steps 4 --no-prefetch
+447.9s	52	[model] AFMoE total 1.906B, active 0.491B | built+sharded in 1s | moe=padded_bmm residual=fp32 reduce=fp16 prefetch=False momentum=gpu | world=2 device=cuda
+461.7s	53	  step  0  micro  11.17s  optimizer  2.54s  ce=11.365  load max/mean=2.12  skipped=0
+474.9s	54	  step  1  micro  11.16s  optimizer  2.10s  ce=11.359  load max/mean=2.25  skipped=0
+489.7s	55	  step  2  micro  12.61s  optimizer  2.18s  ce=11.359  load max/mean=2.22  skipped=0
+503.5s	56	  step  3  micro  11.75s  optimizer  2.07s  ce=11.345  load max/mean=2.75  skipped=0
+517.3s	57	  step  4  micro  11.81s  optimizer  2.01s  ce=11.335  load max/mean=3.11  skipped=0
+530.6s	58	  step  5  micro  11.26s  optimizer  1.98s  ce=11.315  load max/mean=3.37  skipped=0
+530.6s	59	[result] E-sin-prefetch status=ok tokens/s=2734 peak=14.33 GiB  25B≈2540 h
+532.7s	60	>> PYTORCH_CUDA_ALLOC_CONF=expandable_segments:True torchrun --nproc_per_node 2 scripts/bench_afmoe.py --tag F-momento-cpu --out results/t0_2v2.jsonl --seq 2048 --micro 8 --accum 1 --steps 4 --momentum-device cpu
+542.8s	61	[model] AFMoE total 1.906B, active 0.491B | built+sharded in 1s | moe=padded_bmm residual=fp32 reduce=fp16 prefetch=True momentum=cpu | world=2 device=cuda
+556.9s	62	  step  0  micro  11.10s  optimizer  3.01s  ce=11.365  load max/mean=2.12  skipped=0
+570.2s	63	  step  1  micro  10.96s  optimizer  2.36s  ce=11.359  load max/mean=2.26  skipped=0
+584.4s	64	  step  2  micro  11.82s  optimizer  2.37s  ce=11.359  load max/mean=2.23  skipped=0
+598.2s	65	  step  3  micro  11.45s  optimizer  2.35s  ce=11.344  load max/mean=2.76  skipped=0
+611.9s	66	  step  4  micro  11.32s  optimizer  2.34s  ce=11.335  load max/mean=3.10  skipped=0
+625.3s	67	  step  5  micro  11.13s  optimizer  2.33s  ce=11.315  load max/mean=3.37  skipped=0
+625.3s	68	[result] F-momento-cpu status=ok tokens/s=2831 peak=12.76 GiB  25B≈2453 h
+628.3s	69	>> PYTORCH_CUDA_ALLOC_CONF=expandable_segments:True torchrun --nproc_per_node 2 scripts/bench_afmoe.py --tag G-4-secuencias --out results/t0_2v2.jsonl --seq 2048 --micro 4 --accum 2 --steps 4
+638.4s	70	[model] AFMoE total 1.906B, active 0.491B | built+sharded in 1s | moe=padded_bmm residual=fp32 reduce=fp16 prefetch=True momentum=gpu | world=2 device=cuda
+656.0s	71	  step  0  micro   7.39s  optimizer  2.82s  ce=11.360  load max/mean=2.11  skipped=0
+672.5s	72	  step  1  micro   7.17s  optimizer  2.17s  ce=11.362  load max/mean=2.25  skipped=0
+689.0s	73	  step  2  micro   7.21s  optimizer  2.11s  ce=11.362  load max/mean=2.21  skipped=0
+705.6s	74	  step  3  micro   7.30s  optimizer  2.02s  ce=11.339  load max/mean=2.78  skipped=0
+722.1s	75	  step  4  micro   7.21s  optimizer  2.01s  ce=11.336  load max/mean=3.12  skipped=0
+738.6s	76	  step  5  micro   7.26s  optimizer  2.00s  ce=11.318  load max/mean=3.38  skipped=0
+738.6s	77	[result] G-4-secuencias status=ok tokens/s=2242 peak=12.77 GiB  25B≈3098 h
+740.6s	78	>> PYTORCH_CUDA_ALLOC_CONF=expandable_segments:True torchrun --nproc_per_node 2 scripts/bench_afmoe.py --tag H-4k --out results/t0_2v2.jsonl --seq 4096 --micro 4 --accum 1 --steps 4
+750.7s	79	[model] AFMoE total 1.906B, active 0.491B | built+sharded in 1s | moe=padded_bmm residual=fp32 reduce=fp16 prefetch=True momentum=gpu | world=2 device=cuda
+768.1s	80	  step  0  micro  14.82s  optimizer  2.56s  ce=11.362  load max/mean=2.66  skipped=0
+785.3s	81	  step  1  micro  15.01s  optimizer  2.18s  ce=11.362  load max/mean=2.67  skipped=0
+802.5s	82	  step  2  micro  15.10s  optimizer  2.07s  ce=11.351  load max/mean=2.81  skipped=0
+819.1s	83	  step  3  micro  14.58s  optimizer  2.00s  ce=11.336  load max/mean=5.05  skipped=0
+835.2s	84	  step  4  micro  14.15s  optimizer  1.99s  ce=11.320  load max/mean=4.77  skipped=0
+851.4s	85	  step  5  micro  14.18s  optimizer  2.02s  ce=11.311  load max/mean=6.75  skipped=0
+851.4s	86	[result] H-4k status=ok tokens/s=2240 peak=14.33 GiB  25B≈3100 h
+853.6s	87	>> PYTORCH_CUDA_ALLOC_CONF=expandable_segments:True torchrun --nproc_per_node 2 scripts/bench_afmoe.py --tag I-16k --out results/t0_2v2.jsonl --seq 16384 --micro 1 --accum 1 --steps 3
+863.8s	88	[model] AFMoE total 1.906B, active 0.491B | built+sharded in 1s | moe=padded_bmm residual=fp32 reduce=fp16 prefetch=True momentum=gpu | world=2 device=cuda
+894.0s	89	  step  0  micro  27.55s  optimizer  2.69s  ce=11.365  load max/mean=4.32  skipped=0
+923.6s	90	  step  1  micro  27.60s  optimizer  2.01s  ce=11.353  load max/mean=5.39  skipped=0
+951.9s	91	  step  2  micro  26.22s  optimizer  2.00s  ce=11.336  load max/mean=6.53  skipped=0
+980.5s	92	  step  3  micro  26.57s  optimizer  2.04s  ce=11.319  load max/mean=8.08  skipped=0
+1009.4s	93	  step  4  micro  26.88s  optimizer  2.02s  ce=11.309  load max/mean=8.75  skipped=0
+1009.4s	94	[result] I-16k status=ok tokens/s=1228 peak=14.33 GiB  25B≈5655 h
+1011.6s	95	Momento en la CPU para el checkpoint: False
+1011.6s	96	>> PYTORCH_CUDA_ALLOC_CONF=expandable_segments:True torchrun --nproc_per_node 2 scripts/bench_afmoe.py --tag J-checkpoint --out results/t0_2v2.jsonl --seq 2048 --micro 8 --accum 1 --steps 2 --ckpt-test --ckpt-dir /tmp/ludwig_ckpt_test --momentum-device gpu
+1021.7s	97	[model] AFMoE total 1.906B, active 0.491B | built+sharded in 1s | moe=padded_bmm residual=fp32 reduce=fp16 prefetch=True momentum=gpu | world=2 device=cuda
+1035.5s	98	  step  0  micro  11.27s  optimizer  2.53s  ce=11.365  load max/mean=2.12  skipped=0
+1048.8s	99	  step  1  micro  11.20s  optimizer  2.13s  ce=11.359  load max/mean=2.25  skipped=0
+1063.1s	100	  step  2  micro  12.19s  optimizer  2.10s  ce=11.359  load max/mean=2.22  skipped=0
+1076.5s	101	  step  3  micro  11.35s  optimizer  2.05s  ce=11.344  load max/mean=2.77  skipped=0
+1178.0s	102	[ckpt] save 53.6s, load 47.8s, 11.29 GiB, restore exact=True
+1178.0s	103	[result] J-checkpoint status=ok tokens/s=2754 peak=14.32 GiB  25B≈2522 h
+1183.0s	104	>> PYTORCH_CUDA_ALLOC_CONF=expandable_segments:True torchrun --nproc_per_node 2 scripts/bench_afmoe.py --tag K-signo --out results/t0_2v2.jsonl --seq 2048 --micro 4 --accum 2 --train-steps 60 --balance sign --gamma 0.001
+1195.1s	105	[model] AFMoE total 1.906B, active 0.491B | built+sharded in 1s | moe=padded_bmm residual=fp32 reduce=fp16 prefetch=True momentum=gpu | world=2 device=cuda
+1213.7s	106	  step   0  ce=11.352  load max/mean=3.61  dead=0  |bias|max=0.001  scale=32768
+1298.8s	107	  step   5  ce=9.539  load max/mean=7.08  dead=0  |bias|max=0.006  scale=32768
+1384.3s	108	  step  10  ce=5.597  load max/mean=3.94  dead=0  |bias|max=0.011  scale=32768
+1461.5s	109	  step  15  ce=3.832  load max/mean=3.06  dead=0  |bias|max=0.016  scale=32768
+1532.2s	110	  step  20  ce=2.914  load max/mean=2.55  dead=0  |bias|max=0.021  scale=32768
+1605.7s	111	  step  25  ce=2.491  load max/mean=2.71  dead=0  |bias|max=0.026  scale=32768
+1686.6s	112	  step  30  ce=2.330  load max/mean=3.37  dead=0  |bias|max=0.031  scale=32768
+1771.0s	113	  step  35  ce=2.131  load max/mean=4.09  dead=0  |bias|max=0.036  scale=32768
+1855.2s	114	  step  40  ce=2.078  load max/mean=5.85  dead=0  |bias|max=0.041  scale=32768
+1940.3s	115	  step  45  ce=1.982  load max/mean=7.08  dead=0  |bias|max=0.046  scale=32768
+2026.0s	116	  step  50  ce=1.957  load max/mean=7.52  dead=0  |bias|max=0.051  scale=32768
+2111.8s	117	  step  55  ce=1.887  load max/mean=7.97  dead=0  |bias|max=0.056  scale=32768
+2180.5s	118	  step  59  ce=1.865  load max/mean=7.57  dead=0  |bias|max=0.060  scale=32768
+2180.5s	119	[result] K-signo status=ok tokens/s=1995.360323713905 peak=12.65 GiB  25B≈None h
+2182.5s	120	>> PYTORCH_CUDA_ALLOC_CONF=expandable_segments:True torchrun --nproc_per_node 2 scripts/bench_afmoe.py --tag L-smebu-1e-2 --out results/t0_2v2.jsonl --seq 2048 --micro 4 --accum 2 --train-steps 60 --balance smebu --lam 0.01
+2192.6s	121	[model] AFMoE total 1.906B, active 0.491B | built+sharded in 1s | moe=padded_bmm residual=fp32 reduce=fp16 prefetch=True momentum=gpu | world=2 device=cuda
+2211.1s	122	  step   0  ce=11.352  load max/mean=3.60  dead=0  |bias|max=0.006  scale=32768
+2295.9s	123	  step   5  ce=9.537  load max/mean=6.47  dead=0  |bias|max=0.056  scale=32768
+2376.6s	124	  step  10  ce=5.589  load max/mean=2.61  dead=0  |bias|max=0.115  scale=32768
+2444.4s	125	  step  15  ce=3.824  load max/mean=1.92  dead=0  |bias|max=0.159  scale=32768
+2510.5s	126	  step  20  ce=2.908  load max/mean=1.74  dead=0  |bias|max=0.192  scale=32768
+2576.9s	127	  step  25  ce=2.489  load max/mean=1.92  dead=0  |bias|max=0.191  scale=32768
+2643.0s	128	  step  30  ce=2.329  load max/mean=1.73  dead=0  |bias|max=0.214  scale=32768
+2709.4s	129	  step  35  ce=2.132  load max/mean=1.91  dead=0  |bias|max=0.246  scale=32768
+2776.4s	130	  step  40  ce=2.077  load max/mean=2.19  dead=0  |bias|max=0.278  scale=32768
+2845.0s	131	  step  45  ce=1.981  load max/mean=3.24  dead=0  |bias|max=0.292  scale=32768
+2913.9s	132	  step  50  ce=1.957  load max/mean=2.68  dead=0  |bias|max=0.322  scale=32768
+2984.4s	133	  step  55  ce=1.888  load max/mean=2.53  dead=0  |bias|max=0.347  scale=32768
+3040.7s	134	  step  59  ce=1.865  load max/mean=2.41  dead=0  |bias|max=0.360  scale=32768
+3040.7s	135	[result] L-smebu-1e-2 status=ok tokens/s=2318.220065626436 peak=12.64 GiB  25B≈None h
+3042.8s	136	>> PYTORCH_CUDA_ALLOC_CONF=expandable_segments:True torchrun --nproc_per_node 2 scripts/bench_afmoe.py --tag M-smebu-1e-3 --out results/t0_2v2.jsonl --seq 2048 --micro 4 --accum 2 --train-steps 60 --balance smebu --lam 0.001
+3052.9s	137	[model] AFMoE total 1.906B, active 0.491B | built+sharded in 1s | moe=padded_bmm residual=fp32 reduce=fp16 prefetch=True momentum=gpu | world=2 device=cuda
+3071.4s	138	  step   0  ce=11.352  load max/mean=3.60  dead=0  |bias|max=0.001  scale=32768
+3156.6s	139	  step   5  ce=9.539  load max/mean=7.12  dead=0  |bias|max=0.006  scale=32768
+3242.3s	140	  step  10  ce=5.598  load max/mean=3.96  dead=0  |bias|max=0.012  scale=32768
+3319.9s	141	  step  15  ce=3.833  load max/mean=3.10  dead=0  |bias|max=0.018  scale=32768
+3391.4s	142	  step  20  ce=2.915  load max/mean=2.53  dead=0  |bias|max=0.024  scale=32768
+3465.7s	143	  step  25  ce=2.492  load max/mean=2.77  dead=0  |bias|max=0.029  scale=32768
+3546.7s	144	  step  30  ce=2.331  load max/mean=3.59  dead=0  |bias|max=0.033  scale=32768
+3630.6s	145	  step  35  ce=2.132  load max/mean=4.26  dead=0  |bias|max=0.039  scale=32768
+3714.2s	146	  step  40  ce=2.078  load max/mean=5.92  dead=0  |bias|max=0.044  scale=32768
+3800.1s	147	  step  45  ce=1.981  load max/mean=6.84  dead=0  |bias|max=0.050  scale=32768
+3886.0s	148	  step  50  ce=1.957  load max/mean=7.61  dead=0  |bias|max=0.055  scale=32768
+3971.8s	149	  step  55  ce=1.886  load max/mean=7.64  dead=0  |bias|max=0.061  scale=32768
+4040.5s	150	  step  59  ce=1.864  load max/mean=6.86  dead=0  |bias|max=0.065  scale=32768
+4040.5s	151	[result] M-smebu-1e-3 status=ok tokens/s=1990.9348048817683 peak=12.64 GiB  25B≈None h
+4044.6s	152	Base: 2,930 tokens/s, pico reservado 14.33 GiB, ~2,370 h para 25B (16.9 semanas a 140 h/semana)
+4044.6s	153	  B loop en vez de bmm    : +17.3% tokens/s, -0.03 GiB reservados
+4044.6s	154	  C residuo FP16          :  -0.4% tokens/s, -0.66 GiB reservados
+4044.6s	155	  D gradientes FP32       :  -5.7% tokens/s, +0.00 GiB reservados
+4044.6s	156	  E sin prefetch          :  -6.7% tokens/s, +0.00 GiB reservados
+4044.6s	157	  F momento en CPU        :  -3.4% tokens/s, -1.57 GiB reservados
+4044.6s	158	  G 4 secuencias por GPU  : -23.5% tokens/s, -1.56 GiB reservados
+4044.6s	159	  H: H-4k -> ok, 2240 tokens/s, 14.33 GiB
+4044.6s	160	  I: I-16k -> ok, 1228 tokens/s, 14.33 GiB
+4044.6s	161	  J: J-checkpoint -> ok, 2754 tokens/s, 14.32 GiB, checkpoint 11.29 GiB, exacto=True
+4044.6s	162	
+4044.6s	163	Balanceo (60 pasos):
+4044.6s	164	  K-signo       : pérdida 11.35 -> 1.86 (piso ~0.716), carga máx/media al final 7.57 (pico 7.97), pasos saltados 0, 1,995 tokens/s
+4044.6s	165	  L-smebu-1e-2  : pérdida 11.35 -> 1.87 (piso ~0.716), carga máx/media al final 2.41 (pico 6.47), pasos saltados 0, 2,318 tokens/s
+4044.6s	166	  M-smebu-1e-3  : pérdida 11.35 -> 1.86 (piso ~0.716), carga máx/media al final 6.86 (pico 7.64), pasos saltados 0, 1,991 tokens/s
+4048.6s	167	/usr/local/lib/python3.13/dist-packages/mistune.py:435: SyntaxWarning: invalid escape sequence '\|'
+4048.6s	168	  cells[i][c] = re.sub('\\\\\|', '|', cell)
+4048.8s	169	/usr/local/lib/python3.13/dist-packages/nbconvert/filters/filter_links.py:36: SyntaxWarning: invalid escape sequence '\_'
+4048.8s	170	  text = re.sub(r'_', '\_', text) # Escape underscores in display text
+4049.7s	171	[NbConvertApp] Converting notebook __notebook__.ipynb to notebook
+4049.8s	172	[NbConvertApp] Writing 50577 bytes to __notebook__.ipynb
+4052.5s	173	[NbConvertApp] Converting notebook __notebook__.ipynb to html
+4053.1s	174	[NbConvertApp] Writing 345742 bytes to __results__.html
