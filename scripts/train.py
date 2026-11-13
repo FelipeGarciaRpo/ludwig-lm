@@ -79,12 +79,16 @@ def parse(argv=None):
     g.add_argument("--tokens-per-step-after", type=int, default=524288)
     g = ap.add_argument_group("schedule and optimizers")
     g.add_argument("--steps", type=int, required=True, help="optimizer steps of the whole schedule")
-    g.add_argument("--warmup", type=int, default=2000)
+    g.add_argument("--warmup", type=int, default=2000, help="design: 2,000 steps (Ludwig 1: 1,000 of 131K tokens)")
     g.add_argument("--decay-steps", type=int, default=0, help="1−√ decay over the last N steps (0: constant LR)")
-    g.add_argument("--lr", type=float, default=1e-3, help="Muon peak LR")
-    g.add_argument("--adamw-lr", type=float, default=3e-4, help="AdamW peak LR")
+    g.add_argument("--lr", type=float, default=1.5e-3,
+                   help="Muon peak LR (Ludwig 1: 3x the base; its A/B of Oct 31 chose x3 over x1)")
+    g.add_argument("--adamw-lr", type=float, default=5e-4, help="AdamW peak LR: Ludwig 1's base")
     g.add_argument("--lr-mult", type=float, default=1.0, help="multiplies both peaks (the T2 sweep)")
     g.add_argument("--weight-decay", type=float, default=0.1)
+    g.add_argument("--muon-wd-lr", default="adamw", choices=["adamw", "muon"],
+                   help="the LR Muon's weight decay follows. adamw (Ludwig 1): each step removes adamw_lr x wd "
+                        "of every matrix; muon: lr x wd, 3x faster with these peaks")
     g.add_argument("--clip", type=float, default=1.0)
     g.add_argument("--balance", default="smebu", choices=["smebu", "sign"])
     g.add_argument("--lam", type=float, default=1e-2, help="SMEBU step (T0.2 v2: 0.01 balanced best)")
@@ -244,10 +248,12 @@ class Trainer:
             torch.cuda.empty_cache()
             torch.cuda.reset_peak_memory_stats()
         self.counts = count_params(self.model)
+        # lr_mult and the schedule scale both LRs alike, so this keeps Muon's decay at adamw_lr(t) x wd
+        self.muon_wd = a.weight_decay * a.adamw_lr / a.lr if a.muon_wd_lr == "adamw" else a.weight_decay
         self.muon, self.adamw = build_optimizers(
             self.model, lr=a.lr, weight_decay=a.weight_decay, n_heads=cfg.num_attention_heads, head_dim=cfg.head_dim,
             fused_qgate=False, adamw_lr=a.adamw_lr, momentum_device="cpu" if a.momentum_device == "cpu" else None,
-            cpu_mesh=cpu_mesh)
+            cpu_mesh=cpu_mesh, muon_weight_decay=self.muon_wd)
         self.opts = [self.muon, self.adamw]
         self.params = [p for p in self.model.parameters() if p.requires_grad]
         self.scaler = DynamicLossScaler(init_scale=2.0 ** 15 if self.use_cuda else 1.0)
@@ -428,7 +434,8 @@ class Trainer:
         gpu = torch.cuda.get_device_name(0) if self.use_cuda else "cpu"
         self.log.row("config", args=vars(a), world=self.world, gpu=gpu, torch=torch.__version__, code=self.code,
                      params_total=self.counts["total"], params_active=self.counts["active"], vocab=self.tok.get_vocab_size(),
-                     eos_id=self.eos, grad_accum=ga, train_files=[Path(f).name for f in self.train_files],
+                     eos_id=self.eos, grad_accum=ga, muon_weight_decay=self.muon_wd,
+                     train_files=[Path(f).name for f in self.train_files],
                      val_files=[Path(f).name for f in self.val_files], train_slices=self.reader.src.n_slices,
                      val_tokens_per_rank=int(self.val_ids.numel()), start_step=start, resumed=resumed)
         self.log.say(f"[model] AFMoE {self.counts['total']/1e9:.3f}B total, {self.counts['active']/1e9:.3f}B active | "

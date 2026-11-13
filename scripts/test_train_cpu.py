@@ -5,7 +5,7 @@
 
 1. Writes tiny parquet files (with empty rows, accents and literal "<|endoftext|>" strings) and trains a
    1,000-token byte-level BPE tokenizer on them, in work/test_train_cpu/.
-2. Reader: same windows on every run; a reader restarted from a saved state continues exactly; the two
+2. Reader (and Muon's weight decay): same windows on every run; a reader restarted from a saved state continues exactly; the two
    ranks get different data; epochs wrap; raw text never yields the EOS id; validation windows are fixed.
 3. Training, 2 processes on CPU with configs/tiny_afmoe.json:
    A  8 steps with WSD decay, saves before step 3 and before the decay (step 5);
@@ -127,6 +127,28 @@ def test_reader(d: Path):
     check(not torch.equal(v0, v1), "the ranks share the validation windows out")
 
 
+def test_optimizer():
+    import torch
+
+    from ludwig_lm.afmoe import LudwigAfmoe, load_config
+    from ludwig_lm.muon import build_optimizers
+
+    print("optimizer", flush=True)
+    cfg = load_config(ROOT / "configs" / "tiny_afmoe.json")
+    torch.manual_seed(0)
+    model = LudwigAfmoe(cfg)
+    lr, adamw_lr, wd = 1.5e-3, 5e-4, 0.1
+    muon, _ = build_optimizers(model, lr=lr, weight_decay=wd, n_heads=cfg.num_attention_heads, head_dim=cfg.head_dim,
+                               fused_qgate=False, adamw_lr=adamw_lr, muon_weight_decay=wd * adamw_lr / lr)
+    p = muon.param_groups[0]["params"][0]
+    before = p.detach().clone()
+    for q in model.parameters():
+        q.grad = torch.zeros_like(q)
+    muon.step()                                   # zero gradient: only the weight decay moves the matrix
+    check(torch.allclose(p.detach(), before * (1 - adamw_lr * wd), rtol=0, atol=1e-9),
+          "Muon decays its matrices at the AdamW LR x wd (Ludwig 1), not at its own LR")
+
+
 def torchrun(tag, out, *args):
     cmd = [sys.executable, "-m", "torch.distributed.run", "--standalone", "--nproc_per_node", "2",
            str(ROOT / "scripts" / "train.py"), "--config", str(ROOT / "configs" / "tiny_afmoe.json"),
@@ -205,6 +227,7 @@ def main():
         shutil.rmtree(WORK)
     make_data(WORK)
     test_reader(WORK)
+    test_optimizer()
     test_training()
     print("PASS" if not FAILS else f"FAIL: {len(FAILS)} checks", flush=True)
     sys.exit(1 if FAILS else 0)

@@ -157,9 +157,12 @@ def split_params(model):
 
 def build_optimizers(model, lr: float, weight_decay: float = 0.1, n_heads: int = 16, head_dim: int = 64,
                      momentum_dtype=torch.bfloat16, fused_qgate: bool = True, adamw_lr: float | None = None,
-                     momentum_device=None, cpu_mesh=None):
+                     momentum_device=None, cpu_mesh=None, muon_weight_decay: float | None = None):
+    """``muon_weight_decay`` (default: ``weight_decay``) multiplies Muon's own LR: each step removes
+    lr × wd of every matrix. To decay at the AdamW LR instead, as Ludwig 1 does, pass wd × adamw_lr / lr."""
     muon_p, decay_p, no_decay_p = split_params(model)
-    muon = Muon(muon_p, lr=lr, weight_decay=weight_decay, n_heads=n_heads, head_dim=head_dim,
+    muon = Muon(muon_p, lr=lr, weight_decay=weight_decay if muon_weight_decay is None else muon_weight_decay,
+                n_heads=n_heads, head_dim=head_dim,
                 momentum_dtype=momentum_dtype, fused_qgate=fused_qgate, momentum_device=momentum_device,
                 cpu_mesh=cpu_mesh)
     adamw = torch.optim.AdamW(

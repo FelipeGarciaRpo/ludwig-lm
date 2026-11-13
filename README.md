@@ -150,7 +150,7 @@ The real 1.906B model in the transformers class, FSDP2 over the two T4s, FP16, M
 
 ### T0.3 + T2: learning rate and FP16 stability
 
-⏳ Ready to run: [`notebooks/t0_3_t2_lr_2xT4.ipynb`](notebooks/t0_3_t2_lr_2xT4.ipynb), ~9.5 h per run. Three runs of the real model and the real training loop ([`scripts/train.py`](scripts/train.py)) at learning rate ×0.5, ×1 and ×2: 400 steps of 0.25M tokens each, one per Kaggle account, in parallel. Until the 64K tokenizer is ready they use FineWeb-Edu and SmolLM2's tokenizer and are compared in bits per byte. The ×2 run is also the FP16 stress test. The decision rule was fixed before the runs ([`docs/DECISIONS.md`](docs/DECISIONS.md), P6).
+⏳ Ready to run: [`notebooks/t0_3_t2_lr_2xT4.ipynb`](notebooks/t0_3_t2_lr_2xT4.ipynb), ~9.5 h per run. Three runs of the real model and the real training loop ([`scripts/train.py`](scripts/train.py)) at ×0.5, ×1 and ×2 Ludwig 1's learning rates (Muon 1.5e-3, AdamW 5e-4): 400 steps of 0.25M tokens each, one per Kaggle account, in parallel. Until the 64K tokenizer is ready they use FineWeb-Edu and SmolLM2's tokenizer and are compared in bits per byte. The ×2 run is also the FP16 stress test. The decision rule was fixed before the runs ([`docs/DECISIONS.md`](docs/DECISIONS.md), P6).
 
 ## Data
 

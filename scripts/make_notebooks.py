@@ -330,11 +330,13 @@ Entrena el **modelo real** (1.906B totales, 0.491B activos) con `scripts/train.p
 
 | Cuenta | `CORRIDA` | `LR_MULT` | Muon / AdamW |
 |---|---|---|---|
-| cuenta 1 | `lr-x0.5` | 0.5 | 5e-4 / 1.5e-4 |
-| cuenta 2 | `lr-x1` | 1.0 | 1e-3 / 3e-4 |
-| cuenta 3 | `lr-x2` | 2.0 | 2e-3 / 6e-4 |
+| cuenta 1 | `lr-x0.5` | 0.5 | 7.5e-4 / 2.5e-4 |
+| cuenta 2 | `lr-x1` | 1.0 | 1.5e-3 / 5e-4 |
+| cuenta 3 | `lr-x2` | 2.0 | 3e-3 / 1e-3 |
 
-Cada una hace **400 pasos de 0.25M tokens (~105M tokens)**: 50 de calentamiento, LR constante y un enfriamiento 1−√ en los últimos 80 pasos, con el mismo orden de datos. Se comparan los bits por byte de validación al final. La de ×2 es además la prueba de estabilidad en FP16 con margen.
+**×1 es la receta del Ludwig 1:** AdamW 5e-4 para embeddings, normas y router; Muon 3 veces eso, 1.5e-3 (en el A/B del 31 de octubre el ×3 le ganó a AdamW por 0.37 nats); weight decay 0.1 aplicado con el LR de AdamW también a las matrices de Muon. Los dos Muon usan la misma escala (la de Moonlight), así que los números se pueden comparar directamente.
+
+Cada una hace **400 pasos de 0.25M tokens (~105M tokens)**: 100 de calentamiento, LR constante y un enfriamiento 1−√ en los últimos 80 pasos (el último 20%, como en el Ludwig 1), con el mismo orden de datos. Se comparan los bits por byte de validación al final. La de ×2 es además la prueba de estabilidad en FP16 con margen.
 
 **Datos y tokenizador provisionales:** FineWeb-Edu (`sample-10BT`, archivos 000 y 001 para entrenar y 013 para validar) y el tokenizador de SmolLM2 (49,152 tokens, Apache 2.0, con `<|endoftext|>` = 0 como el nuestro), mientras se termina el de 64K. Por eso la métrica son los bits por byte, que no dependen del tokenizador.
 
@@ -342,7 +344,7 @@ Cada una hace **400 pasos de 0.25M tokens (~105M tokens)**: 50 de calentamiento,
     code(r'''CORRIDA = "lr-x1"      # lr-x0.5 · lr-x1 · lr-x2: una por cuenta
 LR_MULT = 1.0          # 0.5 · 1.0 · 2.0
 REPO_URL = ""          # "" = el repo subido como dataset de Kaggle (el repo es privado)
-PASOS, CALENTAMIENTO, ENFRIAMIENTO = 400, 50, 80
+PASOS, CALENTAMIENTO, ENFRIAMIENTO = 400, 100, 80
 GUARDAR_CHECKPOINT = True   # deja en la salida el checkpoint de antes del enfriamiento (~11.3 GB), para seguir la corrida
 REANUDAR = ""          # para seguir una corrida: la carpeta del checkpoint, p. ej. "/kaggle/input/<notebook>/checkpoint"
 import time

@@ -23,7 +23,7 @@
 > 1. **Configuración del entrenamiento:** un matmul por experto (el loop, +17.3% frente al bmm con relleno), residuo en FP32, gradientes en FP16, prefetch, **momento de Muon en la RAM** (−1.57 GiB reservados por −3.4%) y 8 secuencias de 2K por GPU. Medidas por separado, juntas deberían dar ~3,300 tokens/s (~2,100 h para 25B) con ~12.7 GiB reservados. 4K y 16K caben.
 > 2. **SMEBU con λ = 0.01:** dejó al experto más cargado en 2.41× el promedio, contra 6.86× con 0.001 y 7.57× con el signo fijo. Se revisa con texto real en la T0.3 + T2.
 > 3. **El tope de memoria de la G0 (13.5 GiB) es de memoria reservada** (5.7, punto 3).
-> 4. **La T0.3 y la T2 van juntas y antes del tokenizador:** tres corridas de 400 pasos (~105M tokens) con LR ×0.5, ×1 y ×2, con FineWeb-Edu y el tokenizador de SmolLM2 como provisionales, comparadas en bits por byte. La regla de decisión está en `DECISIONS.md` (P6) y en el notebook `t0_3_t2_lr_2xT4.ipynb`.
+> 4. **La T0.3 y la T2 van juntas y antes del tokenizador:** tres corridas de 400 pasos (~105M tokens) con LR ×0.5, ×1 y ×2 alrededor de la receta del Ludwig 1 (Muon 1.5e-3, AdamW 5e-4, weight decay con el LR de AdamW), con FineWeb-Edu y el tokenizador de SmolLM2 como provisionales, comparadas en bits por byte. La regla de decisión está en `DECISIONS.md` (P6) y en el notebook `t0_3_t2_lr_2xT4.ipynb`.
 > 5. **El bucle de entrenamiento existe** (`scripts/train.py`, P7), con reanudación verificada bit a bit. Al escribirlo aparecieron dos errores que ya están corregidos (P8): transformers dejaba fijo el embedding del EOS (id 0) y la carga de checkpoints pasaba el momento de Muon a FP32.
 
 **Leyenda:** ✅ decidido · ❓ decide Pipe · 📏 se mide antes de fijarlo · 🧪 se prueba en corrida corta · 🟢🟡🔴 licencia de datos (ver 4.8)
