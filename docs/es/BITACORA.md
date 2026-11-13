@@ -212,3 +212,14 @@ Todo lo que se corre, se mide o se decide, en orden. Cada entrada dice qué se h
   - Solo SMEBU con λ = 0.01 mantiene el balanceo (2.41× al final), y es el más rápido entrenando. La pérdida es la misma en los tres.
 - **Preguntas para el chat de diseño:** qué piezas van al entrenamiento real (B y F no se midieron juntas), con cuánto margen de memoria, y si SMEBU con λ = 0.01 queda fijo.
 - **Siguiente:** el chat de diseño fija las piezas, el micro-lote y el balanceo. Después viene la T0.3 (estabilidad en FP16 con el LR pico).
+
+## 2026-11-12 · Entra el `t0_2v2.jsonl` del segundo intento
+
+- **Qué:** se agregó la salida del notebook, con una fila por medición. Las 13 filas coinciden con el log en tokens/s y en memoria reservada.
+- **Dónde:** PC de Pipe, sin acelerador.
+- **Archivos:** `results/t0_2v2_intento2/t0_2v2.jsonl`. Llegó copiado a mano, con fines de línea de Windows y sin el salto final; se guardó con los fines de línea del notebook. Pesa 18,807 bytes, lo mismo que muestra Kaggle (18.81 kB), y el texto no cambió.
+- **Lo que agrega al log:**
+  - **Memoria asignada** además de la reservada: la base asigna 12.17 GiB (reserva 14.33), la medición más alta es la I a 16K con 12.92 GiB, y con el momento en la CPU (F) son 10.45 GiB.
+  - **MFU:** 7.37% en la base, 8.65% con el loop y 3.59% a 16K.
+- **Pregunta abierta:** la G0 (5.7) no dice si su tope de 13.5 GiB es de memoria reservada o asignada. Con la asignada, todas las mediciones lo cumplen; con la reservada, solo F, G y los entrenamientos de 4 × 2. El banco v1 usaba la reservada.
+- **Siguiente:** el mismo de la entrada anterior.
