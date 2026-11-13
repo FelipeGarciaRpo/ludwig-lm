@@ -14,7 +14,7 @@
 
 </div>
 
-> **Status, November 12, 2026.** Design v1.2 is approved: Ludwig 2 is stored in the AFMoE format of Arcee's Trinity models, which runs in llama.cpp unpatched. A first bench on 2×T4 measured **3,856 tokens/s, about 1,800 h for 25B tokens**. Next up is T0.2 v2, the real training stack on 2×T4 ([notebook](notebooks/t0_2v2_afmoe_2xT4.ipynb)). **There are no weights yet.** This repository documents the project from its first test.
+> **Status, November 13, 2026.** Design v1.2 is approved: Ludwig 2 is stored in the AFMoE format of Arcee's Trinity models, which runs in llama.cpp unpatched. T0.2 v2 measured the real training stack on 2×T4: the fastest configuration under the memory limit should run at about **3,300 tokens/s, ~2,100 h for 25B tokens**. Next up is T0.3 + T2: three short runs of the real training loop that pick the learning rate and test FP16 stability ([notebook](notebooks/t0_3_t2_lr_2xT4.ipynb)). **There are no weights yet.** This repository documents the project from its first test.
 
 ## Why Ludwig 2
 
@@ -129,9 +129,28 @@ Raw output: [`results/banco_t4_v1/`](results/banco_t4_v1/). What it settles and 
 
 A tiny `AfmoeForCausalLM` with Ludwig 2's layout, run with prompts longer than its sliding window and a deliberately large expert bias, matches transformers on **stock** llama.cpp: next-token probabilities within 5.9e-5, greedy 4/4, expert bias respected ([`scripts/smoke_format_afmoe.py`](scripts/smoke_format_afmoe.py), [`results/t0_1c_afmoe.json`](results/t0_1c_afmoe.json)). Two settings are mandatory for that: `mup_enabled` (llama.cpp always scales the embeddings by √d) and `route_norm`.
 
-### T0.2 v2: the real training stack on 2×T4
+### T0.2 v2: the real training stack on 2×T4 (Kaggle, November 12, 2026)
 
-⏳ Ready to run: [`notebooks/t0_2v2_afmoe_2xT4.ipynb`](notebooks/t0_2v2_afmoe_2xT4.ipynb), ~1–1.25 h. It trains the real 1.906B model in the transformers class plus our speed pieces: padded-bmm experts, FP32 residual stream, FP16 gradients between the GPUs, FSDP2 prefetch, and Muon's momentum in CPU RAM as an option. Each piece is switched off once to measure what it is worth. It also measures 4K and 16K context, a full checkpoint save and load, and 60 training steps that compare SMEBU with the fixed-sign bias update.
+The real 1.906B model in the transformers class, FSDP2 over the two T4s, FP16, Muon + AdamW, the balancing losses and the expert bias, on synthetic data ([`notebooks/t0_2v2_afmoe_2xT4.ipynb`](notebooks/t0_2v2_afmoe_2xT4.ipynb), [`results/t0_2v2_intento2/`](results/t0_2v2_intento2/)). Each speed piece was switched off once against the base:
+
+| Measurement | tokens/s | vs base | Peak reserved |
+|---|---|---|---|
+| Base: padded-bmm experts, FP32 residual, FP16 gradients, prefetch, 8 sequences of 2K per GPU | 2,930 | — | 14.33 GiB |
+| One matmul per expert (a loop) | 3,436 | +17.3% | 14.30 GiB |
+| Muon's momentum in CPU RAM | 2,831 | −3.4% | 12.76 GiB |
+| FP16 residual stream | 2,918 | −0.4% | 13.67 GiB |
+| FP32 gradients between the GPUs | 2,762 | −5.7% | 14.33 GiB |
+| No prefetch | 2,734 | −6.7% | 14.33 GiB |
+| 4 sequences per GPU | 2,242 | −23.5% | 12.77 GiB |
+| 4K / 16K context | 2,240 / 1,228 | | 14.33 GiB |
+
+- **Training configuration:** the loop plus the momentum in RAM. Measured separately, together they should give ~3,300 tokens/s (~2,100 h for 25B tokens) at ~12.7 GiB reserved, under the 13.5 GiB limit of gate G0.
+- **Checkpoint:** 11.29 GiB, saved in 54 s and loaded in 48 s, restored exactly.
+- **Balancing,** 60 steps of synthetic text: SMEBU with λ = 0.01 ended with the busiest expert at 2.41× the mean load; the fixed-sign update of bench v1 at 7.57×. No FP16 step was skipped in any measurement.
+
+### T0.3 + T2: learning rate and FP16 stability
+
+⏳ Ready to run: [`notebooks/t0_3_t2_lr_2xT4.ipynb`](notebooks/t0_3_t2_lr_2xT4.ipynb), ~9.5 h per run. Three runs of the real model and the real training loop ([`scripts/train.py`](scripts/train.py)) at learning rate ×0.5, ×1 and ×2: 400 steps of 0.25M tokens each, one per Kaggle account, in parallel. Until the 64K tokenizer is ready they use FineWeb-Edu and SmolLM2's tokenizer and are compared in bits per byte. The ×2 run is also the FP16 stress test. The decision rule was fixed before the runs ([`docs/DECISIONS.md`](docs/DECISIONS.md), P6).
 
 ## Data
 
@@ -166,13 +185,17 @@ python scripts/smoke_format_afmoe.py
 # The training stack (FSDP2, Muon, balancing, checkpoint), 2 processes on CPU with a tiny model
 torchrun --nproc_per_node 2 scripts/bench_afmoe.py --config configs/tiny_afmoe.json \
     --seq 64 --micro 2 --steps 2 --ckpt-test --out /tmp/t0_2v2_cpu.jsonl
+
+# The training loop and its data reader: a resumed run must equal an uninterrupted one bit for bit (~1–4 min)
+python scripts/test_train_cpu.py
 ```
 
 ### Run them on Kaggle
 
 | Notebook | Accelerator | Time | What you get |
 |---|---|---|---|
-| [`t0_2v2_afmoe_2xT4.ipynb`](notebooks/t0_2v2_afmoe_2xT4.ipynb) | GPU T4 x2 | ~1–1.25 h | `results/t0_2v2.jsonl` |
+| [`t0_3_t2_lr_2xT4.ipynb`](notebooks/t0_3_t2_lr_2xT4.ipynb) | GPU T4 x2 | ~9.5 h per run | `results/t0_3_t2/<run>.jsonl` and `.png`, and the checkpoint before the decay |
+| [`t0_2v2_afmoe_2xT4.ipynb`](notebooks/t0_2v2_afmoe_2xT4.ipynb) | GPU T4 x2 | ~1–1.25 h | `results/t0_2v2.jsonl` (done: [`results/t0_2v2_intento2/`](results/t0_2v2_intento2/)) |
 | [`t0_1_formato_mtp_tokenizador.ipynb`](notebooks/t0_1_formato_mtp_tokenizador.ipynb) | None (CPU) | ~15–25 min | Format A and **tokenizer** checks; only the tokenizer part still matters |
 
 In each notebook set `REPO_URL` to your clone (or upload the repo as a Kaggle dataset and leave it empty), turn **Internet on**, and run all cells. Internet access requires a phone-verified Kaggle account. `t0_2_velocidad_memoria_2xT4.ipynb` measured format A and is kept only as a record.
@@ -181,9 +204,11 @@ In each notebook set `REPO_URL` to your clone (or upload the repo as a Kaggle da
 
 ```
 ludwig-lm/
-├── ludwig_lm/      # afmoe.py: the model (AFMoE), its kernel, losses and balancer · muon.py · model.py: format A (fallback)
+├── ludwig_lm/      # afmoe.py: the model (AFMoE), its kernel, losses and balancer · muon.py · data.py: provisional data reader
+│                   # · checkpoint.py: checkpoints with a verified resume · model.py: format A (fallback)
 ├── configs/        # ludwig2_afmoe.json (the real model), tiny_afmoe.json (tests); ludwig2.json, tiny.json (format A)
-├── scripts/        # smoke_format_afmoe.py (T0.1-C), bench_afmoe.py (T0.2 v2), make_notebooks.py, convert_gguf.py, format-A tools
+├── scripts/        # train.py (the training loop) and test_train_cpu.py, bench_afmoe.py (T0.2 v2), smoke_format_afmoe.py (T0.1-C),
+│                   # make_notebooks.py, convert_gguf.py, format-A tools
 ├── notebooks/      # Kaggle notebooks, generated by scripts/make_notebooks.py
 ├── patches/        # llama.cpp patch for format A and its technical note
 ├── results/        # raw reports of every test: the evidence behind each claim
@@ -197,11 +222,10 @@ ludwig-lm/
 - [x] **Bench v1** on 2×T4: 3,856 tokens/s, shape and expert count confirmed
 - [x] **T0.1-C** AFMoE format: passes on stock llama.cpp
 - [x] **v1.2** AFMoE format approved
-- [ ] **T0.2 v2** The real training stack on 2×T4 ([notebook](notebooks/t0_2v2_afmoe_2xT4.ipynb))
+- [x] **T0.2 v2** The real training stack on 2×T4: the loop and momentum in RAM, ~3,300 tokens/s expected
+- [ ] **T0.3 + T2** Learning rate and FP16 stability: 3 runs of 400 steps ([notebook](notebooks/t0_3_t2_lr_2xT4.ipynb))
 - [ ] **T0.1b** Re-run the tokenizer checks with the final 64K tokenizer
-- [ ] **T0.3** FP16 stability: 2–3K steps at peak LR
 - [ ] **T1** Data: code source, deterministic loader with decontamination and manifests
-- [ ] **T2** Learning rate: 3 short runs
 - [ ] **G0** Gate: ≥6 h sustained, save, resume on another account, 16K
 - [ ] **T3** Trunk to 22.5B tokens
 - [ ] **T4** v1 branch: 2.5B tokens, 16K

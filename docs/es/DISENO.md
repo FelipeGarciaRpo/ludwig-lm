@@ -1,6 +1,6 @@
 # Ludwig 2 — Documento de diseño
 
-**Versión:** 1.2 · 12 de noviembre de 2026 (el cuerpo del documento todavía describe la 1.1: ver el recuadro de la v1.2)
+**Versión:** 1.2 · 13 de noviembre de 2026 (el cuerpo del documento todavía describe la 1.1: ver los recuadros de la v1.2 y de la T0.2 v2)
 **Estado:** diseño cerrado para la v1 (25B tokens). La v1.2 cambió el formato a AFMoE. Fases hasta 1T planificadas, sin obligación de llegar.
 
 > **Cambios de la v1.1** (tras la crítica externa y la primera prueba real):
@@ -18,6 +18,13 @@
 > 4. **Entrenamiento:** la clase de transformers más nuestras piezas de velocidad (bmm con relleno, residuo en FP32, gradientes en FP16, prefetch, momento en la RAM opcional). Lo mide la T0.2 v2.
 >
 > El resto de este documento todavía describe la v1.1 y se reescribe con los números de la T0.2 v2. Donde se contradigan, manda este recuadro, junto con `DECISIONS.md`.
+
+> **Después de la T0.2 v2 (13 de noviembre de 2026)** (evidencia en `results/t0_2v2_intento2/` y la bitácora; decisiones P2a, P5a, D16a, P6–P8 de [`../DECISIONS.md`](../DECISIONS.md)):
+> 1. **Configuración del entrenamiento:** un matmul por experto (el loop, +17.3% frente al bmm con relleno), residuo en FP32, gradientes en FP16, prefetch, **momento de Muon en la RAM** (−1.57 GiB reservados por −3.4%) y 8 secuencias de 2K por GPU. Medidas por separado, juntas deberían dar ~3,300 tokens/s (~2,100 h para 25B) con ~12.7 GiB reservados. 4K y 16K caben.
+> 2. **SMEBU con λ = 0.01:** dejó al experto más cargado en 2.41× el promedio, contra 6.86× con 0.001 y 7.57× con el signo fijo. Se revisa con texto real en la T0.3 + T2.
+> 3. **El tope de memoria de la G0 (13.5 GiB) es de memoria reservada** (5.7, punto 3).
+> 4. **La T0.3 y la T2 van juntas y antes del tokenizador:** tres corridas de 400 pasos (~105M tokens) con LR ×0.5, ×1 y ×2, con FineWeb-Edu y el tokenizador de SmolLM2 como provisionales, comparadas en bits por byte. La regla de decisión está en `DECISIONS.md` (P6) y en el notebook `t0_3_t2_lr_2xT4.ipynb`.
+> 5. **El bucle de entrenamiento existe** (`scripts/train.py`, P7), con reanudación verificada bit a bit. Al escribirlo aparecieron dos errores que ya están corregidos (P8): transformers dejaba fijo el embedding del EOS (id 0) y la carga de checkpoints pasaba el momento de Muon a FP32.
 
 **Leyenda:** ✅ decidido · ❓ decide Pipe · 📏 se mide antes de fijarlo · 🧪 se prueba en corrida corta · 🟢🟡🔴 licencia de datos (ver 4.8)
 
@@ -377,7 +384,7 @@ Además se registran: norma del gradiente, entropía del router, pérdida de bal
 No se arranca el tronco hasta cumplir todo esto con el modelo real y el lector de datos real:
 1. **Corrida sostenida de ≥6 h** sin NaN, con el escalador de pérdida estable.
 2. **Tokens/s sostenidos ≥ 2,600** (el extremo bajo del plan), medidos en la última hora, no en el arranque.
-3. **Memoria pico ≤ 13.5 GiB** durante toda la corrida, evaluación y guardado incluidos.
+3. **Memoria pico ≤ 13.5 GiB reservada** (la que tiene tomada el asignador de PyTorch, como en el banco v1) durante toda la corrida, evaluación y guardado incluidos.
 4. **Al menos 2 guardados** subidos a Hugging Face y **una reanudación en otra cuenta**, con el hash del primer lote igual al esperado.
 5. **16K probado:** 50 pasos a 16K de contexto sin falta de memoria.
 
@@ -558,10 +565,9 @@ Se agregan a medida que existan: `tokenizer/`, `data/` (recetas, lector, descont
 | # | Tarea | Dónde | Horas | Termina cuando |
 |---|---|---|---|---|
 | T0.1 | ✅ **Prueba de formato** (`notebooks/t0_1_formato_mtp_tokenizador.ipynb`): con parche, todo pasa (2.5). Falta correrla con el tokenizador real de 64K | CPU | ~0.5 | Hecho el 11 nov |
-| T0.2 | **Velocidad y memoria** (`notebooks/t0_2_velocidad_memoria_2xT4.ipynb`): kernels de MoE, micro-batch, 2K/4K/16K, 32 expertos, MTP, guardado y carga | 2×T4 | ~1 | Tokens/s y memoria pico medidos |
-| T0.3 | **Estabilidad en FP16:** 2–3K pasos con el LR pico | 2×T4 | ~10–20 | Sin NaN y con el escalador estable |
+| T0.2 | ✅ **Velocidad y memoria** (T0.2 v2, `notebooks/t0_2v2_afmoe_2xT4.ipynb`): piezas de velocidad, micro-lote, 2K/4K/16K, guardado y carga, balanceo | 2×T4 | ~1 | Hecho el 12 nov |
+| T0.3 + T2 | **LR y estabilidad en FP16** (`notebooks/t0_3_t2_lr_2xT4.ipynb`): 3 corridas de 400 pasos con LR ×0.5, ×1 y ×2, en paralelo en 3 cuentas, con datos y tokenizador provisionales. La ganadora se puede alargar como prueba de estabilidad | 2×T4 | ~3 × 9.5 | LR fijado y ninguna corrida inestable |
 | T1 | **Datos:** decidir la fuente de código; lector con descontaminación y manifiestos | CPU | — | Determinista y reanuda exacto |
-| T2 | **LR y formato:** 3 corridas de LR (formato A) + 1 corrida del formato B, ~0.2–0.3B tokens cada una | 2×T4 | ~55–90 | LR y formato fijados (2.5) |
 | G0 | **Compuerta G0** (5.7): ≥6 h sostenidas, guardado, reanudación en otra cuenta, 16K | 2×T4 | ~8–10 | Pasan las 5 condiciones |
 | T3 | **Tronco** hasta 22.5B | Relevo | ~1,550–2,450 | — |
 | T4 | **Rama de la v1** (2.5B, con 16K y MTP) | Relevo | ~225–355 | Base lista |

@@ -14,7 +14,7 @@
 
 </div>
 
-> **Estado, 12 de noviembre de 2026.** El diseño v1.2 está aprobado: Ludwig 2 se guarda en el formato AFMoE de los modelos Trinity de Arcee, que corre en llama.cpp sin parche. Un primer banco en 2×T4 midió **3,856 tokens/s, unas 1,800 h para 25B tokens**. Lo siguiente es la T0.2 v2, el entrenamiento real en 2×T4 ([notebook](notebooks/t0_2v2_afmoe_2xT4.ipynb)). **Todavía no hay pesos.** Este repositorio documenta el proyecto desde la primera prueba.
+> **Estado, 13 de noviembre de 2026.** El diseño v1.2 está aprobado: Ludwig 2 se guarda en el formato AFMoE de los modelos Trinity de Arcee, que corre en llama.cpp sin parche. La T0.2 v2 midió el entrenamiento real en 2×T4: la configuración más rápida que cabe en el tope de memoria debería ir a unos **3,300 tokens/s, ~2,100 h para 25B tokens**. Lo siguiente es la T0.3 + T2: tres corridas cortas del bucle de entrenamiento real que eligen el learning rate y prueban la estabilidad en FP16 ([notebook](notebooks/t0_3_t2_lr_2xT4.ipynb)). **Todavía no hay pesos.** Este repositorio documenta el proyecto desde la primera prueba.
 
 ## Por qué Ludwig 2
 
@@ -129,9 +129,28 @@ Salida cruda: [`results/banco_t4_v1/`](results/banco_t4_v1/). Lo que deja decidi
 
 Un `AfmoeForCausalLM` diminuto con la estructura de Ludwig 2, con prompts más largos que su ventana deslizante y un bias de expertos grande a propósito, coincide con transformers en llama.cpp **sin cambios**: probabilidades a 5.9e-5, greedy 4/4 y el bias de los expertos respetado ([`scripts/smoke_format_afmoe.py`](scripts/smoke_format_afmoe.py), [`results/t0_1c_afmoe.json`](results/t0_1c_afmoe.json)). Para eso son obligatorias dos opciones: `mup_enabled` (llama.cpp siempre multiplica los embeddings por √d) y `route_norm`.
 
-### T0.2 v2: el entrenamiento real en 2×T4
+### T0.2 v2: el entrenamiento real en 2×T4 (Kaggle, 12 de noviembre de 2026)
 
-⏳ Lista para correr: [`notebooks/t0_2v2_afmoe_2xT4.ipynb`](notebooks/t0_2v2_afmoe_2xT4.ipynb), ~1–1.25 h. Entrena el modelo real de 1.906B con la clase de transformers más nuestras piezas de velocidad: expertos con bmm y relleno, residuo en FP32, gradientes en FP16 entre las GPUs, prefetch de FSDP2 y, como opción, el momento de Muon en la RAM. Quita cada pieza una vez para medir cuánto vale. También mide 4K y 16K de contexto, el guardado y la carga del checkpoint completo, y 60 pasos de entrenamiento que comparan SMEBU contra el bias de signo fijo.
+El modelo real de 1.906B en la clase de transformers, FSDP2 entre las dos T4, FP16, Muon + AdamW, las pérdidas de balanceo y el bias de los expertos, con datos sintéticos ([`notebooks/t0_2v2_afmoe_2xT4.ipynb`](notebooks/t0_2v2_afmoe_2xT4.ipynb), [`results/t0_2v2_intento2/`](results/t0_2v2_intento2/)). Cada pieza de velocidad se quitó una vez frente a la base:
+
+| Medición | tokens/s | Frente a la base | Pico reservado |
+|---|---|---|---|
+| Base: bmm con relleno, residuo FP32, gradientes FP16, prefetch, 8 secuencias de 2K por GPU | 2,930 | — | 14.33 GiB |
+| Un matmul por experto (un loop) | 3,436 | +17.3% | 14.30 GiB |
+| Momento de Muon en la RAM de la CPU | 2,831 | −3.4% | 12.76 GiB |
+| Residuo en FP16 | 2,918 | −0.4% | 13.67 GiB |
+| Gradientes en FP32 entre las GPUs | 2,762 | −5.7% | 14.33 GiB |
+| Sin prefetch | 2,734 | −6.7% | 14.33 GiB |
+| 4 secuencias por GPU | 2,242 | −23.5% | 12.77 GiB |
+| 4K / 16K de contexto | 2,240 / 1,228 | | 14.33 GiB |
+
+- **Configuración del entrenamiento:** el loop más el momento en la RAM. Medidos por separado, juntos deberían dar ~3,300 tokens/s (~2,100 h para 25B tokens) con ~12.7 GiB reservados, bajo el tope de 13.5 GiB de la compuerta G0.
+- **Checkpoint:** 11.29 GiB, se guarda en 54 s y se carga en 48 s, y se restaura exacto.
+- **Balanceo,** 60 pasos de texto sintético: SMEBU con λ = 0.01 dejó al experto más cargado en 2.41× el promedio; el bias de signo fijo del banco v1, en 7.57×. Ninguna medición saltó un paso en FP16.
+
+### T0.3 + T2: learning rate y estabilidad en FP16
+
+⏳ Lista para correr: [`notebooks/t0_3_t2_lr_2xT4.ipynb`](notebooks/t0_3_t2_lr_2xT4.ipynb), ~9.5 h por corrida. Tres corridas del modelo real con el bucle de entrenamiento real ([`scripts/train.py`](scripts/train.py)), con learning rate ×0.5, ×1 y ×2: 400 pasos de 0.25M tokens cada una, una por cuenta de Kaggle, en paralelo. Mientras se termina el tokenizador de 64K usan FineWeb-Edu y el tokenizador de SmolLM2, y se comparan en bits por byte. La de ×2 es además la prueba de estrés en FP16. La regla de decisión se fijó antes de correrlas ([`docs/DECISIONS.md`](docs/DECISIONS.md), P6).
 
 ## Datos
 
@@ -166,13 +185,17 @@ python scripts/smoke_format_afmoe.py
 # El entrenamiento (FSDP2, Muon, balanceo, checkpoint), 2 procesos en CPU con un modelo diminuto
 torchrun --nproc_per_node 2 scripts/bench_afmoe.py --config configs/tiny_afmoe.json \
     --seq 64 --micro 2 --steps 2 --ckpt-test --out /tmp/t0_2v2_cpu.jsonl
+
+# El bucle de entrenamiento y su lector de datos: una corrida reanudada debe dar lo mismo, bit a bit, que una sin cortes (~1–4 min)
+python scripts/test_train_cpu.py
 ```
 
 ### Correrlas en Kaggle
 
 | Notebook | Acelerador | Tiempo | Qué sale |
 |---|---|---|---|
-| [`t0_2v2_afmoe_2xT4.ipynb`](notebooks/t0_2v2_afmoe_2xT4.ipynb) | GPU T4 x2 | ~1–1.25 h | `results/t0_2v2.jsonl` |
+| [`t0_3_t2_lr_2xT4.ipynb`](notebooks/t0_3_t2_lr_2xT4.ipynb) | GPU T4 x2 | ~9.5 h por corrida | `results/t0_3_t2/<corrida>.jsonl` y `.png`, y el checkpoint de antes del enfriamiento |
+| [`t0_2v2_afmoe_2xT4.ipynb`](notebooks/t0_2v2_afmoe_2xT4.ipynb) | GPU T4 x2 | ~1–1.25 h | `results/t0_2v2.jsonl` (hecha: [`results/t0_2v2_intento2/`](results/t0_2v2_intento2/)) |
 | [`t0_1_formato_mtp_tokenizador.ipynb`](notebooks/t0_1_formato_mtp_tokenizador.ipynb) | None (CPU) | ~15–25 min | Pruebas del formato A y del **tokenizador**; ya solo importa la del tokenizador |
 
 En cada notebook pon `REPO_URL` con la URL de tu repo (o sube el repo como dataset de Kaggle y déjalo vacío), activa **Internet** y corre todas las celdas. Para tener Internet, la cuenta de Kaggle debe estar verificada con teléfono. `t0_2_velocidad_memoria_2xT4.ipynb` medía el formato A y queda solo como registro.
@@ -181,9 +204,11 @@ En cada notebook pon `REPO_URL` con la URL de tu repo (o sube el repo como datas
 
 ```
 ludwig-lm/
-├── ludwig_lm/      # afmoe.py: el modelo (AFMoE), su kernel, pérdidas y balanceo · muon.py · model.py: formato A (respaldo)
+├── ludwig_lm/      # afmoe.py: el modelo (AFMoE), su kernel, pérdidas y balanceo · muon.py · data.py: lector de datos provisional
+│                   # · checkpoint.py: checkpoints con reanudación verificada · model.py: formato A (respaldo)
 ├── configs/        # ludwig2_afmoe.json (el modelo real), tiny_afmoe.json (pruebas); ludwig2.json, tiny.json (formato A)
-├── scripts/        # smoke_format_afmoe.py (T0.1-C), bench_afmoe.py (T0.2 v2), make_notebooks.py, convert_gguf.py, lo del formato A
+├── scripts/        # train.py (el bucle de entrenamiento) y test_train_cpu.py, bench_afmoe.py (T0.2 v2), smoke_format_afmoe.py (T0.1-C),
+│                   # make_notebooks.py, convert_gguf.py, lo del formato A
 ├── notebooks/      # notebooks de Kaggle, generados con scripts/make_notebooks.py
 ├── patches/        # parche de llama.cpp para el formato A y su nota técnica
 ├── results/        # reportes crudos de cada prueba: la evidencia de cada afirmación
@@ -197,11 +222,10 @@ ludwig-lm/
 - [x] **Banco v1** en 2×T4: 3,856 tokens/s, forma y número de expertos confirmados
 - [x] **T0.1-C** Formato AFMoE: pasa en llama.cpp sin cambios
 - [x] **v1.2** Formato AFMoE aprobado
-- [ ] **T0.2 v2** El entrenamiento real en 2×T4 ([notebook](notebooks/t0_2v2_afmoe_2xT4.ipynb))
+- [x] **T0.2 v2** El entrenamiento real en 2×T4: el loop y el momento en la RAM, ~3,300 tokens/s esperados
+- [ ] **T0.3 + T2** Learning rate y estabilidad en FP16: 3 corridas de 400 pasos ([notebook](notebooks/t0_3_t2_lr_2xT4.ipynb))
 - [ ] **T0.1b** Repetir las pruebas del tokenizador con el tokenizador final de 64K
-- [ ] **T0.3** Estabilidad en FP16: 2–3K pasos con el LR pico
 - [ ] **T1** Datos: fuente de código, lector determinista con descontaminación y manifiestos
-- [ ] **T2** Learning rate: 3 corridas cortas
 - [ ] **G0** Compuerta: ≥6 h sostenidas, guardado, reanudación en otra cuenta, 16K
 - [ ] **T3** Tronco hasta 22.5B tokens
 - [ ] **T4** Rama de la v1: 2.5B tokens, 16K

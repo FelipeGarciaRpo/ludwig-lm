@@ -23,6 +23,19 @@ Two pieces of evidence came in on November 11, 2026 (details in [`docs/es/BITACO
 
 P1–P4 are decided. P5 is decided as the plan and 📏 measured piece by piece in T0.2 v2 (`notebooks/t0_2v2_afmoe_2xT4.ipynb`, `scripts/bench_afmoe.py`, `ludwig_lm/afmoe.py`). The entries below marked ⛔ are replaced by them; the rest still stand.
 
+### After T0.2 v2 (November 13, 2026)
+
+T0.2 v2 ran on Kaggle 2×T4 on November 12 (`results/t0_2v2_intento2/`): 13 measurements, all finished, no skipped FP16 step. Each piece was switched off once against the base (padded-bmm experts, FP32 residual, FP16 reduce-scatter, prefetch, Muon momentum on the GPU, 8 sequences of 2K per GPU: 2,930 tokens/s, 14.33 GiB reserved).
+
+| ID | Decision | Evidence |
+|---|---|---|
+| P5a | 📏 **Training configuration:** one matmul per expert (transformers' `grouped_mm`, a loop on the T4), FP32 residual stream, FP16 reduce-scatter, explicit prefetch, **Muon momentum in pinned CPU RAM**, 8 sequences of 2K per GPU. These are the defaults of `scripts/train.py`. The two pieces were measured separately: together they should give ~3,300 tokens/s (~2,100 h for 25B) at ~12.7 GiB reserved. T0.3 + T2 measure the combination over hours. | Loop +17.3% (3,436 tokens/s); momentum in RAM −1.57 GiB reserved for −3.4%; FP16 residual −0.66 GiB but −0.4%; FP32 reduce −5.7%; no prefetch −6.7%; 4 sequences −23.5%. Only momentum in RAM and 4 sequences stay ≤ 13.5 GiB reserved. 4K and 16K fit (2,240 and 1,228 tokens/s). Checkpoint 11.29 GiB, save 54 s, load 48 s, exact |
+| P2a | ✅ **SMEBU λ = 0.01.** Reviewed with real text in T0.3 + T2: it stays while the busiest expert stays under 3× the mean and no expert dies. | 60 steps of synthetic text: λ = 0.01 ended at 2.41× the mean load; λ = 0.001 at 6.86×; the fixed-sign update at 7.57×. Same loss in the three |
+| D16a | ✅ **G0's memory limit (13.5 GiB) is reserved memory**, what PyTorch's allocator holds on the GPU; bench v1 measured the same. The T4 gives PyTorch ~14.56 GiB, so 13.5 leaves ~1 GiB for what a 3-month run can add. | With allocated memory every T0.2 v2 measurement would pass (12.17 GiB at the base), which says nothing about running out |
+| P6 | ✅ **T0.3 and T2 run together**, before the tokenizer is ready: three runs of the real model and training loop at LR ×0.5, ×1 and ×2, 400 steps of 0.25M tokens each (~105M tokens; 50 warm-up steps, 1−√ decay over the last 80), same data order, one Kaggle session each, in parallel on three accounts. **Proxy data:** FineWeb-Edu `sample-10BT` and SmolLM2's tokenizer (49,152 tokens, Apache-2.0, EOS = 0 like ours), compared in bits per byte, which do not depend on the tokenizer. The ×2 run is the FP16 stress test. **Decision rule, fixed before the results:** a run counts only if stable (no NaN, no stop for spikes, a steady FP16 scale); the lowest validation bits per byte after the decay wins; within 0.5% the lower LR wins, because short runs favour high LRs and the trunk is ~200× longer; if an end of the sweep wins, one more run beyond it before deciding. The real tokenizer and reader are then checked by G0. | Notebook `notebooks/t0_3_t2_lr_2xT4.ipynb`, results in `results/t0_3_t2/` |
+| P7 | ✅ **The training loop** (`scripts/train.py`) is the design's recipe on the T0.2 v2 stack: WSD schedule, batch ramp, evaluation in bits per byte on fixed held-out windows, the alarms of the design's table (DISENO 5.4: a loss spike above mean + 4σ of the last 200 steps is skipped; 3 within 200 steps stop the run), checkpoints with **a verified resume**: the loaded state is compared bit for bit with a fingerprint saved with it, and the first batch with the hash of the batch that followed the save. A time limit saves and stops before Kaggle's 12 h. The provisional reader (`ludwig_lm/data.py`) packs parquet documents with EOS into windows and resumes exactly from three integers; T1 replaces it with Ludwig 1's reader, extended to the mix. | `python scripts/test_train_cpu.py`: a run resumed at step 3, or after a pause, reproduces the uninterrupted run bit for bit on CPU |
+| P8 | ✅ **Two fixes found while writing the loop.** (1) transformers turns `pad_token_id` (0, our EOS) into the embedding's `padding_idx`: that row started at zero and never got a gradient as an input, although packed training has an EOS at every document boundary. `init_ludwig` now initialises it like the other rows and drops `padding_idx`; the checkpoint format does not change. (2) `torch.distributed.checkpoint`'s `set_state_dict` reloads optimizer state through `Optimizer.load_state_dict`, which casts it to the parameter dtype and device: Muon's bf16 momentum came back in FP32 (on the GPU: +1.7 GiB per T4). `dcp.load` already restores everything in place, so `ludwig_lm/checkpoint.py` does not call it. T0.2 v2's checkpoint test (J) checked the weights, the bias and the balancer, not the momentum's dtype. | Reproduced on CPU with the tiny model |
+
 ---
 
 ## Model
@@ -99,8 +112,8 @@ P1–P4 are decided. P5 is decided as the plan and 📏 measured piece by piece 
 ### D12. Schedule, batch and LR
 - ✅ **WSD:** 2,000 warm-up steps; constant LR in the trunk; each branch decays to 0 with a 1−√ curve.
 - ✅ **Batch:** 0.25M tokens per step for the first ~2B tokens, then 0.5M (~54,000 steps in v1).
-- ⏳ **Peak LR:** Ludwig 1's (same width and attention), confirmed with three short runs at ×0.5, ×1 and ×2 in T2.
-- ⏳ **Init:** Normal(0, 0.02), `o_proj` and `down_proj` scaled by 1/√(2·26), norm weights at 0 (scale 1 + w). T0.2 uses transformers' default init, which does not change speed or memory.
+- ⏳ **Peak LR:** Ludwig 1's (same width and attention), confirmed with three short runs at ×0.5, ×1 and ×2 in T2. The sweep (P6) is centred on Trinity Nano's peaks, 1e-3 for Muon and 3e-4 for AdamW.
+- ✅ **Init (v1.2):** transformers' Normal(0, 0.02), plus `init_ludwig`: the norm after each sublayer starts at 1/√26 (depth-scaled sandwich norm, Trinity), the router starts random instead of at zero, and the EOS row trains like the others (P8). ⛔ *The format-A recipe (`o_proj` and `down_proj` scaled by 1/√(2·26), norm weights at 0 with scale 1 + w) does not apply: AFMoE's norms are `weight · x`, and the post-sublayer norm already sets each sublayer's scale.*
 
 ### D13. Context length
 ✅ 2K up to 50B tokens, 4K after that; the last ~0.5B tokens of the v1 branch at 16K; 32K from 250B.
@@ -116,7 +129,7 @@ P1–P4 are decided. P5 is decided as the plan and 📏 measured piece by piece 
 
 1. A sustained run of ≥6 h, with no NaN and a stable loss scaler.
 2. ≥2,600 tokens/s sustained over the last hour.
-3. Peak memory ≤13.5 GiB, evaluation and saving included.
+3. Peak memory ≤13.5 GiB **reserved** (D16a), evaluation and saving included.
 4. ≥2 checkpoints uploaded to Hugging Face and one resume on another account, with the expected first-batch hash.
 5. 50 steps at 16K context without running out of memory.
 
