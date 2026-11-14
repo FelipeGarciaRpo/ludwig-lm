@@ -337,3 +337,16 @@ Todo lo que se corre, se mide o se decide, en orden. Cada entrada dice qué se h
   - La muestra alcanza: de 0.3 a 1.2 GB, la compresión del tronco sube solo de 4.151 a 4.159. Las otras mezclas de la muestra quedan a menos de 0.2%.
 - **Ojo:** la corrida usó TransWeb-Edu (9% de la muestra), aunque se había acordado `USAR_TRANSWEB = False` mientras no se confirme su traductor.
 - **Siguiente:** decidir si se repite sin TransWeb-Edu (~1 h de CPU) antes de fijarlo. Después, el tokenizador entra a la T1 y a la G0.
+
+## 2026-11-14 · Rutas de la T0.1 antes de publicar
+
+- **Qué:** en los tres resultados crudos de la T0.1 (`results/t0_1_stock.json`, `t0_1_patched.json` y `t0_1c_afmoe.json`), la ruta de la máquina donde corrió la prueba se cambió por `/home/user/` en todo el historial, por decisión de Pipe antes de publicar el repo. Es la única excepción a la regla de no editar resultados crudos: no cambió ningún número ni ninguna otra línea, y los tres archivos se leen igual que antes.
+- **Dónde:** PC de Pipe.
+- **Identificadores:** al reescribir el historial cambiaron otra vez los de todos los commits menos el primero, y las referencias de los documentos ya apuntan a los nuevos. Para los zips que están en Kaggle:
+
+| Zip en Kaggle | Ahora | Qué es |
+|---|---|---|
+| `51f037e` | `52f5b0e` | código de la primera ronda de la T0.3 + T2 |
+| `292f882` | `3e4f66c` | código de la segunda ronda de la T2 |
+
+- **Siguiente:** publicar el repo.
