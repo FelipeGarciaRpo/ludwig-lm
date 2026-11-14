@@ -274,3 +274,30 @@ Todo lo que se corre, se mide o se decide, en orden. Cada entrada dice qué se h
 | `51f037e` | `52f5b0e` | código de las tres corridas de la T0.3 + T2 |
 
 - **Siguiente:** el chat de diseño trabaja sobre el repo público en vez de recibir bundles. Los resultados de la T0.3 + T2 se registran con el código `52f5b0e`.
+
+## 2026-11-14 · T0.3 + T2: las tres corridas de LR
+
+- **Qué:** tres corridas de 400 pasos (~105M tokens) con el LR del Ludwig 1 ×0.5, ×1 y ×2 (Muon 7.5e-4 / 1.5e-3 / 3e-3; AdamW 2.5e-4 / 5e-4 / 1e-3), con FineWeb-Edu y el tokenizador de SmolLM2 como provisionales.
+- **Dónde:** Kaggle, 2× T4, en tres cuentas; torch 2.11 + CUDA 13.0; código `52f5b0e` subido como dataset. Duraron entre 8.1 y 8.9 h.
+- **Archivos:** `results/t0_3_t2/`: un `.jsonl` por corrida, su prueba de guardado y reanudación y su gráfica. Los `.jsonl` llegaron copiados a mano, con fines de línea de Windows; se guardaron con los del notebook, y el de ×0.5 coincide con su log en los pasos y evaluaciones que se compararon. Los logs de Kaggle no se guardaron.
+
+| | ×0.5 | ×1 (Ludwig 1) | ×2 |
+|---|---|---|---|
+| Val, bits por byte, antes del enfriamiento | 1.4013 | 1.2879 | 1.2119 |
+| Val, bits por byte, al final | 1.3470 | 1.2223 | **1.1516** |
+| tokens/s en la última hora | 3,601 | 3,428 | 3,293 |
+| Carga máx/media desde el paso 100: media / máx / pasos sobre 3 | 1.64 / 2.99 / 0 | 1.79 / 3.15 / 1 | 2.70 / 7.27 / 65 |
+| Ganancia máxima de qk | 1.14 | 1.29 | 1.59 |
+
+- **Resultado:**
+  - Las tres son estables: 0 NaN, 0 pasos saltados por FP16 o por picos, 0 alarmas y la escala de FP16 fija en 32,768.
+  - Memoria pico: 12.92 GiB reservados (12.17 asignados) en las tres.
+  - La prueba de guardado y reanudación salió exacta en las tres: el estado bit a bit, el primer lote y la validación.
+  - Ninguna evaluación encontró expertos muertos. Hubo expertos sin tokens en algunos pasos solo durante el calentamiento.
+- **Regla de decisión (P6, fijada antes de correr):** las tres cuentan. Gana ×2: ×1 queda 6.1% arriba y ×0.5, 17% arriba, así que no hay empate. Como ×2 es un extremo, la regla pide correr ×4 antes de decidir.
+- **Preguntas abiertas para el chat de diseño:**
+  - En ×2 el balanceo no cumple la condición de SMEBU (carga máx/media bajo 3): 65 de 300 pasos pasan de 3, con un pico de 7.27. En ×0.5 y ×1 sí la cumple.
+  - La velocidad baja con el desbalance: ×2 va 8.6% más lento que ×0.5 (~2,109 h para 25B, contra ~1,929).
+  - La ganancia de qk sube con el LR (1.59 en ×2). En un tronco 200 veces más largo hay que vigilarla.
+- **G0 (5.7):** con datos provisionales ya se cumplen tres de las cinco condiciones: más de 6 h sin NaN y con la escala estable, más de 2,600 tokens/s y menos de 13.5 GiB. Faltan los guardados en Hugging Face con la reanudación en otra cuenta y los 50 pasos a 16K, y todo con el lector y el tokenizador reales.
+- **Siguiente:** el chat de diseño decide si se corre ×4, como pide la regla, y qué hacer con el balanceo de ×2. Mientras, el tokenizador de 64K corre en Kaggle, en CPU.
