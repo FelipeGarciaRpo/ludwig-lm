@@ -14,7 +14,7 @@
 
 </div>
 
-> **Estado, 13 de noviembre de 2026.** El diseño v1.2 está aprobado: Ludwig 2 se guarda en el formato AFMoE de los modelos Trinity de Arcee, que corre en llama.cpp sin parche. La T0.2 v2 midió el entrenamiento real en 2×T4: la configuración más rápida que cabe en el tope de memoria debería ir a unos **3,300 tokens/s, ~2,100 h para 25B tokens**. Lo siguiente es la T0.3 + T2: tres corridas cortas del bucle de entrenamiento real que eligen el learning rate y prueban la estabilidad en FP16 ([notebook](notebooks/t0_3_t2_lr_2xT4.ipynb)). **Todavía no hay pesos.** Este repositorio documenta el proyecto desde la primera prueba.
+> **Estado, 14 de noviembre de 2026.** El diseño v1.2 está aprobado: Ludwig 2 se guarda en el formato AFMoE de los modelos Trinity de Arcee, que corre en llama.cpp sin parche. El bucle de entrenamiento real hizo tres corridas de 400 pasos en 2×T4: todas estables en FP16, a **3,300–3,600 tokens/s, ~1,900–2,100 h para 25B tokens**. Una segunda ronda mide cuánto se mueve el mejor learning rate con la duración del entrenamiento, mientras se entrena el tokenizador de 64K ([notebook](notebooks/t0_3_t2_lr_2xT4.ipynb)). **Todavía no hay pesos.** Este repositorio documenta el proyecto desde la primera prueba.
 
 ## Por qué Ludwig 2
 
@@ -148,9 +148,19 @@ El modelo real de 1.906B en la clase de transformers, FSDP2 entre las dos T4, FP
 - **Checkpoint:** 11.29 GiB, se guarda en 54 s y se carga en 48 s, y se restaura exacto.
 - **Balanceo,** 60 pasos de texto sintético: SMEBU con λ = 0.01 dejó al experto más cargado en 2.41× el promedio; el bias de signo fijo del banco v1, en 7.57×. Ninguna medición saltó un paso en FP16.
 
-### T0.3 + T2: learning rate y estabilidad en FP16
+### T0.3 + T2: learning rate y estabilidad en FP16 (Kaggle, 13–14 de noviembre de 2026)
 
-⏳ Lista para correr: [`notebooks/t0_3_t2_lr_2xT4.ipynb`](notebooks/t0_3_t2_lr_2xT4.ipynb), ~9.5 h por corrida. Tres corridas del modelo real con el bucle de entrenamiento real ([`scripts/train.py`](scripts/train.py)), con ×0.5, ×1 y ×2 los learning rates del Ludwig 1 (Muon 1.5e-3, AdamW 5e-4): 400 pasos de 0.25M tokens cada una, una por cuenta de Kaggle, en paralelo. Mientras se termina el tokenizador de 64K usan FineWeb-Edu y el tokenizador de SmolLM2, y se comparan en bits por byte. La de ×2 es además la prueba de estrés en FP16. La regla de decisión se fijó antes de correrlas ([`docs/DECISIONS.md`](docs/DECISIONS.md), P6).
+El modelo real con el bucle de entrenamiento real ([`scripts/train.py`](scripts/train.py)), con ×0.5, ×1 y ×2 los learning rates del Ludwig 1 (Muon 1.5e-3, AdamW 5e-4): 400 pasos de 0.25M tokens cada una (~105M tokens), una por cuenta de Kaggle, en paralelo ([`notebooks/t0_3_t2_lr_2xT4.ipynb`](notebooks/t0_3_t2_lr_2xT4.ipynb), [`results/t0_3_t2/`](results/t0_3_t2/)). Mientras se termina el tokenizador de 64K usan FineWeb-Edu y el tokenizador de SmolLM2, y se comparan en bits por byte.
+
+| | ×0.5 | ×1 (Ludwig 1) | ×2 |
+|---|---|---|---|
+| Validación, bits por byte, después del enfriamiento | 1.3470 | 1.2223 | **1.1516** |
+| tokens/s, última hora | 3,601 | 3,428 | 3,293 |
+| Experto más cargado en una ventana de 50 pasos, el peor desde el paso 150 | 1.24× | 1.60× | 4.22× (paso 320); 1.11× en el paso 400 |
+
+- **Estables:** sin NaN, sin pasos saltados, escala de FP16 fija en 32,768, 12.92 GiB reservados y la prueba de guardado y reanudación exacta, bit a bit, en las tres.
+- **×2 gana en el horizonte corto,** pero las corridas cortas favorecen los LR altos: el mejor LR baja cuando el entrenamiento es más largo. Una segunda ronda lo mide aquí: ×4 a 400 pasos, y ×1 y ×2 seguidas hasta 1,200 pasos. Después [`scripts/lr_horizon.py`](scripts/lr_horizon.py) fija el LR del tronco con una regla decidida de antemano ([`docs/DECISIONS.md`](docs/DECISIONS.md), P9). Con la primera ronda sola da ×1, la receta del Ludwig 1.
+- **Las diferencias de velocidad son de las máquinas,** no del LR: dentro de cada corrida la velocidad no cambia con la carga de los expertos.
 
 ## Datos
 
@@ -223,7 +233,7 @@ ludwig-lm/
 - [x] **T0.1-C** Formato AFMoE: pasa en llama.cpp sin cambios
 - [x] **v1.2** Formato AFMoE aprobado
 - [x] **T0.2 v2** El entrenamiento real en 2×T4: el loop y el momento en la RAM, ~3,300 tokens/s esperados
-- [ ] **T0.3 + T2** Learning rate y estabilidad en FP16: 3 corridas de 400 pasos ([notebook](notebooks/t0_3_t2_lr_2xT4.ipynb))
+- [ ] **T0.3 + T2** Learning rate y estabilidad en FP16: primera ronda hecha (todas estables, ×2 la mejor a 400 pasos); segunda ronda, ×4 y ×1/×2 hasta 1,200 pasos ([notebook](notebooks/t0_3_t2_lr_2xT4.ipynb))
 - [ ] **T0.1b** Repetir las pruebas del tokenizador con el tokenizador final de 64K
 - [ ] **T1** Datos: fuente de código, lector determinista con descontaminación y manifiestos
 - [ ] **G0** Compuerta: ≥6 h sostenidas, guardado, reanudación en otra cuenta, 16K

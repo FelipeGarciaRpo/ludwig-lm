@@ -26,6 +26,12 @@
 > 4. **La T0.3 y la T2 van juntas y antes del tokenizador:** tres corridas de 400 pasos (~105M tokens) con LR ×0.5, ×1 y ×2 alrededor de la receta del Ludwig 1 (Muon 1.5e-3, AdamW 5e-4, weight decay con el LR de AdamW), con FineWeb-Edu y el tokenizador de SmolLM2 como provisionales, comparadas en bits por byte. La regla de decisión está en `DECISIONS.md` (P6) y en el notebook `t0_3_t2_lr_2xT4.ipynb`.
 > 5. **El bucle de entrenamiento existe** (`scripts/train.py`, P7), con reanudación verificada bit a bit. Al escribirlo aparecieron dos errores que ya están corregidos (P8): transformers dejaba fijo el embedding del EOS (id 0) y la carga de checkpoints pasaba el momento de Muon a FP32.
 
+> **Después de la primera ronda de la T0.3 + T2 (14 de noviembre de 2026)** (`results/t0_3_t2/`; decisiones P6a, P2b y P9):
+> 1. **Las tres corridas son estables** y ×2 gana en el horizonte corto (1.1516 bits por byte, 6.1% por debajo de ×1).
+> 2. **Las corridas cortas favorecen los LR altos:** el mejor LR baja con la duración del entrenamiento, con exponente ~0.32 (medido para AdamW y para Muon). La segunda ronda lo mide aquí: ×4 a 400 pasos, y ×1 y ×2 seguidas hasta 1,200. `scripts/lr_horizon.py` aplica la regla P9; con lo que hay hoy da ×1, la receta del Ludwig 1.
+> 3. **El balanceo se juzga en la ventana de 50 pasos**, por capa, y **λ escala con el LR** (0.01 × el multiplicador). En ×2 hubo un episodio de ~4× que SMEBU corrigió en ~30 pasos.
+> 4. **La diferencia de velocidad entre corridas es de las máquinas**, no del desbalance: dentro de cada corrida la velocidad no cambia con la carga.
+
 **Leyenda:** ✅ decidido · ❓ decide Pipe · 📏 se mide antes de fijarlo · 🧪 se prueba en corrida corta · 🟢🟡🔴 licencia de datos (ver 4.8)
 
 ---

@@ -14,7 +14,7 @@
 
 </div>
 
-> **Status, November 13, 2026.** Design v1.2 is approved: Ludwig 2 is stored in the AFMoE format of Arcee's Trinity models, which runs in llama.cpp unpatched. T0.2 v2 measured the real training stack on 2×T4: the fastest configuration under the memory limit should run at about **3,300 tokens/s, ~2,100 h for 25B tokens**. Next up is T0.3 + T2: three short runs of the real training loop that pick the learning rate and test FP16 stability ([notebook](notebooks/t0_3_t2_lr_2xT4.ipynb)). **There are no weights yet.** This repository documents the project from its first test.
+> **Status, November 14, 2026.** Design v1.2 is approved: Ludwig 2 is stored in the AFMoE format of Arcee's Trinity models, which runs in llama.cpp unpatched. The real training loop ran three 400-step runs on 2×T4: all stable in FP16, at **3,300–3,600 tokens/s, ~1,900–2,100 h for 25B tokens**. A second round measures how the best learning rate moves with training length, while the 64K tokenizer trains ([notebook](notebooks/t0_3_t2_lr_2xT4.ipynb)). **There are no weights yet.** This repository documents the project from its first test.
 
 ## Why Ludwig 2
 
@@ -148,9 +148,19 @@ The real 1.906B model in the transformers class, FSDP2 over the two T4s, FP16, M
 - **Checkpoint:** 11.29 GiB, saved in 54 s and loaded in 48 s, restored exactly.
 - **Balancing,** 60 steps of synthetic text: SMEBU with λ = 0.01 ended with the busiest expert at 2.41× the mean load; the fixed-sign update of bench v1 at 7.57×. No FP16 step was skipped in any measurement.
 
-### T0.3 + T2: learning rate and FP16 stability
+### T0.3 + T2: learning rate and FP16 stability (Kaggle, November 13–14, 2026)
 
-⏳ Ready to run: [`notebooks/t0_3_t2_lr_2xT4.ipynb`](notebooks/t0_3_t2_lr_2xT4.ipynb), ~9.5 h per run. Three runs of the real model and the real training loop ([`scripts/train.py`](scripts/train.py)) at ×0.5, ×1 and ×2 Ludwig 1's learning rates (Muon 1.5e-3, AdamW 5e-4): 400 steps of 0.25M tokens each, one per Kaggle account, in parallel. Until the 64K tokenizer is ready they use FineWeb-Edu and SmolLM2's tokenizer and are compared in bits per byte. The ×2 run is also the FP16 stress test. The decision rule was fixed before the runs ([`docs/DECISIONS.md`](docs/DECISIONS.md), P6).
+The real model and the real training loop ([`scripts/train.py`](scripts/train.py)) at ×0.5, ×1 and ×2 Ludwig 1's learning rates (Muon 1.5e-3, AdamW 5e-4): 400 steps of 0.25M tokens each (~105M tokens), one per Kaggle account, in parallel ([`notebooks/t0_3_t2_lr_2xT4.ipynb`](notebooks/t0_3_t2_lr_2xT4.ipynb), [`results/t0_3_t2/`](results/t0_3_t2/)). Until the 64K tokenizer is ready they use FineWeb-Edu and SmolLM2's tokenizer, compared in bits per byte.
+
+| | ×0.5 | ×1 (Ludwig 1) | ×2 |
+|---|---|---|---|
+| Validation, bits per byte, after the decay | 1.3470 | 1.2223 | **1.1516** |
+| tokens/s, last hour | 3,601 | 3,428 | 3,293 |
+| Busiest expert over a 50-step window, worst after step 150 | 1.24× | 1.60× | 4.22× (step 320); 1.11× at step 400 |
+
+- **Stable:** no NaN, no skipped step, FP16 scale fixed at 32,768, 12.92 GiB reserved, and the save-and-resume test bit-exact in all three.
+- **×2 wins the short horizon,** but short runs favour high learning rates: the best LR falls as training gets longer. A second round measures that here: ×4 at 400 steps, and ×1 and ×2 continued to 1,200 steps. [`scripts/lr_horizon.py`](scripts/lr_horizon.py) then sets the trunk's LR by a rule fixed in advance ([`docs/DECISIONS.md`](docs/DECISIONS.md), P9). With the first round alone it gives ×1, Ludwig 1's recipe.
+- **The speed differences are the machines,** not the LR: within each run the speed does not move with the expert load.
 
 ## Data
 
@@ -223,7 +233,7 @@ ludwig-lm/
 - [x] **T0.1-C** AFMoE format: passes on stock llama.cpp
 - [x] **v1.2** AFMoE format approved
 - [x] **T0.2 v2** The real training stack on 2×T4: the loop and momentum in RAM, ~3,300 tokens/s expected
-- [ ] **T0.3 + T2** Learning rate and FP16 stability: 3 runs of 400 steps ([notebook](notebooks/t0_3_t2_lr_2xT4.ipynb))
+- [ ] **T0.3 + T2** Learning rate and FP16 stability: first round done (all stable, ×2 best at 400 steps); second round, ×4 and ×1/×2 to 1,200 steps ([notebook](notebooks/t0_3_t2_lr_2xT4.ipynb))
 - [ ] **T0.1b** Re-run the tokenizer checks with the final 64K tokenizer
 - [ ] **T1** Data: code source, deterministic loader with decontamination and manifests
 - [ ] **G0** Gate: ≥6 h sustained, save, resume on another account, 16K

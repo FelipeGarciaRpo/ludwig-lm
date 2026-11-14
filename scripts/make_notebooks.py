@@ -340,13 +340,28 @@ Cada una hace **400 pasos de 0.25M tokens (~105M tokens)**: 100 de calentamiento
 
 **Datos y tokenizador provisionales:** FineWeb-Edu (`sample-10BT`, archivos 000 y 001 para entrenar y 013 para validar) y el tokenizador de SmolLM2 (49,152 tokens, Apache 2.0, con `<|endoftext|>` = 0 como el nuestro), mientras se termina el de 64K. Por eso la métrica son los bits por byte, que no dependen del tokenizador.
 
-**Kaggle:** acelerador *GPU T4 x2*, Internet *On*, el repo agregado como dataset. *Save Version → Save & Run All*. Tarda **~9.5 h** de las 12 que da la sesión; si se acaba el tiempo, guarda un checkpoint y para limpio."""),
+**Kaggle:** acelerador *GPU T4 x2*, Internet *On*, el repo agregado como dataset. *Save Version → Save & Run All*. Tarda **~9.5 h** de las 12 que da la sesión; si se acaba el tiempo, guarda un checkpoint y para limpio.
+
+**Segunda ronda (regla P9 de `docs/DECISIONS.md`).** En la primera ganó ×2. Las corridas cortas favorecen los LR altos, así que la segunda mide cuánto se mueve el mejor LR cuando la corrida es más larga:
+
+| Cuenta | `CORRIDA` | `LR_MULT` | `LAMBDA` | `PASOS, CALENTAMIENTO, ENFRIAMIENTO` | `REANUDAR` | `PRUEBA` | Sesiones |
+|---|---|---|---|---|---|---|---|
+| una libre | `lr-x4` | 4.0 | 0.04 | 400, 100, 80 | `""` | `True` | 1 |
+| la que corrió `lr-x1` | `lr-x1-1200` | 1.0 | 0.01 | 1200, 100, 240 | `"auto"` | `False` | 2 |
+| la que corrió `lr-x2` | `lr-x2-1200` | 2.0 | 0.01 | 1200, 100, 240 | `"auto"` | `False` | 2 |
+
+- `lr-x4` cierra el barrido corto, con el balanceo de SMEBU escalado con el LR (λ = 0.01 × el multiplicador).
+- Las otras dos **siguen** las corridas ×1 y ×2 desde su checkpoint del paso 320 hasta 1,200 pasos, 3 veces más largas, con el mismo λ que tuvieron.
+- Para seguir una corrida, agrega como entrada (*Add Input → Your Work*) la salida de la versión que la corrió. Con `REANUDAR = "auto"` el notebook busca ahí el checkpoint de esa corrida más avanzado.
+- La primera sesión para sola hacia el paso 800 y deja su checkpoint en la salida. La segunda se lanza igual, con la salida de la primera como entrada, y termina en el 1,200."""),
     code(r'''CORRIDA = "lr-x1"      # lr-x0.5 · lr-x1 · lr-x2: una por cuenta
 LR_MULT = 1.0          # 0.5 · 1.0 · 2.0
 REPO_URL = ""          # "" = el repo subido como dataset de Kaggle (el repo es privado)
 PASOS, CALENTAMIENTO, ENFRIAMIENTO = 400, 100, 80
+LAMBDA = 0.01          # SMEBU: 0.01 × LR_MULT en una corrida nueva; el mismo de antes en una que sigue
 GUARDAR_CHECKPOINT = True   # deja en la salida el checkpoint de antes del enfriamiento (~11.3 GB), para seguir la corrida
-REANUDAR = ""          # para seguir una corrida: la carpeta del checkpoint, p. ej. "/kaggle/input/<notebook>/checkpoint"
+REANUDAR = ""          # para seguir una corrida: "auto" (lo busca en los datos de entrada) o la carpeta del checkpoint
+PRUEBA = True          # la prueba de guardado y reanudación (~5 min); al seguir una corrida sobra: se verifica al reanudar
 import time
 T_SESION = time.time()'''),
     code(SETUP + "\n!pip install -q hf_xet\n!nvidia-smi --query-gpu=name,memory.total,power.limit --format=csv\n"
@@ -369,30 +384,50 @@ COMUN = dict(tokenizer=TOK, train=" ".join(TRAIN), val=VAL)'''),
     md("""## 2. Prueba de guardado y reanudación (~5 min)
 
 Dos pasos cortos, guardar, y reanudar en otro proceso. La reanudación compara el estado cargado bit a bit con el que se guardó (pesos, momento de Muon en la CPU, AdamW, bias de los expertos) y el primer lote con el hash guardado: lo que pide la G0. Si algo falla, la corrida del paso 3 sigue igual: solo su checkpoint quedaría en duda."""),
-    code(r'''PRUEBA = f"results/t0_3_t2/{CORRIDA}-prueba.jsonl"
-CORTA = dict(**COMUN, warmup=1, tokens_per_step=32768, eval_every=0, eval_windows=8)
-run("prueba-a", PRUEBA, 0.5, **CORTA, steps=2, save_dir="/tmp/ludwig_prueba", save_final=True)
-run("prueba-b", PRUEBA, 0.5, **CORTA, steps=3, resume="/tmp/ludwig_prueba/step_000002")
-filas = [r for r in map(json.loads, open(PRUEBA)) if r["time"] >= T_SESION]   # solo esta sesión
-res = next((r for r in filas if r["type"] == "resume"), {})
-lote = next((r for r in filas if r["type"] == "resume_check"), {})
-ev = {(r["tag"], r["step"]): r["val_bpb"] for r in filas if r["type"] == "eval"}
-dif = abs(ev.get(("prueba-a", 2), 0) - ev.get(("prueba-b", 2), 9))
-print(f"estado idéntico: {res.get('state_exact')} | primer lote idéntico: {lote.get('batch_exact')} | "
-      f"validación antes/después de reanudar: {dif:.2e} bits por byte de diferencia")
-print("✅ guardado y reanudación exactos" if res.get("state_exact") and lote.get("batch_exact") and dif < 1e-3
-      else "⚠️ la reanudación no salió exacta: revisar antes de confiar en los checkpoints")
-!rm -rf /tmp/ludwig_prueba'''),
+    code(r'''if PRUEBA:
+    ARCHIVO_PRUEBA = f"results/t0_3_t2/{CORRIDA}-prueba.jsonl"
+    CORTA = dict(**COMUN, warmup=1, tokens_per_step=32768, eval_every=0, eval_windows=8)
+    run("prueba-a", ARCHIVO_PRUEBA, 0.5, **CORTA, steps=2, save_dir="/tmp/ludwig_prueba", save_final=True)
+    run("prueba-b", ARCHIVO_PRUEBA, 0.5, **CORTA, steps=3, resume="/tmp/ludwig_prueba/step_000002")
+    filas = [r for r in map(json.loads, open(ARCHIVO_PRUEBA)) if r["time"] >= T_SESION]   # solo esta sesión
+    res = next((r for r in filas if r["type"] == "resume"), {})
+    lote = next((r for r in filas if r["type"] == "resume_check"), {})
+    ev = {(r["tag"], r["step"]): r["val_bpb"] for r in filas if r["type"] == "eval"}
+    dif = abs(ev.get(("prueba-a", 2), 0) - ev.get(("prueba-b", 2), 9))
+    print(f"estado idéntico: {res.get('state_exact')} | primer lote idéntico: {lote.get('batch_exact')} | "
+          f"validación antes/después de reanudar: {dif:.2e} bits por byte de diferencia")
+    print("✅ guardado y reanudación exactos" if res.get("state_exact") and lote.get("batch_exact") and dif < 1e-3
+          else "⚠️ la reanudación no salió exacta: revisar antes de confiar en los checkpoints")
+    shutil.rmtree("/tmp/ludwig_prueba", ignore_errors=True)
+else:
+    print("sin prueba: esta corrida sigue un checkpoint, y su reanudación se verifica al cargarlo")'''),
     md("""## 3. La corrida
 
 Imprime una línea cada 10 pasos y una evaluación cada 50 (más una antes del enfriamiento y otra al final). Cada paso queda en `results/t0_3_t2/<CORRIDA>.jsonl` apenas termina. Se detiene sola antes de las 12 h de la sesión, guardando un checkpoint."""),
     code(r'''SALIDA = f"results/t0_3_t2/{CORRIDA}.jsonl"
 horas = round(11.3 - (time.time() - T_SESION) / 3600, 2)
-kw = dict(**COMUN, steps=PASOS, warmup=CALENTAMIENTO, decay_steps=ENFRIAMIENTO, lr_mult=LR_MULT,
+kw = dict(**COMUN, steps=PASOS, warmup=CALENTAMIENTO, decay_steps=ENFRIAMIENTO, lr_mult=LR_MULT, lam=LAMBDA,
           eval_every=50, save_dir="/tmp/ludwig_ckpt", max_hours=horas)
+if REANUDAR == "auto":
+    # los checkpoints de esta corrida, o de la que sigue ("lr-x1" para "lr-x1-1200"), en los datos de entrada
+    hay = []
+    for m in glob.glob("/kaggle/input/**/checkpoint/meta.json", recursive=True):
+        meta = json.load(open(m))
+        if meta["tag"] == CORRIDA or CORRIDA.startswith(meta["tag"] + "-"):
+            hay.append((meta["step"], os.path.dirname(m), meta["tag"], meta["reason"]))
+    if not hay:
+        raise SystemExit(f"no hay checkpoint de {CORRIDA} en los datos de entrada: agrega la salida de la versión que la corrió")
+    paso, REANUDAR, de, motivo = max(hay)
+    print(f"sigue {de} desde el paso {paso} ({motivo}): {REANUDAR}")
+    # si es la segunda sesión de esta misma corrida, su .jsonl sigue en el mismo archivo
+    antes = glob.glob(os.path.join(os.path.dirname(REANUDAR), "**", "results", "t0_3_t2", f"{CORRIDA}.jsonl"),
+                      recursive=True)
+    if antes and not os.path.exists(SALIDA):
+        shutil.copy(antes[0], SALIDA)
+        print(f"{SALIDA}: sigue el de la sesión anterior ({sum(1 for _ in open(SALIDA))} filas)")
 if REANUDAR:
     kw["resume"] = REANUDAR
-print(f"{CORRIDA}: LR ×{LR_MULT}, {PASOS} pasos, tope {horas} h")
+print(f"{CORRIDA}: LR ×{LR_MULT}, λ {LAMBDA}, {PASOS} pasos, tope {horas} h")
 fin = run(CORRIDA, SALIDA, horas + 0.3, **kw)
 print(fin)'''),
     md("## 4. Resumen"),
@@ -453,7 +488,8 @@ if GUARDAR_CHECKPOINT:
    - Gana la de menor bits por byte de validación **al final** (después del enfriamiento). Si dos quedan a menos de 0.5%, gana la de LR más bajo: las corridas cortas favorecen los LR altos, y el tronco es 200 veces más largo.
    - Si gana un extremo (×0.5 o ×2), se corre uno más allá (×0.25 o ×4) antes de decidir.
    - SMEBU con λ = 0.01 queda si la carga máx/media se mantiene bajo 3 y no hay expertos muertos.
-3. **Para seguir una corrida** (por ejemplo, alargar la ganadora como prueba de estabilidad de la T0.3): agrega la salida de esta versión como dataset de entrada, pon en `REANUDAR` la carpeta `checkpoint`, sube `PASOS` (p. ej. 2000) y pon `ENFRIAMIENTO = 0`. La corrida sigue desde el paso 320 con el mismo orden de datos."""),
+3. **Segunda ronda (P9):** con los `.jsonl` de `lr-x4`, `lr-x1-1200` y `lr-x2-1200` en `results/t0_3_t2/`, `python scripts/lr_horizon.py` da el LR del tronco. Mide cuánto baja el mejor LR de 400 a 1,200 pasos y lo lleva a los 25B tokens del tronco.
+4. **Para seguir una corrida:** agrega como entrada la salida de la versión que la corrió y pon `REANUDAR = "auto"`. Sube `PASOS` y pon el `ENFRIAMIENTO` que toque. La corrida sigue con el mismo orden de datos, desde el checkpoint más avanzado de esa corrida que encuentre."""),
 ]
 
 for nb, name in [(t01, "t0_1_formato_mtp_tokenizador.ipynb"), (t02, "t0_2_velocidad_memoria_2xT4.ipynb"),
