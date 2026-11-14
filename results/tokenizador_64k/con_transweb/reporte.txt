@@ -1,0 +1,12 @@
+══════════════════════════════════════════════════════════════════════
+TOKENIZADOR 64K DE LUDWIG 2 · 2026-11-14 06:54 · sha1 0b7da8fdb062 · 65,536 tokens
+Muestra: 1,200 MB de 23 fuentes
+Barrido: 0.3 GB → 4.151 B/tok en el tronco, 1 min, RAM 2.0 GB | 0.6 GB → 4.156 B/tok en el tronco, 3 min, RAM 3.2 GB | 1.2 GB → 4.159 B/tok en el tronco, 8 min, RAM 4.7 GB
+Bytes/token por dominio: inglés 4.496 | español 4.598 | código 3.708 | matemática 3.413 | razonamiento 2.877
+Bytes/token, mezcla del tronco: Nuevo (64K) 4.159 | SmolLM2 (49K) 3.551 | OLMoE (50K) 3.719 | Qwen3 (151K) 4.034
+Tokens por palabra (inglés / español): Nuevo (64K) 1.37 / 1.33 | SmolLM2 (49K) 1.38 / 2.08 | OLMoE (50K) 1.36 / 1.83 | Qwen3 (151K) 1.35 / 1.61
+Mezclas (tronco): final (refuerza español y código) 4.151 | proporcional al tronco 4.153 | más español 4.151 | como la v2 4.146
+Tokens sin uso en 100 MB: 236
+✅ Todo bien
+Listo en 56 min → /kaggle/working/tokenizador_64k
+══════════════════════════════════════════════════════════════════════

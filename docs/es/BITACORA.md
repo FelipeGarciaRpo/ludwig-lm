@@ -322,3 +322,18 @@ Todo lo que se corre, se mide o se decide, en orden. Cada entrada dice qué se h
 - Dónde: chat de diseño; probado en CPU: test_train_cpu.py da PASS y la continuación en dos sesiones con
   REANUDAR = "auto" sale exacta.
 - Siguiente: la segunda ronda en tres cuentas.
+
+## 2026-11-14 · Tokenizador de 64K: corrida completa
+
+- **Qué:** `tokenizador_64k_v1_2.py` en Kaggle, completo: muestra de 1.2 GB de las 23 fuentes de la mezcla v3, con barrido de 0.3, 0.6 y 1.2 GB. Antes pasó una prueba en modo rápido, cuya salida no se guardó.
+- **Dónde:** Kaggle, CPU, sin GPU; tokenizers 0.23.3. Tardó 56 min, con 4.7 GB de RAM pico.
+- **Archivos:** `results/tokenizador_64k/con_transweb/`: el tokenizador (`tokenizer.json`, sha1 `0b7da8fdb062`), su reporte y una copia del script.
+- **Resultado:**
+  - Pasan todas las pruebas del script: 65,536 tokens, los ids especiales en orden (EOS 0, pad 1, `<think>` 4, FIM 10–13), los 256 bytes, ida y vuelta exacta y ningún token de control desde texto crudo. En el PC se repitieron por separado, con el mismo resultado, y el sha1 coincide.
+  - Bytes por token: inglés 4.496, español 4.598, código 3.708, matemática 3.413. En la mezcla del tronco, 4.159, contra 3.551 de SmolLM2, 3.719 de OLMoE y 4.034 de Qwen3 (151K).
+  - Tokens por palabra: 1.37 en inglés y 1.33 en español (SmolLM2: 1.38 y 2.08).
+  - En textos que no vio (los documentos y el código del repo), usa 20% menos tokens que SmolLM2 en español, 7% menos en inglés y 12% menos en Python.
+  - 236 tokens no aparecen en 100 MB de texto (0.36%).
+  - La muestra alcanza: de 0.3 a 1.2 GB, la compresión del tronco sube solo de 4.151 a 4.159. Las otras mezclas de la muestra quedan a menos de 0.2%.
+- **Ojo:** la corrida usó TransWeb-Edu (9% de la muestra), aunque se había acordado `USAR_TRANSWEB = False` mientras no se confirme su traductor.
+- **Siguiente:** decidir si se repite sin TransWeb-Edu (~1 h de CPU) antes de fijarlo. Después, el tokenizador entra a la T1 y a la G0.
