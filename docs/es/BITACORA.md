@@ -380,3 +380,16 @@ Todo lo que se corre, se mide o se decide, en orden. Cada entrada dice qué se h
   - El hash del vocabulario (`b01d3ee0…`) es nuevo para llama.cpp. Hasta que se registre (un PR que escribe Pipe), los GGUF se convierten con `scripts/convert_gguf.py`.
   - La segunda ronda de la T2 sigue con su zip (`3e4f66c`): nada de esto la toca. Sus `.jsonl` que ya traen el usuario se enmascaran al subirlos, con su nota (regla 6).
 - **Siguiente:** el relevo con los checkpoints en Hugging Face y respaldo en Kaggle, y el lector de la T1.
+
+## 2026-11-14 · Verificación independiente del tokenizador, en `results/`
+
+- **Qué:**
+  - Los números de la verificación con textos que el tokenizador nunca vio ya estaban en la entrada del tokenizador y ahora en los README, pero faltaba su archivo crudo (regla 1).
+  - Se repitió sobre los documentos y el código del repo en `3e4f66c`, el commit de cuando se corrió por primera vez, y dio lo mismo.
+- **Dónde:** el PC de Pipe, en CPU, con tokenizers 0.23.3. El tokenizador de SmolLM2 se bajó de Hugging Face.
+- **Archivos:** `results/tokenizador_64k/verificacion_textos_repo.txt`.
+- **Resultado:**
+  - El sha1 coincide con el reporte, los ids 0–255 están en orden y en modo datos ninguna cadena de control escrita en el texto sale como id de control. La ida y vuelta es exacta.
+  - Frente a SmolLM2 usa 20.4% menos tokens en español (`DISENO.md` y `BITACORA.md`), 7.2% menos en inglés (`README.md` y `DECISIONS.md`) y 12.0% menos en Python (`ludwig_lm/` y `scripts/`).
+- **Ojo:** el patch 0009 no traía `README.es.md` ni la fila de `results/t0_1b_tokenizer.json` en `results/README.md`. Se agregaron aparte, con el mismo contenido que `README.md`.
+- **Siguiente:** nada; la entrada solo cierra la regla 1 para esos números.

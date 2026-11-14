@@ -14,7 +14,7 @@
 
 </div>
 
-> **Estado, 14 de noviembre de 2026.** El diseño v1.2 está aprobado: Ludwig 2 se guarda en el formato AFMoE de los modelos Trinity de Arcee, que corre en llama.cpp sin parche. El bucle de entrenamiento real hizo tres corridas de 400 pasos en 2×T4: todas estables en FP16, a **3,300–3,600 tokens/s, ~1,900–2,100 h para 25B tokens**. Una segunda ronda mide cuánto se mueve el mejor learning rate con la duración del entrenamiento, mientras se entrena el tokenizador de 64K ([notebook](notebooks/t0_3_t2_lr_2xT4.ipynb)). **Todavía no hay pesos.** Este repositorio documenta el proyecto desde la primera prueba.
+> **Estado, 14 de noviembre de 2026.** El diseño v1.2 está aprobado: Ludwig 2 se guarda en el formato AFMoE de los modelos Trinity de Arcee, que corre en llama.cpp sin parche. El bucle de entrenamiento real hizo tres corridas de 400 pasos en 2×T4: todas estables en FP16, a **3,300–3,600 tokens/s, ~1,900–2,100 h para 25B tokens**. Una segunda ronda mide cuánto se mueve el mejor learning rate con la duración del entrenamiento ([notebook](notebooks/t0_3_t2_lr_2xT4.ipynb)), y el tokenizador de 64K quedó fijado ([`tokenizer/`](tokenizer/)): 4.16 bytes por token en la mezcla del tronco, contra 4.03 del de Qwen3, de 151K. **Todavía no hay pesos.** Este repositorio documenta el proyecto desde la primera prueba.
 
 ## Por qué Ludwig 2
 
@@ -162,6 +162,19 @@ El modelo real con el bucle de entrenamiento real ([`scripts/train.py`](scripts/
 - **×2 gana en el horizonte corto,** pero las corridas cortas favorecen los LR altos: el mejor LR baja cuando el entrenamiento es más largo. Una segunda ronda lo mide aquí: ×4 a 400 pasos, y ×1 y ×2 seguidas hasta 1,200 pasos. Después [`scripts/lr_horizon.py`](scripts/lr_horizon.py) fija el LR del tronco con una regla decidida de antemano ([`docs/DECISIONS.md`](docs/DECISIONS.md), P9). Con la primera ronda sola da ×1, la receta del Ludwig 1.
 - **Las diferencias de velocidad son de las máquinas,** no del LR: dentro de cada corrida la velocidad no cambia con la carga de los expertos.
 
+### El tokenizador de 64K (CPU de Kaggle, 14 de noviembre de 2026)
+
+BPE a nivel de bytes con 65,536 tokens y la regex de corte de Qwen2, entrenado en 56 minutos con una muestra de 1.2 GB de las 23 fuentes de la mezcla del tronco ([`tokenizer/`](tokenizer/), [`results/tokenizador_64k/con_transweb/`](results/tokenizador_64k/con_transweb/)):
+
+| | Ludwig 2 (64K) | SmolLM2 (49K) | OLMoE (50K) | Qwen3 (151K) |
+|---|---|---|---|---|
+| Bytes por token, mezcla del tronco | **4.159** | 3.551 | 3.719 | 4.034 |
+| Bytes por token, español | **4.598** | 2.934 | 3.350 | 3.790 |
+| Tokens por palabra, inglés / español | 1.37 / 1.33 | 1.38 / 2.08 | 1.36 / 1.83 | 1.35 / 1.61 |
+
+- **Texto que nunca vio:** en los documentos y el código de este repositorio usa 20% menos tokens que SmolLM2 en español, 7% menos en inglés y 12% menos en Python.
+- **llama.cpp (T0.1b):** en el formato AFMoE, 17 de 17 textos de prueba tokenizan igual que en Hugging Face, y llama.cpp detecta todos los ids especiales ([`results/t0_1b_tokenizer.json`](results/t0_1b_tokenizer.json)). El hash del vocabulario es nuevo para llama.cpp, así que por ahora los GGUF se convierten con [`scripts/convert_gguf.py`](scripts/convert_gguf.py).
+
 ## Datos
 
 | | Web en inglés | Código | Matemática | Conocimiento | Libros sintéticos | Español | Instrucción y razonamiento |
@@ -192,6 +205,9 @@ pip install -r requirements.txt
 # T0.1-C: el formato AFMoE contra llama.cpp (la primera vez clona y compila llama.cpp, ~15–25 min)
 python scripts/smoke_format_afmoe.py
 
+# T0.1b: el tokenizador de 64K en llama.cpp, en el formato AFMoE (la primera vez compila llama-tokenize)
+python scripts/smoke_tokenizer.py
+
 # El entrenamiento (FSDP2, Muon, balanceo, checkpoint), 2 procesos en CPU con un modelo diminuto
 torchrun --nproc_per_node 2 scripts/bench_afmoe.py --config configs/tiny_afmoe.json \
     --seq 64 --micro 2 --steps 2 --ckpt-test --out /tmp/t0_2v2_cpu.jsonl
@@ -206,7 +222,7 @@ python scripts/test_train_cpu.py
 |---|---|---|---|
 | [`t0_3_t2_lr_2xT4.ipynb`](notebooks/t0_3_t2_lr_2xT4.ipynb) | GPU T4 x2 | ~9.5 h por corrida | `results/t0_3_t2/<corrida>.jsonl` y `.png`, y el checkpoint de antes del enfriamiento |
 | [`t0_2v2_afmoe_2xT4.ipynb`](notebooks/t0_2v2_afmoe_2xT4.ipynb) | GPU T4 x2 | ~1–1.25 h | `results/t0_2v2.jsonl` (hecha: [`results/t0_2v2_intento2/`](results/t0_2v2_intento2/)) |
-| [`t0_1_formato_mtp_tokenizador.ipynb`](notebooks/t0_1_formato_mtp_tokenizador.ipynb) | None (CPU) | ~15–25 min | Pruebas del formato A y del **tokenizador**; ya solo importa la del tokenizador |
+| [`t0_1_formato_mtp_tokenizador.ipynb`](notebooks/t0_1_formato_mtp_tokenizador.ipynb) | None (CPU) | ~15–25 min | Pruebas del formato A y del tokenizador, guardadas como registro: la del tokenizador ahora es `scripts/smoke_tokenizer.py` (T0.1b) |
 
 En cada notebook pon `REPO_URL` con la URL de tu repo (o sube el repo como dataset de Kaggle y déjalo vacío), activa **Internet** y corre todas las celdas. Para tener Internet, la cuenta de Kaggle debe estar verificada con teléfono. `t0_2_velocidad_memoria_2xT4.ipynb` medía el formato A y queda solo como registro.
 
@@ -214,10 +230,12 @@ En cada notebook pon `REPO_URL` con la URL de tu repo (o sube el repo como datas
 
 ```
 ludwig-lm/
+├── tokenizer/      # el tokenizador de 64K, fijado: receta, tokens de control y compresión en su README
 ├── ludwig_lm/      # afmoe.py: el modelo (AFMoE), su kernel, pérdidas y balanceo · muon.py · data.py: lector de datos provisional
 │                   # · checkpoint.py: checkpoints con reanudación verificada · model.py: formato A (respaldo)
 ├── configs/        # ludwig2_afmoe.json (el modelo real), tiny_afmoe.json (pruebas); ludwig2.json, tiny.json (formato A)
-├── scripts/        # train.py (el bucle de entrenamiento) y test_train_cpu.py, bench_afmoe.py (T0.2 v2), smoke_format_afmoe.py (T0.1-C),
+├── scripts/        # train.py (el bucle de entrenamiento) y test_train_cpu.py, train_tokenizer.py, smoke_tokenizer.py (T0.1b),
+│                   # bench_afmoe.py (T0.2 v2), smoke_format_afmoe.py (T0.1-C),
 │                   # make_notebooks.py, convert_gguf.py, lo del formato A
 ├── notebooks/      # notebooks de Kaggle, generados con scripts/make_notebooks.py
 ├── patches/        # parche de llama.cpp para el formato A y su nota técnica
@@ -234,7 +252,8 @@ ludwig-lm/
 - [x] **v1.2** Formato AFMoE aprobado
 - [x] **T0.2 v2** El entrenamiento real en 2×T4: el loop y el momento en la RAM, ~3,300 tokens/s esperados
 - [ ] **T0.3 + T2** Learning rate y estabilidad en FP16: primera ronda hecha (todas estables, ×2 la mejor a 400 pasos); segunda ronda, ×4 y ×1/×2 hasta 1,200 pasos ([notebook](notebooks/t0_3_t2_lr_2xT4.ipynb))
-- [ ] **T0.1b** Repetir las pruebas del tokenizador con el tokenizador final de 64K
+- [x] **Tokenizador** BPE de 64K, fijado ([`tokenizer/`](tokenizer/)): 4.16 bytes por token en la mezcla del tronco
+- [x] **T0.1b** El tokenizador final en llama.cpp: tokenización idéntica y todos los ids especiales detectados
 - [ ] **T1** Datos: fuente de código, lector determinista con descontaminación y manifiestos
 - [ ] **G0** Compuerta: ≥6 h sostenidas, guardado, reanudación en otra cuenta, 16K
 - [ ] **T3** Tronco hasta 22.5B tokens

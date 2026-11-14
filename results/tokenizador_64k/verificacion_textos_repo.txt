@@ -1,0 +1,23 @@
+# Verificación independiente del tokenizador de 64K con textos que nunca vio
+# Script: verificar_tokenizador.py (fuera del repo), sobre tokenizer/ (sha1 0b7da8fdb062)
+# Textos: los documentos y el código del repo en el commit 3e4f66c, el de cuando se corrió por primera vez (14 nov 2026)
+# Comparado con el tokenizador de HuggingFaceTB/SmolLM2-135M, bajado de Hugging Face
+# Dónde: PC de Pipe, CPU; Python 3.12.10, tokenizers 0.23.3, huggingface_hub 2.4.0
+# Salida sin editar:
+
+sha1 del archivo: 0b7da8fdb062 | sha1 del reporte: 0b7da8fdb062 | ✔ coincide
+vocabulario: 65,536 | id máximo 65,535
+ids 0–15 con nombre en orden: True | 240 de reserva (16–255): True | 256 bytes: True
+modo datos: texto crudo con cadenas de control → ids de control: 0 | ida y vuelta: True
+tokenizer_config: eos '<|endoftext|>', pad '<|pad|>', bos None, plantilla de chat: sí
+
+textos del proyecto                     bytes    nuevo  SmolLM2  bytes/token nuevo vs SmolLM2 | ida y vuelta
+español (DISENO.md + BITACORA.md)      76,733   25,740   32,340  2.981 vs 2.373 (-20.4% tokens) | True
+inglés (README.md + DECISIONS.md)      41,426   13,456   14,506  3.079 vs 2.856 (-7.2% tokens) | True
+Python (ludwig_lm/ + scripts/)        206,699   59,582   67,713  3.469 vs 3.053 (-12.0% tokens) | True
+
+ejemplos (cómo corta):
+   13 tokens: ['El', 'ĠcorazÃ³n', 'Ġde', 'Ġla', 'ĠcanciÃ³n', ':', 'ĠÂ¿', 'd', 'Ã³nde', 'ĠestÃ¡', 'Ġel', 'ĠniÃ±o', '?']
+   14 tokens: ['def', 'Ġcargar', '_d', 'atos', '(r', 'uta', ':', 'Ġstr', ')', 'Ġ->', 'Ġlist', '[', 'dict', ']:']
+    9 tokens: ['const', 'Ġusuario', 'Ġ=', 'Ġawait', 'Ġobtener', 'Us', 'uario', '(id', ');']
+   21 tokens: ['La', 'Ġderivada', 'Ġde', 'Ġx', '^', '2', 'Ġes', 'Ġ', '2', 'x', ',', 'ĠasÃŃ', 'Ġque', 'Ġf', "'(", '3', ')', 'Ġ=', 'Ġ', '6', '.']
