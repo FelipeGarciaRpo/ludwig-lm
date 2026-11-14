@@ -350,3 +350,33 @@ Todo lo que se corre, se mide o se decide, en orden. Cada entrada dice qué se h
 | `292f882` | `3e4f66c` | código de la segunda ronda de la T2 |
 
 - **Siguiente:** publicar el repo.
+
+## 2026-11-14 · Tokenizador fijado, T0.1b y rutas sin usuario (patch 0009)
+
+- **Qué:**
+  - El tokenizador de 64K queda fijado tal como salió (P10) y vive en `tokenizer/`. El script que lo hizo pasa a `scripts/train_tokenizer.py`, sin cambios.
+  - No se repite sin TransWeb-Edu: su traductor es Mistral-7B-Instruct-v0.1 (Apache 2.0) y el dataset es ODC-By, así que es 🟢 (D20).
+  - La T0.1b, con `scripts/smoke_tokenizer.py`: el tokenizador final en llama.cpp, en el formato AFMoE.
+  - `load_tokenizer` pasa al modo datos de verdad (P11). Con `encode_special_tokens` solo, un `<think>` escrito en una página web salía como el id 4.
+  - `configs/ludwig2_afmoe.json` queda con padding 1 y BOS 0 (P12).
+  - `train.py` y el notebook de la T0.3 + T2 escriben las rutas de Kaggle sin el usuario (`/kaggle/input/notebooks/<usuario>/…`): en los `.jsonl`, en lo que imprimen y en los metadatos del checkpoint.
+  - Al reanudar, los argumentos se comparan sin el usuario por los dos lados. Así, un checkpoint viejo, con el usuario, no marca cambios falsos.
+- **Dónde:** chat de diseño, en CPU. llama.cpp `61dbf49` (13 nov 2026), compilado solo `llama-tokenize`: 8 min con 2 núcleos.
+- **Archivos:**
+  - `tokenizer/`: los 4 archivos de `results/tokenizador_64k/con_transweb/` y un README.
+  - `scripts/train_tokenizer.py`, `scripts/smoke_tokenizer.py` y `results/t0_1b_tokenizer.json`.
+- **Resultado:**
+  - La T0.1b pasa:
+    - El pre-tokenizador es `qwen2`.
+    - 17 de 17 textos tokenizan igual que en Hugging Face: prosa en inglés y español, código, LaTeX, chat, `<think>`, herramientas y FIM.
+    - llama.cpp detecta BOS 0, EOS 0, fin de turno 3, padding 1 y los seis de FIM, y para de generar en 0, 3, 13, 14 y 15.
+  - `test_train_cpu.py` da PASS, con dos pruebas nuevas: el tokenizador real en modo datos (ningún id de control desde texto, ida y vuelta exacta) y las rutas sin usuario.
+- **Ojo:**
+  - La primera corrida de la T0.1b falló por tres cosas. Dos eran del arnés:
+    - `llama-tokenize` interpreta escapes por defecto: el `\to` de LaTeX se volvió tabulador + `o`. Ahora va con `--no-escape`.
+    - En el llama.cpp actual, los tokens especiales solo salen en el log con `-lv 4`.
+  - La tercera era real: sin `bos_token_id` en el config, llama.cpp toma como BOS el id 11, que aquí es `<|fim_middle|>`.
+  - Esa primera corrida no se guardó: medía el arnés, no el tokenizador.
+  - El hash del vocabulario (`b01d3ee0…`) es nuevo para llama.cpp. Hasta que se registre (un PR que escribe Pipe), los GGUF se convierten con `scripts/convert_gguf.py`.
+  - La segunda ronda de la T2 sigue con su zip (`3e4f66c`): nada de esto la toca. Sus `.jsonl` que ya traen el usuario se enmascaran al subirlos, con su nota (regla 6).
+- **Siguiente:** el relevo con los checkpoints en Hugging Face y respaldo en Kaggle, y el lector de la T1.

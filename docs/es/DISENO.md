@@ -182,11 +182,18 @@ La T0.1 (`scripts/smoke_format.py`) arma un modelo diminuto con exactamente la e
 
 ## 3. Tokenizador ✅
 
-- **El mismo de 64K del plan del modelo grande** (`tokenizador_64k_v1_1.py`): los 256 bytes siempre en el vocabulario, sin normalización, entrenado con documentos enteros, con val aparte y en modo datos (el texto crudo nunca produce tokens de control).
+- 📏 **Fijado el 14 nov 2026** en `tokenizer/` (sha1 `0b7da8fdb062`; P10 en `docs/DECISIONS.md`): 4.159 bytes por token en la mezcla del tronco (Qwen3 4.034, OLMoE 3.719, SmolLM2 3.551) y 1.33 tokens por palabra en español (SmolLM2 2.08). Receta, tokens de control y compresión por dominio en `tokenizer/README.md`.
+- 📏 **T0.1b** (14 nov 2026; `scripts/smoke_tokenizer.py`, `results/t0_1b_tokenizer.json`): pasa en el formato AFMoE con llama.cpp `61dbf49`.
+  - El pre-tokenizador es `qwen2`.
+  - 17 de 17 textos tokenizan igual que en Hugging Face, con chat, `<think>`, herramientas y FIM.
+  - llama.cpp detecta todos los ids especiales.
+  - El hash del vocabulario es nuevo para llama.cpp: se convierte con `scripts/convert_gguf.py` hasta registrarlo en llama.cpp (un PR que escribe Pipe).
+  - Sin `bos_token_id`, llama.cpp tomaba como BOS el id 11 (`<|fim_middle|>`); el config dice ahora 0, el EOS, que nunca se añade (P12).
+- **La receta de 64K del plan del modelo grande**, con la mezcla v3 del tronco de Ludwig 2 (`scripts/train_tokenizer.py`, v1.2): los 256 bytes siempre en el vocabulario, sin normalización, entrenado con documentos enteros, con val aparte y en modo datos (el texto crudo nunca produce tokens de control).
 - **Tokens especiales desde el día uno:** plantilla de chat, `<think>` y `</think>` (id 4…), FIM (ids 10–13), llamadas a herramientas y fin de texto (id 0) 📏.
 - **Ventaja de compartirlo con el modelo grande:** si algún día existe Ludwig 3 con el mismo tokenizador, podrá destilarle logits a Ludwig 2, y Ludwig 2 le servirá de borrador para decodificación especulativa.
-- 📏 **Medir bytes por token** en inglés, Python, JS, matemática y español, y compararlo con el de Llama 3 (el que usa MobileMoE).
-- ❗ **El tokenizador muestrea el código de la misma fuente que el tronco.** Si no, quedan tokens que casi no salen en el entrenamiento (glitch tokens).
+- 📏 **Bytes por token** medidos por fuente y por dominio contra SmolLM2, OLMoE y Qwen3 (`results/tokenizador_64k/con_transweb/compresion.csv`). Llama 3 no entró en la comparación.
+- ❗ **El tokenizador muestrea el código de la misma fuente que el tronco.** Si no, quedan tokens que casi no salen en el entrenamiento (glitch tokens). El fijado usó Stack-Edu (solo licencia permisiva, bajado de Software Heritage) y HTML y CSS de The Stack v1.
 - **Si el tokenizador del plan grande cambia, Ludwig 2 usa la versión final.** Después del primer paso del tronco ya no se puede cambiar.
 
 ---

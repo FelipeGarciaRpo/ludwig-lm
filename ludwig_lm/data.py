@@ -19,6 +19,7 @@ from __future__ import annotations
 
 import glob
 import hashlib
+import json
 import os
 import queue
 import random
@@ -42,8 +43,17 @@ def expand(patterns) -> list[str]:
 
 
 def load_tokenizer(path) -> Tokenizer:
-    tok = Tokenizer.from_file(str(path))
-    tok.encode_special_tokens = True        # data mode: "<|endoftext|>" written in a web page stays text
+    """The tokenizer in data mode: no text produces a control id. "<|endoftext|>" or "<think>" written in a
+    web page stay text; the pipeline adds the control ids (EOS after each document; later FIM and chat).
+
+    ``encode_special_tokens`` only covers added tokens marked special, and the 64K tokenizer keeps
+    ``<think>``, ``<tool_call>`` and their closing tags as non-special (as Qwen3 does, for chat), so every
+    added token is marked special first: the same as ``para_datos()`` in the tokenizer's own loader."""
+    j = json.loads(Path(path).read_text(encoding="utf-8"))
+    for added in j.get("added_tokens", []):
+        added["special"] = True
+    tok = Tokenizer.from_str(json.dumps(j, ensure_ascii=False))
+    tok.encode_special_tokens = True
     return tok
 
 

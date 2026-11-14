@@ -19,7 +19,8 @@ Everything here works around the model, never changes its parameters or their na
   stream stays in FP32 when the caller runs it under FP16 autocast.
 * ``init_ludwig``: depth-scaled sandwich norm (Trinity): output-norm gains start at 1/sqrt(L); the router
   starts random (transformers starts it at zero, which sends every token to the same 4 experts); and the
-  EOS embedding trains like any other row (transformers makes pad_token_id = 0 = EOS a frozen padding row).
+  padding row trains like any other (transformers turns pad_token_id into a frozen ``padding_idx`` row; until
+  the 64K tokenizer that id was 0, the EOS).
 * ``shard_model``: the FSDP2 layout T0.2 v2 measured, shared by the bench and the training script.
 * T4 fixes for transformers' SDPA path (pre-Ampere GPUs): repeat the KV heads instead of asking SDPA for
   native GQA, which there can fall back to the math kernel and store B*H*T*T attention weights in FP32;
@@ -181,8 +182,9 @@ def init_ludwig(lm: AfmoeForCausalLM):
         m.router.gate.weight.normal_(0.0, lm.config.initializer_range)
     emb = lm.model.embed_tokens
     if emb.padding_idx is not None:
-        # transformers passes pad_token_id (0, our EOS) as padding_idx: that row starts at zero and its lookup
-        # gets no gradient. Packed training never pads, and EOS is an input at every document boundary.
+        # transformers passes pad_token_id as padding_idx: that row starts at zero and its lookup gets no
+        # gradient. Packed training never pads; with configs where padding is EOS (the tests' tiny configs, the
+        # runs before the 64K tokenizer), EOS is an input at every document boundary.
         # The checkpoint format does not change: padding_idx is not a weight.
         emb.weight[emb.padding_idx].normal_(0.0, lm.config.initializer_range)
         emb.padding_idx = None

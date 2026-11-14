@@ -1,0 +1,87 @@
+{
+  "llama_cpp": "61dbf49228c8a96b72e40c89d93cb7c003411f8c Fri Nov 13 20:57:05 2026 -0800",
+  "transformers": "5.22.2",
+  "tokenizers": "0.23.3",
+  "tokenizer_sha1": "0b7da8fdb0622fe185f8c7117b0eadd7c35568ba",
+  "T1_pretokenizer": {
+    "pass": true,
+    "chkhsh": "b01d3ee07b08b215bfe2dbf0240a1b214920f74417cbfb91ba88028fe85a0481",
+    "hash_known_to_llama_cpp": false,
+    "split_regex": "(?i:'s|'t|'re|'ve|'m|'ll|'d)|[^\\r\\n\\p{L}\\p{N}]?\\p{L}+|\\p{N}| ?[^\\s\\p{L}\\p{N}]+[\\r\\n]*|\\s*[\\r\\n]+|\\s+(?!\\S)|\\s+",
+    "mapped_pre": "qwen2"
+  },
+  "T2_parity": {
+    "pass": true,
+    "n_strings": 17,
+    "mismatches": []
+  },
+  "T3_llama_cpp_view": {
+    "pass": true,
+    "problems": [],
+    "wrong_special_ids": {},
+    "gguf": {
+      "architecture": "afmoe",
+      "model": "gpt2",
+      "pre": "qwen2",
+      "n_tokens": 65536,
+      "eos": 0,
+      "pad": 1,
+      "bos": 0,
+      "add_bos": false,
+      "user_defined": [
+        4,
+        5,
+        6,
+        7,
+        8,
+        9
+      ],
+      "control": 250
+    },
+    "detected_on_load": {
+      "BOS": [
+        0
+      ],
+      "EOS": [
+        0
+      ],
+      "EOT": [
+        3
+      ],
+      "PAD": [
+        1
+      ],
+      "LF": [
+        454
+      ],
+      "FIM PRE": [
+        10
+      ],
+      "FIM SUF": [
+        12
+      ],
+      "FIM MID": [
+        11
+      ],
+      "FIM PAD": [
+        13
+      ],
+      "FIM REP": [
+        14
+      ],
+      "FIM SEP": [
+        15
+      ],
+      "EOG": [
+        0,
+        3,
+        13,
+        14,
+        15
+      ]
+    },
+    "optional_not_detected": {}
+  },
+  "all_pass": true,
+  "minutes": 0.2
+}

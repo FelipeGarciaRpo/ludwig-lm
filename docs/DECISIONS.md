@@ -46,6 +46,16 @@ Three 400-step runs at ×0.5, ×1 and ×2 Ludwig 1's learning rates ([`results/t
 | P2b | ✅ **Expert balance is judged per layer over the 50-step evaluation window.** A single step's maximum also reflects what that batch is about. **λ scales with the LR: λ = 0.01 × the multiplier.** | ×1: every window at or below 1.6× after step 150. ×2: 65 steps above 3× (27 in a row), and the windows ending at steps 300 and 320 at 3.6× and 4.2×: SMEBU took ~30 steps to catch up. Every layer within 1.11× by step 400. No dead expert |
 | P9 | ✅ **The trunk's LR rule, fixed before the second round.** The best LR falls as training gets longer, as a power law of the tokens, with exponent ~0.32 measured for AdamW and for Muon. The trunk is ~240× longer than these runs, so the short winner overstates its LR: at that exponent, ×2 to ×4 at 105M tokens is ~×1 at 25B. The second round measures the exponent here: **×4** at 400 steps (λ = 0.04) closes the short sweep, and **×1 and ×2 continue from step 320 to 1,200 steps** (3× the horizon, same λ as before, decay over the last 240). `scripts/lr_horizon.py` fits the best LR at each horizon (a parabola in log2 LR), extrapolates it to 25B tokens plus 0.5 in log2 for the trunk's batch doubling, and takes the nearest of ×0.5, ×0.7, ×1, ×1.4 and ×2. The trunk never goes above ×2, the largest LR tested over a long run. With the first round and the literature's exponent it gives ×1, Ludwig 1's recipe; if the ×1–×2 gap does not shrink at 1,200 steps, it gives ×2. | Bjorck et al., *Scaling Optimal LR Across Token Horizons* (ICLR 2025); the same exponent for Muon in arXiv 2603.28743 |
 
+### After the 64K tokenizer (November 14, 2026)
+
+The tokenizer trained on Kaggle's CPU in 56 min ([`results/tokenizador_64k/con_transweb/`](../results/tokenizador_64k/con_transweb/)) and passed all its checks. It now lives in [`tokenizer/`](../tokenizer/), and the script that made it in [`scripts/train_tokenizer.py`](../scripts/train_tokenizer.py), unchanged.
+
+| ID | Decision | Evidence |
+|---|---|---|
+| P10 | ✅ **The 64K tokenizer is fixed as trained**: `tokenizer/tokenizer.json`, sha1 `0b7da8fdb062`. 4.159 bytes per token on the trunk mix (Qwen3 4.034, OLMoE 3.719, SmolLM2 3.551) and 1.33 tokens per Spanish word (SmolLM2 2.08). Its sample included TransWeb-Edu (9%), against what had been agreed while its translator was unconfirmed. **It is not retrained without it.** TransWeb-Edu is FineWeb-Edu translated with Mistral-7B-Instruct-v0.1 (Apache-2.0), released under ODC-By: the output of a permissively licensed open model, 🟢 under D20. It stays in the Spanish mix. A different, later corpus called TransWebEdu was translated with NLLB-200 under a non-commercial license: it stays out. | TransWeb-Edu's paper, arXiv 2410.23956. The mixes compared in the run keep the trunk figure within 0.2%, so the sample's composition barely moves the tokenizer |
+| P11 | ✅ **Data mode turns every added token into text.** The 64K tokenizer keeps `<think>`, `</think>` and the tool tags (ids 4–9) as added tokens that are not special, as Qwen3 does, so decoding shows them in chat. `encode_special_tokens` covers only the special ones, so with the provisional reader a `<think>` written in a web page would have become id 4. `load_tokenizer` (`ludwig_lm/data.py`) now does what the tokenizer's own loader does: no control id comes from text. The pipeline places them: EOS after each document now, and in T1 FIM on code and the chat format of instruction and reasoning data (DISENO 4.3.7: `<think>` as id 4, never as plain text). | `scripts/test_train_cpu.py` encodes every control string with the real tokenizer: no control id, exact round trip. The LR rounds keep their own code zips |
+| P12 | ✅ **Padding is id 1 (`<\|pad\|>`), and BOS is id 0, the EOS, never added**, in `configs/ludwig2_afmoe.json`. Packed pre-training never pads, but in SFT the usual collators set the label to −100 wherever the input is the padding id. With padding = EOS, the real EOS of every answer would be masked too, and the model would never learn to stop. P8's fix (the `padding_idx` row starts like the others) now applies to row 1. BOS = EOS is Qwen's convention, and it matches packed training, where every document starts after an EOS. Without a BOS id, llama.cpp falls back to id 11, which here is `<\|fim_middle\|>`, for any template or tool that asks for the BOS. | transformers' `DataCollatorForLanguageModeling` masks labels equal to `pad_token_id`. T0.1b: with no `bos_token_id`, llama.cpp reported BOS = 11; with 0, BOS = 0 and `add_bos` false |
+
 ---
 
 ## Model
@@ -86,11 +96,15 @@ Three 400-step runs at ×0.5, ×1 and ×2 Ludwig 1's learning rates ([`results/t
 - 📏 **Expert count (bench v1):** 48 experts fit only with half the micro-batch (2,926 tokens/s, −24%); 60 only with Muon's momentum in CPU RAM (2,670, −31%). Every micro-batch moves the whole model between the GPUs at 3.2 GB/s, so more experts cost speed. **40 stays.**
 
 ### D06. Tokenizer
-✅ Our own 64K BPE (the same as the larger Ludwig plan), with tied input and output embeddings.
+✅ Our own 64K BPE (the same as the larger Ludwig plan), with tied input and output embeddings. 📏 Fixed on November 14, 2026 (P10): [`tokenizer/`](../tokenizer/).
 
 - **Why 64K:** the output head is 12% of the compute, against ~23% with a 128K vocabulary.
 - **Special tokens from day one:** chat template, `<think>` and `</think>`, FIM, tool calls, end of text.
-- **Constraint:** the pre-tokenizer regex must be one llama.cpp implements. T0.1 checks it (T1–T2) and must be re-run with the final tokenizer. ⏳
+- **Constraint:** the pre-tokenizer regex must be one llama.cpp implements. 📏 **T0.1b** checked the final tokenizer on November 14, 2026 ([`scripts/smoke_tokenizer.py`](../scripts/smoke_tokenizer.py), [`results/t0_1b_tokenizer.json`](../results/t0_1b_tokenizer.json), llama.cpp `61dbf49`):
+  - The regex is Qwen2's (`qwen2`).
+  - In the AFMoE format, 17 of 17 strings tokenize as in Hugging Face, chat, reasoning, tool-call and FIM markup included.
+  - llama.cpp detects every special id: EOS, end of turn, padding and FIM.
+  - The vocabulary's hash is new to llama.cpp, so conversion goes through `scripts/convert_gguf.py` until the hash is registered upstream. That PR is one Pipe writes himself, as llama.cpp's rules require.
 
 ### D07. MTP head
 ⛔ *Dropped (P3): AFMoE has no MTP in llama.cpp.* One multi-token-prediction module (projection 2048 → 1024, two norms, one decoder layer, the shared head), used as the draft model for speculative decoding (`llama-server --spec-type draft-mtp`).

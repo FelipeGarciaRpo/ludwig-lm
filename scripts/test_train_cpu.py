@@ -81,6 +81,14 @@ def test_reader(d: Path):
     check(tok.token_to_id("<|endoftext|>") == 0, "EOS is id 0")
     check(0 not in tok.encode("w1 <|endoftext|> w2", add_special_tokens=False).ids,
           "data mode: a literal <|endoftext|> in the text is not the EOS id")
+    real = ROOT / "tokenizer" / "tokenizer.json"
+    if real.exists():
+        big = load_tokenizer(real)
+        control = {a["id"] for a in json.loads(real.read_text(encoding="utf-8"))["added_tokens"]}
+        ids = big.encode("a <think> b </think> <tool_call> <|im_start|>user <|endoftext|> <|fim_prefix|> c",
+                         add_special_tokens=False).ids
+        check(not control & set(ids) and big.decode(ids) == "a <think> b </think> <tool_call> <|im_start|>user "
+              "<|endoftext|> <|fim_prefix|> c", "the 64K tokenizer in data mode: no control id from text, exact round trip")
     files = expand([str(d / "train-*.parquet")])
     kw = dict(files=files, tok=tok, seq=64, micro=2, world=2, seed=0, eos_id=0, rows_per_slice=16, column="text")
 
@@ -147,6 +155,18 @@ def test_optimizer():
     muon.step()                                   # zero gradient: only the weight decay moves the matrix
     check(torch.allclose(p.detach(), before * (1 - adamw_lr * wd), rtol=0, atol=1e-9),
           "Muon decays its matrices at the AdamW LR x wd (Ludwig 1), not at its own LR")
+
+
+def test_public_paths():
+    sys.path.insert(0, str(ROOT / "scripts"))
+    from train import public
+
+    print("paths in logs", flush=True)
+    check(public('{"resume": "/kaggle/input/notebooks/juan_k/ludwig-t2/checkpoint"}')
+          == '{"resume": "/kaggle/input/notebooks/<usuario>/ludwig-t2/checkpoint"}'
+          and public("/kaggle/input/datasets/ana99/ludwig-code/x") == "/kaggle/input/datasets/<usuario>/ludwig-code/x"
+          and public("/tmp/ludwig_ckpt/step_000320") == "/tmp/ludwig_ckpt/step_000320",
+          "the Kaggle username of an attached input never reaches the logs")
 
 
 def torchrun(tag, out, *args):
@@ -228,6 +248,7 @@ def main():
     make_data(WORK)
     test_reader(WORK)
     test_optimizer()
+    test_public_paths()
     test_training()
     print("PASS" if not FAILS else f"FAIL: {len(FAILS)} checks", flush=True)
     sys.exit(1 if FAILS else 0)

@@ -283,7 +283,9 @@ Descarga `results/t0_2v2.jsonl` (panel *Output*), guárdalo en `results/` y anot
 ]
 
 # ----------------------------------------------------------------------------- T0.3 + T2 (training loop)
-TRAIN_HELPER = r'''import threading, time, glob, shutil
+TRAIN_HELPER = r'''import threading, time, glob, shutil, re
+DUENO = re.compile(r"(/kaggle/input/(?:notebooks|datasets|models)/)[^/\"\s]+")
+publico = lambda texto: DUENO.sub(r"\1<usuario>", texto)   # el usuario de Kaggle de una entrada no va a los logs
 KEEP = ("[model]", "[data]", "[train]", "[eval]", "[save]", "[resume]", "[alarm]", "[end]", "[checkpoint]",
         "Traceback", "Error", "out of memory")
 
@@ -295,7 +297,7 @@ def run(tag, out, timeout_h, **kw):
     args = " ".join(arg(k, v) for k, v in kw.items() if v is not False and v != "")
     cmd = (f"PYTORCH_CUDA_ALLOC_CONF=expandable_segments:True torchrun --nproc_per_node 2 "
            f"scripts/train.py --tag {tag} --out {out} {args}")
-    print(">>", cmd, flush=True)
+    print(">>", publico(cmd), flush=True)
     p = subprocess.Popen(cmd, shell=True, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True,
                          start_new_session=True)
     killed = []
@@ -310,12 +312,12 @@ def run(tag, out, timeout_h, **kw):
     for line in p.stdout:
         tail = (tail + [line])[-40:]
         if any(k in line for k in KEEP):
-            print(line, end="", flush=True)
+            print(publico(line), end="", flush=True)
     p.wait()
     timer.cancel()
     if p.returncode != 0:
         print(f"[{tag}] terminó con código {p.returncode}" + (" (se pasó del tiempo)" if killed else "")
-              + "; últimas líneas:\n" + "".join(tail[-15:]))
+              + "; últimas líneas:\n" + publico("".join(tail[-15:])))
     rows = [json.loads(l) for l in open(out)] if os.path.exists(out) else []
     return next((r for r in reversed(rows) if r.get("tag") == tag and r.get("type") == "end"),
                 {"tag": tag, "status": "sin fila final"})'''
@@ -418,7 +420,7 @@ if REANUDAR == "auto":
     if not hay:
         raise SystemExit(f"no hay checkpoint de {CORRIDA} en los datos de entrada: agrega la salida de la versión que la corrió")
     paso, REANUDAR, de, motivo = max(hay)
-    print(f"sigue {de} desde el paso {paso} ({motivo}): {REANUDAR}")
+    print(f"sigue {de} desde el paso {paso} ({motivo}): {publico(REANUDAR)}")
     # si es la segunda sesión de esta misma corrida, su .jsonl sigue en el mismo archivo
     antes = glob.glob(os.path.join(os.path.dirname(REANUDAR), "**", "results", "t0_3_t2", f"{CORRIDA}.jsonl"),
                       recursive=True)

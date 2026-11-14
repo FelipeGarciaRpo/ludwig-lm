@@ -14,7 +14,7 @@
 
 </div>
 
-> **Status, November 14, 2026.** Design v1.2 is approved: Ludwig 2 is stored in the AFMoE format of Arcee's Trinity models, which runs in llama.cpp unpatched. The real training loop ran three 400-step runs on 2×T4: all stable in FP16, at **3,300–3,600 tokens/s, ~1,900–2,100 h for 25B tokens**. A second round measures how the best learning rate moves with training length, while the 64K tokenizer trains ([notebook](notebooks/t0_3_t2_lr_2xT4.ipynb)). **There are no weights yet.** This repository documents the project from its first test.
+> **Status, November 14, 2026.** Design v1.2 is approved: Ludwig 2 is stored in the AFMoE format of Arcee's Trinity models, which runs in llama.cpp unpatched. The real training loop ran three 400-step runs on 2×T4: all stable in FP16, at **3,300–3,600 tokens/s, ~1,900–2,100 h for 25B tokens**. A second round measures how the best learning rate moves with training length ([notebook](notebooks/t0_3_t2_lr_2xT4.ipynb)), and the 64K tokenizer is fixed ([`tokenizer/`](tokenizer/)): 4.16 bytes per token on the trunk mix, against 4.03 for Qwen3's 151K. **There are no weights yet.** This repository documents the project from its first test.
 
 ## Why Ludwig 2
 
@@ -162,6 +162,19 @@ The real model and the real training loop ([`scripts/train.py`](scripts/train.py
 - **×2 wins the short horizon,** but short runs favour high learning rates: the best LR falls as training gets longer. A second round measures that here: ×4 at 400 steps, and ×1 and ×2 continued to 1,200 steps. [`scripts/lr_horizon.py`](scripts/lr_horizon.py) then sets the trunk's LR by a rule fixed in advance ([`docs/DECISIONS.md`](docs/DECISIONS.md), P9). With the first round alone it gives ×1, Ludwig 1's recipe.
 - **The speed differences are the machines,** not the LR: within each run the speed does not move with the expert load.
 
+### The 64K tokenizer (Kaggle CPU, November 14, 2026)
+
+Byte-level BPE with 65,536 tokens and Qwen2's split regex, trained in 56 minutes on a 1.2 GB sample of the trunk mix's 23 sources ([`tokenizer/`](tokenizer/), [`results/tokenizador_64k/con_transweb/`](results/tokenizador_64k/con_transweb/)):
+
+| | Ludwig 2 (64K) | SmolLM2 (49K) | OLMoE (50K) | Qwen3 (151K) |
+|---|---|---|---|---|
+| Bytes per token, trunk mix | **4.159** | 3.551 | 3.719 | 4.034 |
+| Bytes per token, Spanish | **4.598** | 2.934 | 3.350 | 3.790 |
+| Tokens per word, English / Spanish | 1.37 / 1.33 | 1.38 / 2.08 | 1.36 / 1.83 | 1.35 / 1.61 |
+
+- **Unseen text:** on this repository's documents and code, it uses 20% fewer tokens than SmolLM2 in Spanish, 7% fewer in English and 12% fewer in Python.
+- **llama.cpp (T0.1b):** in the AFMoE format, 17 of 17 test strings tokenize as in Hugging Face, and llama.cpp detects every special id ([`results/t0_1b_tokenizer.json`](results/t0_1b_tokenizer.json)). The vocabulary's hash is new to llama.cpp, so GGUFs are converted with [`scripts/convert_gguf.py`](scripts/convert_gguf.py) for now.
+
 ## Data
 
 | | English web | Code | Math | Knowledge | Textbooks | Spanish | Instructions and reasoning |
@@ -192,6 +205,9 @@ pip install -r requirements.txt
 # T0.1-C: the AFMoE format against llama.cpp (clones and builds llama.cpp the first time, ~15–25 min)
 python scripts/smoke_format_afmoe.py
 
+# T0.1b: the 64K tokenizer in llama.cpp, in the AFMoE format (builds llama-tokenize the first time)
+python scripts/smoke_tokenizer.py
+
 # The training stack (FSDP2, Muon, balancing, checkpoint), 2 processes on CPU with a tiny model
 torchrun --nproc_per_node 2 scripts/bench_afmoe.py --config configs/tiny_afmoe.json \
     --seq 64 --micro 2 --steps 2 --ckpt-test --out /tmp/t0_2v2_cpu.jsonl
@@ -206,7 +222,7 @@ python scripts/test_train_cpu.py
 |---|---|---|---|
 | [`t0_3_t2_lr_2xT4.ipynb`](notebooks/t0_3_t2_lr_2xT4.ipynb) | GPU T4 x2 | ~9.5 h per run | `results/t0_3_t2/<run>.jsonl` and `.png`, and the checkpoint before the decay |
 | [`t0_2v2_afmoe_2xT4.ipynb`](notebooks/t0_2v2_afmoe_2xT4.ipynb) | GPU T4 x2 | ~1–1.25 h | `results/t0_2v2.jsonl` (done: [`results/t0_2v2_intento2/`](results/t0_2v2_intento2/)) |
-| [`t0_1_formato_mtp_tokenizador.ipynb`](notebooks/t0_1_formato_mtp_tokenizador.ipynb) | None (CPU) | ~15–25 min | Format A and **tokenizer** checks; only the tokenizer part still matters |
+| [`t0_1_formato_mtp_tokenizador.ipynb`](notebooks/t0_1_formato_mtp_tokenizador.ipynb) | None (CPU) | ~15–25 min | Format A and tokenizer checks, kept as a record: the tokenizer check is now `scripts/smoke_tokenizer.py` (T0.1b) |
 
 In each notebook set `REPO_URL` to your clone (or upload the repo as a Kaggle dataset and leave it empty), turn **Internet on**, and run all cells. Internet access requires a phone-verified Kaggle account. `t0_2_velocidad_memoria_2xT4.ipynb` measured format A and is kept only as a record.
 
@@ -214,10 +230,12 @@ In each notebook set `REPO_URL` to your clone (or upload the repo as a Kaggle da
 
 ```
 ludwig-lm/
+├── tokenizer/      # the 64K tokenizer, fixed: recipe, control tokens and compression in its README
 ├── ludwig_lm/      # afmoe.py: the model (AFMoE), its kernel, losses and balancer · muon.py · data.py: provisional data reader
 │                   # · checkpoint.py: checkpoints with a verified resume · model.py: format A (fallback)
 ├── configs/        # ludwig2_afmoe.json (the real model), tiny_afmoe.json (tests); ludwig2.json, tiny.json (format A)
-├── scripts/        # train.py (the training loop) and test_train_cpu.py, bench_afmoe.py (T0.2 v2), smoke_format_afmoe.py (T0.1-C),
+├── scripts/        # train.py (the training loop) and test_train_cpu.py, train_tokenizer.py, smoke_tokenizer.py (T0.1b),
+│                   # bench_afmoe.py (T0.2 v2), smoke_format_afmoe.py (T0.1-C),
 │                   # make_notebooks.py, convert_gguf.py, format-A tools
 ├── notebooks/      # Kaggle notebooks, generated by scripts/make_notebooks.py
 ├── patches/        # llama.cpp patch for format A and its technical note
@@ -234,7 +252,8 @@ ludwig-lm/
 - [x] **v1.2** AFMoE format approved
 - [x] **T0.2 v2** The real training stack on 2×T4: the loop and momentum in RAM, ~3,300 tokens/s expected
 - [ ] **T0.3 + T2** Learning rate and FP16 stability: first round done (all stable, ×2 best at 400 steps); second round, ×4 and ×1/×2 to 1,200 steps ([notebook](notebooks/t0_3_t2_lr_2xT4.ipynb))
-- [ ] **T0.1b** Re-run the tokenizer checks with the final 64K tokenizer
+- [x] **Tokenizer** 64K BPE, fixed ([`tokenizer/`](tokenizer/)): 4.16 bytes per token on the trunk mix
+- [x] **T0.1b** The final tokenizer in llama.cpp: identical tokenization, every special id detected
 - [ ] **T1** Data: code source, deterministic loader with decontamination and manifests
 - [ ] **G0** Gate: ≥6 h sustained, save, resume on another account, 16K
 - [ ] **T3** Trunk to 22.5B tokens

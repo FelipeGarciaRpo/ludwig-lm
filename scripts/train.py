@@ -26,6 +26,7 @@ import argparse
 import json
 import math
 import os
+import re
 import subprocess
 import sys
 import time
@@ -135,6 +136,15 @@ def git_commit():
         return None
 
 
+_KAGGLE_OWNER = re.compile(r"(/kaggle/input/(?:notebooks|datasets|models)/)[^/\"\s]+")
+
+
+def public(text: str) -> str:
+    """Kaggle mounts another account's notebook output under its username (/kaggle/input/notebooks/<user>/...):
+    logs and checkpoints keep the path without it."""
+    return _KAGGLE_OWNER.sub(r"\1<usuario>", text)
+
+
 class Log:
     def __init__(self, path, enabled: bool, tag: str):
         self.enabled, self.tag, self.f = enabled, tag, None
@@ -144,12 +154,12 @@ class Log:
 
     def row(self, kind, **kw):
         if self.f:
-            self.f.write(json.dumps({"type": kind, "tag": self.tag, "time": round(time.time(), 1), **kw}) + "\n")
+            self.f.write(public(json.dumps({"type": kind, "tag": self.tag, "time": round(time.time(), 1), **kw})) + "\n")
             self.f.flush()
 
     def say(self, msg):
         if self.enabled:
-            print(msg, flush=True)
+            print(public(msg), flush=True)
 
 
 class Alarms:
@@ -205,7 +215,7 @@ def main(argv=None):
         code = Trainer(args, log, rank, world, device, use_cuda, t_proc).run()
     except Exception:
         err = traceback.format_exc()
-        print(f"[rank {rank}] {err}", flush=True)
+        print(public(f"[rank {rank}] {err}"), flush=True)
         log.row("end", status="error", error=err[-3000:])
         os._exit(1)        # without destroy_process_group: the other rank may be inside a collective; torchrun ends it
     dist.destroy_process_group()
@@ -374,7 +384,7 @@ class Trainer:
             meta = {"step": step, "tokens": tokens, "reason": reason, "tag": a.tag, "world": self.world,
                     "micro": a.micro, "seq": a.seq, "tokens_per_step": a.tokens_per_step, "lr_mult": a.lr_mult,
                     "loss_history": list(hist), "train_hours": self.hours_before + (time.time() - self.t_loop) / 3600,
-                    "args": vars(a), "code": self.code, "saved_at": time.time()}
+                    "args": json.loads(public(json.dumps(vars(a)))), "code": self.code, "saved_at": time.time()}
             ckpt.save(path, self.model, self.opts, self.scaler, self.balancer, self.rank,
                       {"reader": rstate, "next_batch_sha": batch_hash(nxt[0])}, meta)
             if self.rank == 0:
@@ -389,7 +399,7 @@ class Trainer:
             return path
         except Exception:  # a failed save must not end a run that is otherwise fine
             err = traceback.format_exc()
-            print(f"[rank {self.rank}] checkpoint failed:\n{err}", flush=True)
+            print(public(f"[rank {self.rank}] checkpoint failed:\n{err}"), flush=True)
             self.log.row("alarm", step=step, alarm="checkpoint_failed", error=err[-2000:])
             return None
 
@@ -403,10 +413,12 @@ class Trainer:
         ok = torch.tensor(float(exact), device=self.device)
         dist.all_reduce(ok, op=dist.ReduceOp.MIN)
         self.expected_sha = extra["next_batch_sha"] if meta.get("micro") == a.micro else None
+        # both sides without the Kaggle username: the same dataset attached from another account is not a change
+        # (and a checkpoint written before the paths were redacted compares the same way)
+        then, now = (json.loads(public(json.dumps(d))) for d in (meta["args"], vars(a)))
         info = {"path": str(path), "step": meta["step"], "tokens": meta["tokens"], "from_tag": meta.get("tag"),
                 "reason": meta.get("reason"), "state_exact": bool(ok.item()), "seconds": round(time.time() - t, 1),
-                "changed_args": {k: [meta["args"].get(k), v] for k, v in vars(a).items()
-                                 if k in meta["args"] and meta["args"][k] != v
+                "changed_args": {k: [then[k], v] for k, v in now.items() if k in then and then[k] != v
                                  and k not in ("resume", "out", "tag", "max_hours", "save_dir")}}
         self.log.row("resume", **info)
         self.log.say(f"[resume] {path} at step {meta['step']}: state bit-exact = {info['state_exact']} "
