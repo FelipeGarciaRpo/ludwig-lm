@@ -301,3 +301,24 @@ Todo lo que se corre, se mide o se decide, en orden. Cada entrada dice qué se h
   - La ganancia de qk sube con el LR (1.59 en ×2). En un tronco 200 veces más largo hay que vigilarla.
 - **G0 (5.7):** con datos provisionales ya se cumplen tres de las cinco condiciones: más de 6 h sin NaN y con la escala estable, más de 2,600 tokens/s y menos de 13.5 GiB. Faltan los guardados en Hugging Face con la reanudación en otra cuenta y los 50 pasos a 16K, y todo con el lector y el tokenizador reales.
 - **Siguiente:** el chat de diseño decide si se corre ×4, como pide la regla, y qué hacer con el balanceo de ×2. Mientras, el tokenizador de 64K corre en Kaggle, en CPU.
+
+## 2026-11-14 · Segunda ronda de la T2 y regla del LR del tronco (patch 0008)
+
+- Qué: el chat de diseño revisó la primera ronda y preparó la segunda.
+- Lectura de la primera ronda:
+  - La diferencia de velocidad entre corridas es de las máquinas: dentro de cada corrida la velocidad no
+    cambia con la carga (correlación −0.07 / +0.17 / +0.01 desde el paso 100; ×2 va igual de rápido con
+    la carga en 7.2× que en 2.1×).
+  - En ×2 sí hubo un episodio de desbalance: las ventanas de 50 pasos que terminan en 300 y 320 llegaron
+    a 3.6× y 4.2×; SMEBU lo corrigió en ~30 pasos y en el 400 todas las capas quedan bajo 1.11×. El balanceo
+    se juzga por capa en esa ventana, y λ escala con el LR: 0.01 × el multiplicador (P2b).
+  - La ganancia de qk crece casi lineal con el LR constante y se frena con el enfriamiento.
+- Decisión (P9, fijada antes de la segunda ronda): el mejor LR baja con la duración del entrenamiento
+  (exponente ~0.32 en la literatura, para AdamW y para Muon). Se mide aquí con lr-x4 (400 pasos, λ 0.04)
+  y lr-x1-1200 / lr-x2-1200 (siguen ×1 y ×2 desde el paso 320 hasta 1,200, con λ 0.01).
+  scripts/lr_horizon.py lo lleva a los 25B del tronco; con la primera ronda sola da ×1.
+- Cambios: scripts/lr_horizon.py; notebook con LAMBDA, PRUEBA y REANUDAR = "auto"; DECISIONS (P6a, P2b, P9),
+  recuadro del DISENO y READMEs con los resultados de la primera ronda.
+- Dónde: chat de diseño; probado en CPU: test_train_cpu.py da PASS y la continuación en dos sesiones con
+  REANUDAR = "auto" sale exacta.
+- Siguiente: la segunda ronda en tres cuentas.
