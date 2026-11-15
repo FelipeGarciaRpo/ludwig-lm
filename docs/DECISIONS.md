@@ -56,6 +56,18 @@ The tokenizer trained on Kaggle's CPU in 56 min ([`results/tokenizador_64k/con_t
 | P11 | ✅ **Data mode turns every added token into text.** The 64K tokenizer keeps `<think>`, `</think>` and the tool tags (ids 4–9) as added tokens that are not special, as Qwen3 does, so decoding shows them in chat. `encode_special_tokens` covers only the special ones, so with the provisional reader a `<think>` written in a web page would have become id 4. `load_tokenizer` (`ludwig_lm/data.py`) now does what the tokenizer's own loader does: no control id comes from text. The pipeline places them: EOS after each document now, and in T1 FIM on code and the chat format of instruction and reasoning data (DISENO 4.3.7: `<think>` as id 4, never as plain text). | `scripts/test_train_cpu.py` encodes every control string with the real tokenizer: no control id, exact round trip. The LR rounds keep their own code zips |
 | P12 | ✅ **Padding is id 1 (`<\|pad\|>`), and BOS is id 0, the EOS, never added**, in `configs/ludwig2_afmoe.json`. Packed pre-training never pads, but in SFT the usual collators set the label to −100 wherever the input is the padding id. With padding = EOS, the real EOS of every answer would be masked too, and the model would never learn to stop. P8's fix (the `padding_idx` row starts like the others) now applies to row 1. BOS = EOS is Qwen's convention, and it matches packed training, where every document starts after an EOS. Without a BOS id, llama.cpp falls back to id 11, which here is `<\|fim_middle\|>`, for any template or tool that asks for the BOS. | transformers' `DataCollatorForLanguageModeling` masks labels equal to `pad_token_id`. T0.1b: with no `bos_token_id`, llama.cpp reported BOS = 11; with 0, BOS = 0 and `add_bos` false |
 
+### The trunk's data (November 15, 2026)
+
+Pipe chose mix v3 on November 13. An independent review closed its sources and internal splits on November 14 and 15 without moving any block's share ([`results/datos_tronco_v3/`](../results/datos_tronco_v3/)). The full tables are in DISENO 4.2–4.10.
+
+| ID | Decision | Evidence |
+|---|---|---|
+| P13 | ✅ **Trunk mix v3:**<br>• English 36%: FineWeb-Edu dedup 14, DCLM dedup 11, FinePhrase 6, English Wikipedia and StackExchange 3, Cosmopedia v2 2.<br>• Spanish 24%: FineWeb2-HQ 13, TransWeb-Edu 8.5, Spanish Wikipedia 2, parallel text 0.5.<br>• Code 28%, math 10% (FineMath 4+ and InfiWebMath 4+) and instructions 2%.<br>English:Spanish is 60:40 in natural language. The sources are sized for a 100B horizon (trunk to 90B) with at most ~4 passes over any of them; going past 100B means revisiting them. Replaces D17's trunk table and D18's 10%. | Pipe's goals (DISENO 1): "totalmente bilingüe", Python and JS/TS at a beginner's level, reasoning and basic math |
+| P14 | ✅ **Code: Stack-Edu's permissively licensed files, with their content from `common-pile/stackv2_edu_filtered`, matched by `blob_id`.**<br>• It holds ~90% of them in Python (89.2% of the files), JavaScript (88.3%) and TypeScript (90.4%): ≈5.30B, 2.39B and 1.39B tokens, which are 1.9, 2.7 and 2.5 passes at 90B.<br>• The filter is Stack-Edu's list of permissive `blob_id`s, never Common Pile's score, which is not comparable with Stack-Edu's.<br>• No download from Software Heritage and no pass over The Stack v3. Software Heritage stays optional, for the ~10% Common Pile lacks.<br>• These are the files the tokenizer saw. HTML and CSS come from The Stack v1 dedup (`data/html`, `data/css`), as in the tokenizer. | [`common_pile.txt`](../results/datos_tronco_v3/common_pile.txt); [`revision_fuentes.txt`](../results/datos_tronco_v3/revision_fuentes.txt), points 2 and 3 |
+| P15 | ✅ **The remaining sources and internal splits.**<br>• DCLM (Zyphra's dedup) stays: it is CC-BY-4.0, and its card's "intended for research use only" sits under out-of-scope use, explained by performance. The sentence goes into the data card.<br>• StackExchange: `HuggingFaceH4/stack-exchange-preferences`, without Stack Overflow.<br>• Notebooks: `bigcode/starcoderdata`, `jupyter-*`.<br>• Parallel text: UN 0.35 + Europarl 0.15, without their test sets.<br>• Instructions: OpenMathReasoning 1.9 (only solutions that fit in 2K) + OpenAssistant 0.1. OpenThoughts3 stays out until audited.<br>• Stack Overflow: `mikex86/stackoverflow-posts` (June 14, 2023, CC BY-SA per row), with `Id` and `OwnerUserId` in the manifest for attribution.<br>• Splits: FinePhrase 1.5 per format; Wikipedia 1.5 + StackExchange 1.5; notebooks 1.1 + Markdown 1.0 + Stack Overflow 1.0; JS 7.3 + TS 3.9; HTML 0.7 + CSS 0.7; SQL 0.55 + Shell 0.55. | [`revision_fuentes.txt`](../results/datos_tronco_v3/revision_fuentes.txt). OLMo 2, SmolLM2 and SmolLM3 trained on DCLM and released Apache-2.0 weights |
+| P16 | ✅ **Caps on model-written text, by type** (replaces D19's 10%):<br>• Free generation ≤5% of the trunk.<br>• Rewriting ≤10%, and ≤30% of the English web.<br>• Machine translation ≤10%, and ≤40% of the Spanish.<br>• Total ≤20%, with no single generator above 10%. Branches ≤35%.<br>v3 sits at ~4 / 6 / 8.5, 18.5% in total, and its largest generator is Mistral-7B at 8.5%. | Meta (arXiv 2510.01631): the good dose of rewritten text is ~30%. FinePhrase (arXiv 2604.13977): from 10% to 90% rewritten, every mix beats web alone. TransWeb-Edu (arXiv 2410.23956). The translation cap is judgment, not measurement |
+| P17 | ✅ **No proxy mix test before the trunk.** Its rule could barely fail, a failure would move ~4 points that the branches can make up, and it costs 64–80 h of T4 and ~3 days. Instead, validation bits per byte per domain from step 0, reviewed at 1B and 2.25B trunk tokens. Two 0.5B runs on spare accounts during the first week remain optional. | DataDecide: comparisons with 150M models pick the winner at 1B ~80% of the time. [`revision_fuentes.txt`](../results/datos_tronco_v3/revision_fuentes.txt), point 8 |
+
 ---
 
 ## Model
@@ -162,11 +174,11 @@ The tokenizer trained on Kaggle's CPU in 56 min ([`results/tokenizador_64k/con_t
 ## Data
 
 ### D17. Mixes
-✅ **Trunk** (stationary from 0 to 900B tokens):
+✅ **Trunk**, mix v3 (P13), stationary and sized for a 100B horizon:
 
 | English web | Code | Math | Knowledge | Synthetic textbooks | Spanish | Instructions and short reasoning |
 |---|---|---|---|---|---|---|
-| 50% | 20% | 10% | 5% | 3% | 10% | 2% |
+| 31% | 28% | 10% | 3% | 2% | 24% | 2% |
 
 ✅ **Branches** (~10% of each milestone):
 
@@ -174,22 +186,23 @@ The tokenizer trained on Kaggle's CPU in 56 min ([`results/tokenizador_64k/con_t
 |---|---|---|---|---|---|
 | 26% | 25% | 22% | 13% | 4% | 10% |
 
-- **Code** is mostly Python (45%) and JS/TS (25%). ⏳ Source: Stack-Edu or The Stack v3 filtered, decided before the trunk.
-- **Rule:** at most ~4 passes over any source up to 1T tokens; scarce, high-quality data goes only into the branches.
+- **Code:** Python and JS/TS get the same tokens (11.2% each). ✅ Source: Stack-Edu's permissively licensed files, with their content from Common Pile (P14).
+- **Rule:** at most ~4 passes over any source up to a 90B trunk; scarce, high-quality data goes only into the branches.
 
-### D18. Spanish: 10%
-✅ 10% in the trunk and the branches, 25–30% in SFT. That leaves the trunk's natural language at about 86% English and 14% Spanish.
+### D18. Spanish: 24%
+✅ 24% of the trunk (P13), 10% in the branches, 25–30% in SFT. That puts the trunk's natural language at 60% English and 40% Spanish.
 
-- **Not 50/50:** in controlled studies, a dominant language helps the less frequent one, and at scale a 90/10 mix beat 50/50 in both languages. English also has the best data and nearly all the benchmarks.
-- **Not 4%:** ~1B Spanish tokens in v1 is too little to hold a conversation.
+- **The goal:** a "fully bilingual" model (DISENO 1).
+- **Not 90/10:** the result that a dominant language helps the other, with 90/10 beating 50/50, comes from cloned languages. The precedent for a small, truly bilingual model is CroissantLLM (1.3B), trained 1:1 on English and French.
 - **Precedent:** SmolLM3 (3B) used 12% multilingual web across 5 languages and beat Qwen2.5-3B and Llama 3.2 3B on Spanish HellaSwag.
-- **Measured with:** Spanish bits per byte, tokenizer compression, MGSM, Belebele, Global-MMLU, Spanish HellaSwag and Flores (EN↔ES). If Spanish lags, the branches raise it without touching the trunk.
+- **Cost:** human-written English web drops to 25% of the trunk, a risk for general knowledge and English benchmarks.
+- **Measured with:** bits per byte per domain from step 0, reviewed at 1B and 2.25B trunk tokens (P17); tokenizer compression; MGSM, Belebele, Global-MMLU, Spanish HellaSwag and Flores (EN↔ES). If Spanish lags, the branches raise it without touching the trunk.
 
 ### D19. Synthetic data
-✅ At most 10% of the trunk and 35% of each branch; at least 3 teacher families; near-duplicate removal; a style watch (n-gram diversity, teacher tics such as "Certainly!").
+✅ Caps by type (P16): free generation ≤5% of the trunk, rewriting ≤10%, machine translation ≤10%, ≤20% in total, no single generator above 10%, and ≤35% of each branch. At least 3 teacher families; near-duplicate removal; a style watch (n-gram diversity, teacher tics such as "Certainly!").
 
 ### D20. Licenses
-✅ 🟢 open human text and outputs of permissively licensed open models (DeepSeek-R1/V3, Qwen3, QwQ, gpt-oss, Mixtral). 🟡 models whose license sets conditions (for example, Llama's naming clause): out by default. 🔴 outputs of closed APIs, whose terms forbid training competing models (for example TinyGSM, made with GPT-3.5): never.
+✅ 🟢 open human text and outputs of permissively licensed open models (DeepSeek-R1/V3, Qwen3, QwQ, gpt-oss, Mixtral, Mistral-7B, SmolLM2). 🟡 models whose license sets conditions (for example, Llama's naming clause): out by default. 🔴 outputs of closed APIs, whose terms forbid training competing models (for example TinyGSM, made with GPT-3.5): never.
 
 - **Code:** Apache-2.0 now.
 - **Weights:** Apache-2.0 ⏳ only after auditing the data card source by source. This gates every release.

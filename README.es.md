@@ -20,7 +20,7 @@
 
 - **Hecho para tu PC.** 0.49B parámetros activos por token, ~1.1 GB en 4 bits y una caché KV 3 veces más chica que con atención completa a 16K, porque 20 de sus 26 capas solo miran los últimos 2,048 tokens.
 - **Entrenado con cómputo gratis.** Dos GPUs T4 de Kaggle, con un relevo entre amigos: cada uno corre sus turnos en su propia cuenta.
-- **Inglés y español.** 10% de español en el preentrenamiento y 25–30% en el ajuste fino. [¿Por qué no 4% ni 50%?](#por-qué-10-de-español)
+- **Inglés y español.** 24% de español en el tronco, 60/40 con el inglés en lenguaje natural, y 25–30% en el ajuste fino. [¿Por qué 24%?](#por-qué-24-de-español)
 - **Razona, a su escala.** `<think>` desde el día uno, 10–22% de matemática, Python como calculadora y ajuste fino con cadenas de pensamiento cortas.
 - **Abierto de punta a punta:** pesos, código, la receta de datos con manifiestos exactos, logs completos, checkpoints intermedios y lo que salió mal.
 
@@ -179,20 +179,27 @@ BPE a nivel de bytes con 65,536 tokens y la regex de corte de Qwen2, entrenado e
 
 | | Web en inglés | Código | Matemática | Conocimiento | Libros sintéticos | Español | Instrucción y razonamiento |
 |---|---|---|---|---|---|---|---|
-| **Tronco** | 50% | 20% | 10% | 5% | 3% | 10% | 2% |
+| **Tronco** (mezcla v3) | 31% | 28% | 10% | 3% | 2% | 24% | 2% |
 | **Ramas** | 26% | 25% | 22% | 4% | — | 10% | 13% |
 
-- **Fuentes:** FineWeb-Edu y DCLM; Stack-Edu o The Stack v3 (sobre todo Python y JS/TS); FineMath, OpenWebMath y MegaMath; Wikipedia, arXiv y StackExchange; Cosmopedia; FineWeb2 y TransWeb-Edu en español; OpenMathReasoning para las trazas.
+- **Fuentes:**
+  - Inglés: FineWeb-Edu y DCLM (sin duplicados), FinePhrase, Wikipedia, StackExchange y Cosmopedia.
+  - Español: FineWeb2-HQ, TransWeb-Edu, Wikipedia y texto paralelo de la ONU y Europarl.
+  - Código: los archivos de Stack-Edu con licencia permisiva, con el contenido de Common Pile; The Stack v1 para HTML y CSS; notebooks de StarCoderData; Stack Overflow.
+  - Matemática: FineMath 4+ e InfiWebMath 4+.
+  - Instrucción: OpenMathReasoning y OpenAssistant.
+
+  La tabla completa está en [`docs/es/DISENO.md`](docs/es/DISENO.md) (4.2–4.4), y la revisión que la respalda, en [`results/datos_tronco_v3/`](results/datos_tronco_v3/).
 - **Licencias:** solo texto humano abierto y salidas de modelos abiertos con licencia permisiva. **Nunca salidas de APIs cerradas.** Los pesos se publican solo después de auditar la ficha de datos fuente por fuente.
-- **Datos sintéticos:** con tope de 10% del tronco y 35% de cada rama, de al menos 3 familias de maestros.
+- **Texto escrito por modelos:** con topes por tipo en el tronco (generación libre ≤5%, reescritura ≤10%, traducción ≤10%, ≤20% en total; la v3 queda en 18.5%) y de 35% en cada rama, de al menos 3 familias de maestros.
 - **Descontaminación** contra los benchmarks con filtros de Bloom de 13-gramas; el val de cada fuente nunca se entrena.
 
-### Por qué 10% de español
+### Por qué 24% de español
 
-- **No 50/50.** En experimentos controlados, un idioma dominante ayuda al menos frecuente, y a escala una mezcla 90/10 le ganó a la 50/50 en *los dos* idiomas. Además, el inglés tiene los mejores datos y casi todos los benchmarks.
-- **No 4%.** Serían ~1B tokens de español en la v1: muy poco para que converse bien.
-- **10%** da ~2.5B tokens de español en la v1 y ~90B a 1T, más o menos 86/14 en lenguaje natural. SmolLM3 usó una proporción parecida (12% multilingüe) y le fue bien en español.
-- Se mide con bits por byte en español, MGSM, Belebele, Global-MMLU, HellaSwag y Flores. Si el español se queda atrás, las ramas lo suben sin tocar el tronco.
+- **La meta es un modelo totalmente bilingüe.** Con 24% del tronco, el lenguaje natural queda 60/40 entre inglés y español: ~5.4B tokens de español en el tronco de la v1.
+- **No 90/10.** Que un idioma dominante ayude al otro, y que 90/10 le ganara a 50/50, viene de experimentos con idiomas clonados. El precedente de un modelo chico bilingüe de verdad es CroissantLLM (1.3B), entrenado con inglés y francés 1:1. A SmolLM3 le fue bien en español con 12% de web multilingüe.
+- **El costo:** la web en inglés escrita por personas baja a 25% del tronco.
+- **Se mide** con bits por byte por dominio desde el paso 0, más MGSM, Belebele, Global-MMLU, HellaSwag y Flores. Si el español se queda atrás, las ramas lo suben sin tocar el tronco.
 
 ## Cómo empezar
 
@@ -254,7 +261,8 @@ ludwig-lm/
 - [ ] **T0.3 + T2** Learning rate y estabilidad en FP16: primera ronda hecha (todas estables, ×2 la mejor a 400 pasos); segunda ronda, ×4 y ×1/×2 hasta 1,200 pasos ([notebook](notebooks/t0_3_t2_lr_2xT4.ipynb))
 - [x] **Tokenizador** BPE de 64K, fijado ([`tokenizer/`](tokenizer/)): 4.16 bytes por token en la mezcla del tronco
 - [x] **T0.1b** El tokenizador final en llama.cpp: tokenización idéntica y todos los ids especiales detectados
-- [ ] **T1** Datos: fuente de código, lector determinista con descontaminación y manifiestos
+- [x] **Mezcla v3** Fuentes y repartos cerrados, código incluido ([`results/datos_tronco_v3/`](results/datos_tronco_v3/))
+- [ ] **T1** Datos: archivos pre-tokenizados, construidos en la CPU de Kaggle, con descontaminación y manifiestos
 - [ ] **G0** Compuerta: ≥6 h sostenidas, guardado, reanudación en otra cuenta, 16K
 - [ ] **T3** Tronco hasta 22.5B tokens
 - [ ] **T4** Rama de la v1: 2.5B tokens, 16K

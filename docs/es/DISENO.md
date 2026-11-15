@@ -32,6 +32,13 @@
 > 3. **El balanceo se juzga en la ventana de 50 pasos**, por capa, y **λ escala con el LR** (0.01 × el multiplicador). En ×2 hubo un episodio de ~4× que SMEBU corrigió en ~30 pasos.
 > 4. **La diferencia de velocidad entre corridas es de las máquinas**, no del desbalance: dentro de cada corrida la velocidad no cambia con la carga.
 
+> **Datos del tronco (15 de noviembre de 2026)** ([`results/datos_tronco_v3/`](../../results/datos_tronco_v3/); decisiones P13–P17 de [`../DECISIONS.md`](../DECISIONS.md)). La sección 4 ya está reescrita con esto:
+> 1. **Mezcla v3,** elegida por Pipe el 13 de noviembre: inglés 36%, español 24%, código 28%, matemática 10% e instrucción 2%, dimensionada para 100B.
+> 2. **El código** son los archivos permisivos de Stack-Edu, con el contenido de `common-pile/stackv2_edu_filtered`, que trae ~90% de los de Python, JS y TS sin pasar por Software Heritage. HTML y CSS salen de The Stack v1.
+> 3. **Fuentes y repartos cerrados:** DCLM se queda, y StackExchange, los notebooks, el texto paralelo y la instrucción ya tienen fuente.
+> 4. **Topes por tipo** para el texto escrito por modelos. La v3 queda en 18.5% del tronco.
+> 5. **Sin prueba proxy de mezcla antes del tronco:** la reemplaza la evaluación por dominio desde el paso 0.
+
 **Leyenda:** ✅ decidido · ❓ decide Pipe · 📏 se mide antes de fijarlo · 🧪 se prueba en corrida corta · 🟢🟡🔴 licencia de datos (ver 4.8)
 
 ---
@@ -52,7 +59,7 @@
 
 **Objetivo:** el mejor modelo de ~0.5B activos que se pueda entrenar gratis en 2×T4, que corra en cualquier PC y que muestre todos los pasos.
 
-**Prioridades de capacidad:** inglés + Python que razone > JS/TS > español (un plus) > otros lenguajes.
+**Objetivos de capacidad (Pipe, 13 de noviembre de 2026):** "totalmente bilingüe" en inglés y español; que "domine como un nivel principiante" Python y JS/TS; y que "razone y sepa matemáticas básicas".
 
 **Criterios para publicar cada versión:**
 1. **Formato:** transformers y llama.cpp dan los mismos logits (prueba de la sección 12).
@@ -200,63 +207,96 @@ La T0.1 (`scripts/smoke_format.py`) arma un modelo diminuto con exactamente la e
 
 ## 4. Datos
 
+> **Mezcla v3,** elegida por Pipe el 13 de noviembre de 2026. Fuentes y repartos cerrados el 15 de noviembre con una revisión independiente ([`results/datos_tronco_v3/`](../../results/datos_tronco_v3/); decisiones P13–P17 de [`../DECISIONS.md`](../DECISIONS.md)).
+
 ### 4.1 Qué se reutiliza del plan del modelo grande y qué cambia
 
 **Se reutiliza tal cual (PLAN_MODELO_NUEVO v0.5):**
-- **Tronco + ramas.** El tronco lleva una mezcla estacionaria que aguanta hasta 1T sin pasar de ~4 pasadas por ninguna fuente. Lo escaso y lo mejor van solo en las ramas de enfriamiento.
-- **Fuentes y procesamiento** (4.2 y 4.3).
+- **Tronco + ramas.** El tronco lleva una mezcla estacionaria. Lo escaso y lo mejor van solo en las ramas de enfriamiento.
 - **Reglas de licencias** 🟢🟡🔴 (4.8).
 
-**Cambia porque el modelo es ~4 veces más chico:**
-1. **Menos dominios.** Con menos capacidad, cada dominio diluye a los demás. El código se concentra en Python y JS/TS.
+**Cambia porque el modelo es ~4 veces más chico, y por los objetivos de Pipe (sección 1):**
+1. **Menos dominios.** Con menos capacidad, cada dominio diluye a los demás. El código se concentra en Python y JS/TS, con los mismos tokens para los dos.
 2. **Más matemática:** 10% en el tronco (antes 6%) y 22% en las ramas (antes 18%), porque la meta es razonar. MobileLLM-R1 subió la matemática a ~35% en su fase 2 de preentrenamiento, y le funcionó.
-3. **Español al 10%** en el tronco y las ramas, y 25–30% en el SFT (4.9).
-4. **Trazas más cortas:** los modelos chicos aprenden mejor de cadenas cortas (sección 9).
-5. **Contexto de 16K** en la v1 (antes 32K).
+3. **Bilingüe:** español al 24% del tronco (60/40 con el inglés en lenguaje natural), al 10% en las ramas y al 25–30% en el SFT (4.9).
+4. **Horizonte de 100B:** las fuentes están dimensionadas para que ninguna pase de ~4 pasadas hasta un tronco de 90B. Pasar de 100B pide revisarlas.
+5. **Trazas más cortas:** los modelos chicos aprenden mejor de cadenas cortas (sección 9).
+6. **Contexto de 16K** en la v1 (antes 32K).
 
 ### 4.2 Fuentes
 
-| Dominio | Fuente | Tamaño aprox. | Licencia | Dónde va |
-|---|---|---|---|---|
-| Web educativa | FineWeb-Edu (puntaje ≥3; ≥4 en las ramas) | ~1.3T | 🟢 ODC-By | Tronco y ramas |
-| Web diversa | DCLM-baseline | ~3.8T | 📏 | Tronco y ramas |
-| Libros de texto sintéticos | Cosmopedia v2 (generado con Mixtral) | ~25–28B | 📏 | Tronco y ramas |
-| Conocimiento | Wikipedia (inglés), arXiv, StackExchange | 3.7B / 28B / 19.6B | 📏 | Tronco y ramas |
-| Código | Stack-Edu (Python 21.8B, JS 11.1B, TS 3.0B…) o The Stack v3 filtrado con sus clasificadores ❓ | 125B | 📏 | Tronco y ramas |
-| Código explicado | Notebooks de Jupyter y Kaggle, issues de GitHub | — | 📏 | Tronco y ramas |
-| Matemática | FineMath 3+ y 4+, OpenWebMath, Algebraic Stack, MegaMath | 34B / 12.6B / 12.6B / — | 📏 | Tronco y ramas |
-| Razonamiento | OpenMathReasoning: 3.2M soluciones con cadena de pensamiento + 1.7M con Python (TIR), generadas con DeepSeek-R1 y QwQ-32B | Millones de soluciones | 🟢 CC-BY-4.0 | Ramas y SFT |
-| Matemática escolar | Train de GSM8K y MATH, con soluciones cortas generadas en la fábrica (9.3) | — | 🟢 | Ramas y SFT |
-| Español | FineWeb2 (español) filtrado por calidad, Wikipedia en español, TransWeb-Edu en español (FineWeb-Edu traducido) y un poco de texto paralelo inglés–español | De sobra | 📏 | Tronco, ramas y SFT |
+| Bloque | Fuente (id en Hugging Face) | Licencia | Notas |
+|---|---|---|---|
+| Web educativa | FineWeb-Edu sin duplicados (`HuggingFaceTB/smollm-corpus`, `fineweb-edu-dedup`) | 🟢 ODC-By + términos de Common Crawl | |
+| Web diversa | DCLM sin duplicados (`Zyphra/dclm-dedup`) | 🟢 CC-BY-4.0 | La ficha original dice "intended for research use only" en sus usos fuera de alcance, y lo justifica por rendimiento. Se anota en la ficha de datos (P15) |
+| Web reescrita | FinePhrase (`HuggingFaceFW/finephrase`), formatos faq, tutorial, math y table | 🟢 ODC-By; reescrita con SmolLM2-1.7B-Instruct (Apache 2.0) | La reescritura está en `rollout_results`; `text` es la página original |
+| Conocimiento | Wikipedia en inglés (`wikimedia/wikipedia`, 20231101.en) y StackExchange sin Stack Overflow (`HuggingFaceH4/stack-exchange-preferences`, volcado de febrero de 2023) | CC-BY-SA | StackExchange guarda el autor, su perfil y el link de cada respuesta, que es lo que pide la atribución |
+| Libros sintéticos | Cosmopedia v2 (`HuggingFaceTB/smollm-corpus`) | 🟢 ODC-By; generado con Mixtral-8x7B | |
+| Español nativo | FineWeb2-HQ (`epfml/FineWeb2-HQ`, `spa_Latn`) | 🟢 ODC-By + términos de Common Crawl | |
+| Español traducido | TransWeb-Edu (`britllm/TransWeb-Edu-Spanish`): FineWeb-Edu traducido con Mistral-7B-Instruct-v0.1 | 🟢 ODC-By; Mistral es Apache 2.0 (P10) | No confundir con TransWebEdu, traducido con NLLB-200 y de uso no comercial: ese no entra |
+| Español enciclopédico | Wikipedia en español (`wikimedia/wikipedia`, 20231101.es) | CC-BY-SA | |
+| Texto paralelo | Corpus paralelo de la ONU y Europarl, inglés–español, sin sus sets de prueba | ONU: pide citar la fuente. Europarl: sin restricciones conocidas | Traducción humana; 25.2M y 2.0M de pares |
+| Código | Stack-Edu (`HuggingFaceTB/stack-edu`), solo los archivos con licencia permisiva, con el contenido de `common-pile/stackv2_edu_filtered` cruzado por `blob_id` | La de cada archivo | Trae ~90% de los permisivos de Python, JS y TS (4.6). Son los mismos archivos que vio el tokenizador (P14) |
+| HTML y CSS | The Stack v1 sin duplicados (`bigcode/the-stack-dedup`, `data/html` y `data/css`) | La de cada archivo + términos de The Stack | Es lo que vio el tokenizador. 51.2 GB y 8.5 GB comprimidos |
+| Notebooks | StarCoderData (`bigcode/starcoderdata`), subconjuntos `jupyter-*` | La de cada archivo | Sale de The Stack v1, sin duplicados y con los datos personales quitados; ~13 GB |
+| Stack Overflow | `mikex86/stackoverflow-posts`, volcado del 14 de junio de 2023 | CC BY-SA 2.5, 3.0 o 4.0, la de cada fila | Anterior al cambio de condiciones de julio de 2024 |
+| Matemática | FineMath 4+ e InfiWebMath 4+ (`HuggingFaceTB/finemath`) | 🟢 ODC-By + términos de Common Crawl | |
+| Instrucción y razonamiento corto | OpenMathReasoning (`nvidia/OpenMathReasoning`), solo las soluciones que quepan en 2K; OpenAssistant | 🟢 CC-BY-4.0 (soluciones de DeepSeek-R1 y QwQ-32B); Apache-2.0 (texto escrito por personas) | OpenThoughts3 queda fuera hasta auditarlo |
+| Razonamiento (ramas y SFT) | OpenMathReasoning: 3.2M soluciones con cadena de pensamiento + 1.7M con Python (TIR) | 🟢 CC-BY-4.0 | |
+| Matemática escolar (ramas y SFT) | Train de GSM8K y MATH, con soluciones cortas generadas en la fábrica (9.3) | 🟢 | |
 
-- **Del plan grande sigue pendiente:** Stack-Edu no trae el contenido de los archivos; hay que bajarlo de Software Heritage respetando sus términos. The Stack v3 lo trae inline y tiene licencia odc-by. ❓ Decidirlo antes del tronco.
+- **Salen del tronco:** arXiv, OpenWebMath, C#, Go, Rust, Java, C/C++ y los issues de GitHub. De Algebraic Stack solo entraría el Python, si su licencia pasa.
+- **Software Heritage queda opcional.** Solo haría falta para el ~10% de los permisivos que Common Pile no trae, y bajar en masa pide un acuerdo con Software Heritage e INRIA.
 - **Cada fuente lleva su ficha** con licencia, tamaño, versión y hash.
 
 ### 4.3 Procesamiento
 
-1. **Lector propio**, determinista y con reanudación exacta: mezcla ponderada por fuente; streaming de parquet; EOS al final de cada documento; ventanas de largo fijo sin botar colas; guarda y recupera su estado; reanuda saltando por grupos de filas con pyarrow, no con `skip(n)`. En las T4 se reutiliza el de Ludwig 1, ampliado.
-2. **Deduplicación:** cada fuente ya viene deduplicada por dentro. Entre FineWeb-Edu y DCLM se quitan las URL repetidas con un hash de 64 bits.
-3. **Descontaminación** en el momento, con un filtro de Bloom de los 13-gramas de GSM8K, MATH, HumanEval, MBPP, MMLU, ARC, HellaSwag, PIQA y WinoGrande.
-4. **Etiquetas de fuente** al estilo MeCo 🧪: la fuente antepuesta en el tronco y nada en las ramas, para que el modelo final funcione sin etiquetas.
-5. **FIM** en el 10% del código. Los ids 10–13 los pone el lector, no el texto.
-6. **Val:** el último archivo de cada fuente nunca se entrena. La pérdida se reporta en bits por byte, por dominio.
-7. **Trazas y chat** con la plantilla de chat y `<think>` como token (id 4), nunca como texto plano. Si no, el modelo aprende dos formatos para lo mismo.
+1. **Pre-tokenizado una sola vez (T1):**
+   - Todo se convierte a ids una vez y se guarda en arreglos planos uint16, en archivos de tamaño fijo con un manifiesto de hashes. Así lo hacen nanoGPT, Megatron-LM y OLMo.
+   - Se construye en sesiones de CPU de Kaggle, que no gastan cuota de GPU. La sesión de GPU no descarga, no filtra ni tokeniza: reanudar exacto es un offset, y reproducir es comparar hashes.
+   - Para la v1 son ~50 GB. Los archivos quedan privados, porque tienen texto y código de terceros. Se publican la receta, los manifiestos y los hashes.
+   - EOS al final de cada documento y ventanas de largo fijo sin botar colas, como en el lector actual.
+2. **Duplicados:** FineWeb-Edu y DCLM entran en sus versiones sin duplicados, porque según el informe de Zyda-2 las originales traen ~80% de duplicados internos. Entre FineWeb-Edu y DCLM se quitan además las URL repetidas, con un hash de 64 bits.
+3. **Un documento, una sola forma:** el original en inglés, su reescritura en FinePhrase y su traducción en TransWeb-Edu no entran juntos. Se cruzan por el id o la URL de Common Crawl, que las dos conservan. La excepción es el 0.5% de texto paralelo.
+4. **Código:**
+   - El filtro es que el `blob_id` esté entre los archivos permisivos de Stack-Edu, nunca el puntaje de Common Pile, que no es comparable con el de Stack-Edu.
+   - Fuera los encabezados de licencia y los archivos generados o minificados.
+   - Common Pile ya reemplaza correos, teléfonos e IP. Aquí se limpian llaves y contraseñas; en HTML y CSS, que vienen de The Stack v1, también los datos personales.
+   - El manifiesto guarda `repo_name`, `path`, `license`, `url` y `blob_id`, y en Stack Overflow, `Id` y `OwnerUserId`: es la atribución.
+5. **Descontaminación** en el momento, con un filtro de Bloom de los 13-gramas de GSM8K, MATH, HumanEval, MBPP, MultiPL-E, MMLU, ARC, HellaSwag, PIQA y WinoGrande, y de los de español: MGSM, Belebele, Global-MMLU, HellaSwag en español y Flores.
+6. **Etiquetas de fuente** al estilo MeCo 🧪: la fuente antepuesta en el tronco y nada en las ramas, para que el modelo final funcione sin etiquetas.
+7. **FIM** en el 10% del código. Los ids 10–13 los pone el lector, no el texto.
+8. **Val:** el último archivo de cada fuente nunca se entrena. La pérdida se reporta en bits por byte, por dominio, desde el paso 0 (P17).
+9. **Trazas y chat** con la plantilla de chat y `<think>` como token (id 4), nunca como texto plano. Si no, el modelo aprende dos formatos para lo mismo.
 
-### 4.4 Mezcla del tronco (estacionaria, de 0 a 900B) ✅
+### 4.4 Mezcla del tronco v3 (estacionaria) ✅
 
-| Dominio | % | Qué lleva | Tokens en la v1 (tronco de 22.5B) | Pasadas a 1T (tronco de 900B) |
+| Bloque | Fuente | % | Tronco de la v1 (22.5B) | Tronco a 90B |
 |---|---|---|---|---|
-| Web (inglés) | 50% | FineWeb-Edu 60% / DCLM 40% (como SmolLM2) | 11.25B | FineWeb-Edu ~0.21; DCLM ~0.05 |
-| Código | 20% | Ver 4.6 | 4.5B | Python ~3.7 |
-| Matemática | 10% | FineMath 3+, OpenWebMath, Algebraic Stack, MegaMath | 2.25B | ~1.5 sin contar MegaMath |
-| Conocimiento | 5% | Wikipedia, arXiv, StackExchange | 1.1B | ~0.9 |
-| Libros sintéticos | 3% | Cosmopedia v2 | 0.7B | ~1.1 |
-| Español | 10% | FineWeb2, TransWeb-Edu y Wikipedia en español; ≤0.5% de texto paralelo | 2.25B | 📏 |
-| Instrucción y razonamiento corto | 2% | Fuentes 🟢 de 4.2 | 0.45B | Bajo |
+| **Inglés, 36%** | FineWeb-Edu sin duplicados | 14 | 3.15B | 12.6B |
+| | DCLM sin duplicados | 11 | 2.5B | 9.9B |
+| | FinePhrase, 1.5 por formato | 6 | 1.35B | 5.4B |
+| | Wikipedia en inglés 1.5 + StackExchange 1.5 | 3 | 0.68B | 2.7B |
+| | Cosmopedia v2 | 2 | 0.45B | 1.8B |
+| **Español, 24%** | FineWeb2-HQ | 13 | 2.9B | 11.7B |
+| | TransWeb-Edu | 8.5 | 1.9B | 7.7B |
+| | Wikipedia en español | 2 | 0.45B | 1.8B |
+| | Texto paralelo: ONU 0.35 + Europarl 0.15 | 0.5 | 0.11B | 0.45B |
+| **Código, 28%** | Python | 11.2 | 2.5B | 10.1B |
+| | JavaScript 7.3 + TypeScript 3.9 | 11.2 | 2.5B | 10.1B |
+| | Notebooks 1.1 + Markdown 1.0 + Stack Overflow 1.0 | 3.1 | 0.7B | 2.8B |
+| | HTML 0.7 + CSS 0.7 | 1.4 | 0.32B | 1.26B |
+| | SQL 0.55 + Shell 0.55 | 1.1 | 0.25B | 1.0B |
+| **Matemática, 10%** | FineMath 4+ e InfiWebMath 4+ | 10 | 2.25B | 9B |
+| **Instrucción, 2%** | OpenMathReasoning 1.9 + OpenAssistant 0.1 | 2 | 0.45B | 1.8B |
 
+- **Inglés y español:** 60/40 en lenguaje natural.
 - **Contexto:** 2K hasta 50B; 4K desde 50B.
-- **Por qué FineWeb-Edu pesa tanto:** en MobileLLM-R1, quitarlo fue lo que más degradó conocimiento, matemática y código a la vez; lo llaman el "pegamento" entre dominios.
-- **Por qué el código ayuda a razonar:** en el mismo estudio, StarCoder subió más la matemática que lo que OpenWebMath subió el código.
+- **Pasadas:** ninguna fuente pasa de ~4 hasta un tronco de 90B. Las que más se repiten son las de código: Python 1.9, JavaScript 2.7 y TypeScript 2.5 a 90B (4.6). Wikipedia en inglés queda en 0.37.
+- **Por qué la web a gran escala:** en MobileLLM-R1, quitar FineWeb-Edu, su única fuente de web general, fue lo que más degradó a la vez el conocimiento, la matemática y el código. Los autores lo dicen de la web a gran escala, no de una proporción: aquí, la web en inglés (FineWeb-Edu, DCLM y FinePhrase) es el 31% del tronco.
+- **Por qué FinePhrase:** en su estudio, con un modelo de 1.2B y ~21B tokens, DCLM sola saca 13.77, lo mejor de FineWeb-Edu solo 11.82 y una mezcla con 10–20% de web reescrita, 15.1–15.2. Meta encontró que la buena dosis de texto reescrito es ~30% de la mezcla (4.10).
+- **Por qué el código ayuda a razonar:** en MobileLLM-R1, StarCoder subió la matemática más de lo que OpenWebMath subió el código.
+- **Punto débil:** la web en inglés escrita por personas (FineWeb-Edu y DCLM) queda en 25% del tronco, contra 50% en la mezcla anterior. Es un riesgo para el conocimiento general y los benchmarks en inglés, y lo vigila la evaluación por dominio (4.9).
 
 ### 4.5 Mezcla de las ramas de enfriamiento (~10% de cada hito) ✅
 
@@ -275,50 +315,66 @@ La T0.1 (`scripts/smoke_format.py`) arma un modelo diminuto con exactamente la e
 
 ### 4.6 Código por dentro
 
-| Lenguaje | % del código | Tronco v1 | Tronco a 1T | Pasadas por Stack-Edu a 1T |
-|---|---|---|---|---|
-| Python | 45% | 2.0B | 81B | 3.7 |
-| JavaScript + TypeScript | 25% | 1.1B | 45B | 3.2 |
-| C#, Go, Rust, Java, C/C++, SQL, Shell | 15% | 0.7B | 27B | — |
-| Notebooks, issues y Markdown | 15% | 0.7B | 27B | — |
+| Lenguaje | % del tronco | Tronco de la v1 | Tronco a 90B | Disponible: permisivo y en Common Pile | Pasadas a 22.5B / 90B |
+|---|---|---|---|---|---|
+| Python | 11.2 | 2.5B | 10.1B | ≈5.30B | 0.48 / 1.9 |
+| JavaScript | 7.3 | 1.6B | 6.6B | ≈2.39B | 0.69 / 2.7 |
+| TypeScript | 3.9 | 0.88B | 3.5B | ≈1.39B | 0.63 / 2.5 |
+| SQL | 0.55 | 0.12B | 0.5B | ≈1.18B | 0.10 / 0.4 |
+| Shell | 0.55 | 0.12B | 0.5B | ≈0.94B | 0.13 / 0.5 |
+| Markdown | 1.0 | 0.23B | 0.9B | ≈1.90B | 0.12 / 0.5 |
+| Notebooks (StarCoderData) | 1.1 | 0.25B | 1.0B | ~13 GB | — |
+| Stack Overflow | 1.0 | 0.23B | 0.9B | — | — |
+| HTML y CSS (The Stack v1) | 1.4 | 0.32B | 1.26B | 51.2 + 8.5 GB comprimidos | — |
 
-- Si la fuente termina siendo The Stack v3 filtrado, habrá más margen 📏.
+- **De dónde salen los números:** [`results/datos_tronco_v3/common_pile.txt`](../../results/datos_tronco_v3/common_pile.txt), cruzando por `blob_id`. Los tokens están contados con la proporción de la ficha de Stack-Edu: con el tokenizador de 64K serán ~10% menos, y las pasadas, ~10% más.
+- **Common Pile trae ~90% de los permisivos:** el 89.2% de los archivos de Python, el 88.3% de JavaScript y el 90.4% de TypeScript. Bajando todo lo permisivo de Software Heritage, las pasadas a 90B serían 1.7 / 2.4 / 2.4; con The Stack v3, 2.1 / 4.3 / 4.4.
+- **Para la T1:** los shards de Common Pile vienen ordenados por lenguaje, así que no hace falta bajar los 83 GB: los de estos lenguajes son ~45 GB.
+- **Reserva:** Common Pile trae además ~1.5M archivos de JavaScript con puntaje ≥2.5 que no están en Stack-Edu (≈1.8B tokens), por si a 90B se quieren bajar sus pasadas.
 - Más de ~4 pasadas por los datos escasos ya no valen como datos nuevos (Muennighoff). Pasado eso, se reformula al estilo Kimi en vez de repetir.
 
 ### 4.7 Lo que ve la v1 en total (25B)
 
 | | Tronco (22.5B) | Rama (2.5B) | Total |
 |---|---|---|---|
-| Web (inglés) | 11.25B | 0.65B | ~11.9B |
-| Código | 4.5B | 0.63B | ~5.1B |
+| Web en inglés | 6.98B | 0.65B | ~7.6B |
+| Conocimiento y libros | 1.13B | 0.1B | ~1.2B |
+| Español | 5.4B | 0.25B | ~5.7B |
+| Código | 6.3B | 0.63B | ~6.9B |
 | Matemática | 2.25B | 0.55B | ~2.8B |
 | Razonamiento e instrucción | 0.45B | 0.33B | ~0.8B |
-| Conocimiento y libros | 1.8B | 0.1B | ~1.9B |
-| Español | 2.25B | 0.25B | ~2.5B |
 
 ### 4.8 Licencias 🟢🟡🔴
 
-- 🟢 **Entra:** texto humano con licencia abierta, y datos sintéticos generados con modelos abiertos de licencia permisiva: DeepSeek-R1/V3 (MIT), Qwen3 y QwQ (Apache 2.0), gpt-oss (Apache 2.0), Mixtral (Apache 2.0). En cada dataset se revisa qué modelo generó cada subconjunto.
+- 🟢 **Entra:** texto humano con licencia abierta, y datos sintéticos generados con modelos abiertos de licencia permisiva: DeepSeek-R1/V3 (MIT), Qwen3 y QwQ (Apache 2.0), gpt-oss (Apache 2.0), Mixtral y Mistral-7B (Apache 2.0) y SmolLM2 (Apache 2.0). En cada dataset se revisa qué modelo generó cada subconjunto.
 - 🟡 **Solo si aceptas la condición:** datos generados con modelos cuya licencia pone condiciones. Por ejemplo, Llama pide que el modelo entrenado con sus salidas lleve "Llama" en el nombre. Por defecto, fuera.
 - 🔴 **No entra:** salidas de APIs cerradas, cuyos términos prohíben entrenar modelos competidores. Ejemplo: TinyGSM, generado con GPT-3.5. La regla es "ante la duda, fuera".
+- **Atribución:** una fila por fuente en la ficha de datos (sección 10). Wikipedia, StackExchange y Stack Overflow son CC-BY-SA, y el código lleva la licencia de cada archivo, con su repo y su ruta en el manifiesto.
+- **Common Crawl:** FineWeb-Edu, FineWeb2-HQ y FineMath también quedan sujetos a sus términos de uso.
 
-### 4.9 Español: por qué 10% y no 4% ni 50%
+### 4.9 Español: por qué 24% (60/40 en lenguaje natural)
 
-- **No 50/50.** En experimentos controlados con idiomas clonados, tener un idioma dominante mejora el rendimiento del idioma menos frecuente y alinea más las representaciones entre idiomas. Con modelos grandes o entrenamientos largos, una mezcla 90/10 rindió mejor en los dos idiomas que una 50/50. Con idiomas reales, el idioma menos frecuente igual se beneficia del dominante. Y el inglés tiene los mejores datos y casi todos los benchmarks.
-- **No 4%.** En la v1 serían ~1B tokens de español: poco para que converse bien. Con 10% son ~2.5B en la v1 y ~90B a 1T.
-- **Qué queda:** contando solo el lenguaje natural del tronco, ~86% inglés y ~14% español, cerca del 90/10.
+- **El objetivo:** Pipe quiere un modelo "totalmente bilingüe" (sección 1). Con 24% del tronco, la v1 ve ~5.4B tokens de español en el tronco, y la proporción con el inglés en lenguaje natural es 60/40.
+- **No 90/10:** que un idioma dominante ayude al otro, y que 90/10 le ganara a 50/50, viene de experimentos con idiomas clonados. El precedente de un modelo chico bilingüe de verdad es CroissantLLM (1.3B), entrenado con inglés y francés 1:1.
 - **Referencia:** SmolLM3 (3B) puso 12% de web multilingüe repartida entre 5 idiomas, y en HellaSwag en español le ganó a Qwen2.5-3B y Llama 3.2 3B.
-- **Calidad sobre cantidad:** FineWeb-Edu traducido al español (TransWeb-Edu) aporta el mismo tipo de texto educativo que la base en inglés, y un poco de texto paralelo ayuda a alinear los dos idiomas.
-- **Qué se mide:** bits por byte en español, compresión del tokenizador en español y MGSM, Belebele, Global-MMLU, HellaSwag y Flores (inglés↔español). Si el español se queda atrás, se sube en las ramas, que sí se pueden cambiar sin tocar el tronco.
-- **Costo para el inglés:** 6 puntos menos de web en inglés en el tronco. Código y matemática no se tocan.
+- **Calidad sobre cantidad:** un estudio de 2025 atribuye el daño en los modelos bilingües a la calidad desigual de los datos más que a la cantidad. Por eso el español sale de FineWeb2-HQ y de TransWeb-Edu, que trae el mismo texto educativo de la base en inglés, más un poco de texto paralelo para alinear los dos idiomas.
+- **Costo para el inglés:** la web en inglés escrita por personas baja a 25% del tronco (4.4).
+- **Qué se mide:** bits por byte por dominio desde el paso 0, revisados a 1B y a 2.25B tokens del tronco (P17). Además, la compresión del tokenizador en español, MGSM, Belebele, Global-MMLU, HellaSwag y Flores (inglés↔español). Si el español se queda atrás, se sube en las ramas, que sí se pueden cambiar sin tocar el tronco.
+- **Sin prueba proxy de mezcla antes del tronco (P17):** su regla casi no podía fallar, y si fallaba, movía ~4 puntos que las ramas pueden compensar.
 
-### 4.10 Datos sintéticos: topes y diversidad
+### 4.10 Texto escrito por modelos: topes y diversidad
 
-- **Topes:** ≤10% del tronco y ≤35% de cada rama. Hoy el tronco tiene ~5% (Cosmopedia + instrucción) y las ramas ~25–30%.
-- **Al menos 3 familias de maestros** (por ejemplo Qwen, DeepSeek y gpt-oss), para no copiar el estilo de uno solo.
+- **Topes por tipo en el tronco (P16):**
+  - Generación libre: ≤5%.
+  - Reescritura de páginas reales: ≤10% del tronco y ≤30% de la web en inglés.
+  - Traducción automática: ≤10% del tronco y ≤40% del español.
+  - En total, ≤20%, y ningún modelo generador por encima de 10%.
+  - En las ramas, ≤35%.
+- **La v3 queda en** ~4% de generación libre (Cosmopedia y la instrucción), 6% de reescritura (FinePhrase) y 8.5% de traducción (TransWeb-Edu): 18.5% en total. El generador más grande es Mistral-7B, con 8.5%. Con Mixtral, la familia Mistral suma 10.5%.
+- **Evidencia:** Meta (la buena dosis de reescritura es ~30%), FinePhrase (con 10% a 90% de reescritura, todo supera a la web sola) y TransWeb-Edu (un modelo entrenado solo con texto traducido fue competitivo). El tope de traducción es criterio, no medición.
+- **Al menos 3 familias de maestros:** hoy son Mistral (Mistral-7B y Mixtral), SmolLM2, DeepSeek-R1 y QwQ.
 - **Deduplicación** de casi-duplicados dentro de cada fuente sintética.
 - **Vigilancia de estilo:** en cada hito, la diversidad de n-gramas de muestras generadas y la frecuencia de muletillas típicas de maestros ("Certainly!", "As an AI language model").
-
 
 ---
 
@@ -580,7 +636,7 @@ Se agregan a medida que existan: `tokenizer/`, `data/` (recetas, lector, descont
 | T0.1 | ✅ **Prueba de formato** (`notebooks/t0_1_formato_mtp_tokenizador.ipynb`): con parche, todo pasa (2.5). Falta correrla con el tokenizador real de 64K | CPU | ~0.5 | Hecho el 11 nov |
 | T0.2 | ✅ **Velocidad y memoria** (T0.2 v2, `notebooks/t0_2v2_afmoe_2xT4.ipynb`): piezas de velocidad, micro-lote, 2K/4K/16K, guardado y carga, balanceo | 2×T4 | ~1 | Hecho el 12 nov |
 | T0.3 + T2 | **LR y estabilidad en FP16** (`notebooks/t0_3_t2_lr_2xT4.ipynb`): 3 corridas de 400 pasos con LR ×0.5, ×1 y ×2, en paralelo en 3 cuentas, con datos y tokenizador provisionales. La ganadora se puede alargar como prueba de estabilidad | 2×T4 | ~3 × 9.5 | LR fijado y ninguna corrida inestable |
-| T1 | **Datos:** decidir la fuente de código; lector con descontaminación y manifiestos | CPU | — | Determinista y reanuda exacto |
+| T1 | **Datos:** fuentes cerradas (4.2, mezcla v3); pre-tokenizado con descontaminación y manifiestos | CPU | — | Determinista y reanuda exacto |
 | G0 | **Compuerta G0** (5.7): ≥6 h sostenidas, guardado, reanudación en otra cuenta, 16K | 2×T4 | ~8–10 | Pasan las 5 condiciones |
 | T3 | **Tronco** hasta 22.5B | Relevo | ~1,550–2,450 | — |
 | T4 | **Rama de la v1** (2.5B, con 16K y MTP) | Relevo | ~225–355 | Base lista |
@@ -615,3 +671,9 @@ Se agregan a medida que existan: `tokenizer/`, `data/` (recetas, lector, descont
 21. SmolLM3: smol, multilingual, long-context reasoner (Hugging Face). https://huggingface.co/blog/smollm3
 22. Multilingual Pretraining Using a Large Corpus Machine-Translated from a Single Source Language (TransWeb-Edu). https://arxiv.org/pdf/2410.23956v1
 23. Resultados de la T0.1 en este repo: `results/t0_1_stock.json` y `results/t0_1_patched.json`.
+24. Estudio de FinePhrase (web reescrita por un modelo). https://arxiv.org/abs/2604.13977
+25. Estudio de Meta sobre la dosis de texto reescrito. https://arxiv.org/abs/2510.01631
+26. The Common Pile v0.1: An 8TB Dataset of Public Domain and Openly Licensed Text (EleutherAI, 2025). https://arxiv.org/abs/2506.05209 · dataset del código: https://huggingface.co/datasets/common-pile/stackv2_edu_filtered
+27. CroissantLLM: A Truly Bilingual French-English Language Model (2024). https://arxiv.org/abs/2402.00786
+28. DCLM sin duplicados (Zyphra, del trabajo de Zyda-2). https://huggingface.co/datasets/Zyphra/dclm-dedup
+29. Revisión de las fuentes del tronco, en este repo: `results/datos_tronco_v3/`.

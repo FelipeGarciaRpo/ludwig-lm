@@ -448,3 +448,20 @@ Todo lo que se corre, se mide o se decide, en orden. Cada entrada dice qué se h
   - Sin el enfriamiento, esta corrida no cuenta para `scripts/lr_horizon.py`, que solo usa corridas terminadas. Si lr-x1-1200 tampoco llega al paso 1,200, la regla P9 se queda con el exponente de la literatura, o sea ×1.
   - Propuesta: comparar ×1 y ×2 en el mismo paso, antes del enfriamiento, hasta el paso 800. En la primera ronda, la brecha antes del enfriamiento (6.3%) fue casi igual a la del final (6.1%).
 - **Siguiente:** lr-x1-1200 sigue desde el paso 530 por ~7 h, hasta cerca del paso 850.
+
+## 2026-11-15 · Datos del tronco: mezcla v3 y fuentes cerradas
+
+- **Qué:**
+  - Pipe eligió la mezcla v3 el 13 de noviembre. Esa decisión no había quedado registrada en la bitácora, y el diseño y los README seguían con la mezcla anterior, que daba 10% al español.
+  - Una revisión independiente, hecha en otro chat, cerró los ocho puntos abiertos de la v3 el 14 de noviembre. El 15 midió cuánto del código permisivo de Stack-Edu trae Common Pile. Pipe aceptó sus recomendaciones.
+  - Se reescribieron la sección 4 del diseño, su línea de objetivos (sección 1), D17–D19 y los dos README, y se agregaron las decisiones P13–P17.
+- **Dónde:** en el chat de la revisión, leyendo shards de Hugging Face. Nada corrió en Kaggle.
+- **Archivos:** `results/datos_tronco_v3/revision_fuentes.txt` y `common_pile.txt`. Son el texto recibido sin editar; solo se quitó la línea de destinatarios.
+- **Resultado:**
+  - **Mezcla del tronco:** inglés 36, español 24, código 28, matemática 10 e instrucción 2, dimensionada para 100B. La revisión no cambió el porcentaje de ningún bloque.
+  - **Código:** `common-pile/stackv2_edu_filtered` trae ~90% de los archivos permisivos de Stack-Edu en Python, JS y TS: ≈5.30B / 2.39B / 1.39B tokens, que son 1.9 / 2.7 / 2.5 pasadas a 90B. Reemplaza la descarga de Software Heritage y el recorrido de The Stack v3, y el correo a Software Heritage pasa a ser opcional. HTML y CSS salen de The Stack v1, como en el tokenizador.
+  - **DCLM se queda.** La nota de "solo para investigación" de su ficha se anota en la ficha de datos.
+  - **Ya tienen fuente:** StackExchange, los notebooks, el texto paralelo (ONU y Europarl), la instrucción (OpenMathReasoning y OpenAssistant) y Stack Overflow.
+  - **Texto escrito por modelos:** topes por tipo; la v3 queda en 18.5% del tronco.
+  - **No hay prueba proxy de mezcla antes del tronco** (P17). En su lugar, bits por byte por dominio desde el paso 0, revisados a 1B y a 2.25B tokens.
+- **Siguiente:** el patch de la T1 del chat de diseño: el pre-tokenizado con estas fuentes. De Common Pile basta bajar los shards de esos lenguajes, ~45 GB.

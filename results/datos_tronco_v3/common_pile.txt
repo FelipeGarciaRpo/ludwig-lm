@@ -1,0 +1,55 @@
+# Revisión independiente, segunda parte: common-pile/stackv2_edu_filtered como fuente del contenido del código.
+# Recibida el 15 de noviembre de 2026, del mismo chat que revision_fuentes.txt. Texto sin editar; solo se quitó la primera línea, que nombraba a los destinatarios.
+# Las tablas venían separadas por tabuladores.
+
+Sí: common-pile/stackv2_edu_filtered puede reemplazar a la vez la descarga de Software Heritage y el recorrido de The Stack v3. Trae cerca del 90% del código permisivo de Stack-Edu en Python, JavaScript y TypeScript, y alcanza para todo el programa hasta 90B con menos de 3 pasadas.
+
+1. Qué parte de los permisivos de Stack-Edu está ahí
+Crucé por blob_id. Los 14 shards donde cambia el lenguaje los leí completos; del resto leí los primeros 10 MB y escalé.
+
+Lenguaje	Permisivos de Stack-Edu	En Common Pile (archivos / bytes)	Tokens que quedan	Pasadas a 22.5B	Pasadas a 90B
+Python	≈5.79B tokens	89.2% / 91.5%	≈5.30B	0.48	1.9
+JavaScript	≈2.72B	88.3% / 87.8%	≈2.39B	0.69	2.7
+TypeScript	≈1.50B	90.4% / 92.4%	≈1.39B	0.63	2.5
+SQL	≈1.95B	80.8% / 60.6%	≈1.18B	0.10	0.4
+Shell	≈1.16B	84.5% / 80.7%	≈0.94B	0.13	0.5
+Markdown	≈5.12B	48.4% / 37.0%	≈1.90B	0.12	0.5
+Las pasadas usan el reparto que propuse: Python 11.2%, JS 7.3%, TS 3.9%, SQL y Shell 0.55% cada uno, Markdown 1.0%.
+Los tokens están contados con la proporción de la ficha de Stack-Edu. Con el tokenizador nuevo serán algo menos y las pasadas suben en la misma medida; estimo ~10%, por la prueba rápida de 20 MB.
+Comparación: con todo lo permisivo desde Software Heritage serían 1.7 / 2.4 / 2.4 pasadas a 90B; con The Stack v3, 2.1 / 4.3 / 4.4. Common Pile queda casi igual que Software Heritage.
+Corrección a mi avance: con solo los primeros 10 MB de cada shard había dicho ~94% / ~93% / ~78%. Estaban sesgados porque los shards vienen ordenados por lenguaje; los de la tabla son los buenos.
+2. Umbral del puntaje educativo
+Common Pile corta más abajo que Stack-Edu, y su paper lo dice: "We use a lower threshold… than was used for SmolLM2".
+
+Stack-Edu corta en 3 (Java en 2). En sus estadísticas, el int_score mínimo de Python, JS y TS es 3.
+Los int_score no son comparables. Parece que Common Pile trunca y Stack-Edu redondea: de los archivos comunes de Python, 63% tiene puntaje bajo 3.0 en Common Pile, pero solo 0.2% bajo 2.5. Por eso ves filas con int_score 2 que sí están en Stack-Edu.
+En JavaScript los puntajes no coinciden: 24.7% de los archivos comunes tiene menos de 2.5 en Common Pile.
+Conclusión: el filtro debe ser "el blob_id está entre los permisivos de Stack-Edu", nunca el puntaje de Common Pile.
+
+3. Ficha y términos
+No encontré nada que lo impida. Lo que hay que saber:
+
+Acceso: no está restringido y no pasa por Software Heritage.
+Licencia: el dataset no declara una propia; la de cada archivo viene en metadata.license. La regla es más estricta que la etiqueta de Stack-Edu: todas las licencias detectadas en el repo deben estar en la lista de Blue Oak. En la muestra, el 100% de las filas es permissive y ninguna figura sin licencia en Stack-Edu.
+Aviso de la ficha: reconoce que puede haber licencias mal asignadas. La atribución sigue siendo nuestra: el manifiesto debe guardar repo_name, path, license, url y blob_id.
+Términos de origen: viene de The Stack v2, y su ficha no repite esos términos. Conviene cumplirlos igual: respetar la licencia de cada archivo y aplicar retiros.
+Texto: en 7,597 filas de tres shards, el 90.9% es idéntico al original byte por byte. El 3.3% trae correos, teléfonos o IP reemplazados por <EMAIL_ADDRESS>, <PHONE_NUMBER> e <IP_ADDRESS>. No limpia llaves ni contraseñas, así que esa limpieza sigue pendiente.
+Cómo queda la fuente del código
+"Stack-Edu (solo archivos permisivos), con el contenido de common-pile/stackv2_edu_filtered cruzado por blob_id."
+
+Software Heritage: el correo pasa a ser opcional. Solo haría falta para recuperar el ~10% que Common Pile no trae.
+The Stack v3: ya no hace falta recorrerlo.
+HTML y CSS: siguen saliendo de The Stack v1. Según el paper, la variante HTML de Common Pile es texto plano extraído, no código.
+Tokenizador: son los mismos archivos que vio, por id, así que la regla del diseño se cumple.
+Para la T1 sirve saber que los shards vienen ordenados por lenguaje, así que no hay que bajar los 83 GB:
+
+Lenguaje	Shards	Tamaño comprimido
+Markdown	0000–0017	9.2 GB
+JavaScript	0050–0064	14.5 GB
+Python	0073–0084	11.7 GB
+Shell	0087–0088	2.0 GB
+TypeScript	0091–0094	3.4 GB
+SQL	dentro del 0086	1.0 GB
+Un lenguaje puede empezar en el último shard del anterior, así que hay que bajar también ese: 0049 para JavaScript, 0072 para Python, 0086 para Shell y 0090 para TypeScript. En total son unos 45 GB.
+
+Common Pile trae además ~1.5M archivos de JavaScript con puntaje ≥2.5 que no están en Stack-Edu (≈1.8B tokens). No los usaría para el primer tronco, pero son una reserva si a 90B se quieren bajar las pasadas de JavaScript.

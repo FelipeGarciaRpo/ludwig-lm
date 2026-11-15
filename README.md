@@ -20,7 +20,7 @@
 
 - **Made for your PC.** 0.49B active parameters per token, ~1.1 GB at 4-bit, and a KV cache 3× smaller than full attention at 16K, because 20 of its 26 layers only look at the last 2,048 tokens.
 - **Trained on free compute.** Two T4 GPUs on Kaggle, relayed between friends who each run turns on their own account.
-- **English and Spanish.** 10% Spanish in pretraining and 25–30% in fine-tuning. [Why not 4% or 50%?](#why-10-spanish)
+- **English and Spanish.** 24% Spanish in the trunk, 60/40 with English in natural language, and 25–30% in fine-tuning. [Why 24%?](#why-24-spanish)
 - **Reasons, at its scale.** `<think>` from day one, 10–22% math, Python as a calculator, and short chain-of-thought fine-tuning.
 - **Open all the way:** weights, code, the data recipe with exact manifests, full training logs, intermediate checkpoints, and the things that went wrong.
 
@@ -179,20 +179,27 @@ Byte-level BPE with 65,536 tokens and Qwen2's split regex, trained in 56 minutes
 
 | | English web | Code | Math | Knowledge | Textbooks | Spanish | Instructions and reasoning |
 |---|---|---|---|---|---|---|---|
-| **Trunk** | 50% | 20% | 10% | 5% | 3% | 10% | 2% |
+| **Trunk** (mix v3) | 31% | 28% | 10% | 3% | 2% | 24% | 2% |
 | **Branches** | 26% | 25% | 22% | 4% | — | 10% | 13% |
 
-- **Sources:** FineWeb-Edu and DCLM; Stack-Edu or The Stack v3 (mostly Python and JS/TS); FineMath, OpenWebMath and MegaMath; Wikipedia, arXiv and StackExchange; Cosmopedia; FineWeb2 and TransWeb-Edu in Spanish; OpenMathReasoning for traces.
+- **Sources:**
+  - English: FineWeb-Edu and DCLM (deduplicated), FinePhrase, Wikipedia, StackExchange and Cosmopedia.
+  - Spanish: FineWeb2-HQ, TransWeb-Edu, Wikipedia, and UN and Europarl parallel text.
+  - Code: Stack-Edu's permissively licensed files, with their content from Common Pile; The Stack v1 for HTML and CSS; StarCoderData notebooks; Stack Overflow.
+  - Math: FineMath 4+ and InfiWebMath 4+.
+  - Instructions: OpenMathReasoning and OpenAssistant.
+
+  The full table is in [`docs/es/DISENO.md`](docs/es/DISENO.md) (4.2–4.4), with the review behind it in [`results/datos_tronco_v3/`](results/datos_tronco_v3/).
 - **Licenses:** open human text and outputs of permissively licensed open models only. **Never outputs of closed APIs.** Weights are released only after a source-by-source audit of the data card.
-- **Synthetic data:** capped at 10% of the trunk and 35% of each branch, from at least 3 teacher families.
+- **Model-written text:** capped by type in the trunk (free generation ≤5%, rewriting ≤10%, translation ≤10%, ≤20% in total; v3 sits at 18.5%) and at 35% of each branch, from at least 3 teacher families.
 - **Decontamination** against the benchmarks with 13-gram Bloom filters; the validation split of each source is never trained on.
 
-### Why 10% Spanish
+### Why 24% Spanish
 
-- **Not 50/50.** In controlled studies a dominant language helps the less frequent one, and at scale a 90/10 mix beat 50/50 in *both* languages. English also has the best data and nearly all benchmarks.
-- **Not 4%.** That would be ~1B Spanish tokens in v1: too little to hold a conversation.
-- **10%** gives ~2.5B Spanish tokens in v1 and ~90B at 1T, about 86/14 in natural language. SmolLM3 used a similar share (12% multilingual) and did well in Spanish.
-- It is measured with Spanish bits per byte, MGSM, Belebele, Global-MMLU, HellaSwag and Flores. If Spanish lags, the branches raise it without touching the trunk.
+- **The goal is a fully bilingual model.** 24% of the trunk puts natural language at 60/40 English/Spanish: ~5.4B Spanish tokens in v1's trunk.
+- **Not 90/10.** The result that a dominant language helps the other, with 90/10 beating 50/50, comes from cloned languages. The precedent for a small, truly bilingual model is CroissantLLM (1.3B), trained 1:1 on English and French. SmolLM3 did well in Spanish with 12% multilingual web.
+- **The cost:** human-written English web drops to 25% of the trunk.
+- **It is measured** with bits per byte per domain from step 0, plus MGSM, Belebele, Global-MMLU, HellaSwag and Flores. If Spanish lags, the branches raise it without touching the trunk.
 
 ## Quick start
 
@@ -254,7 +261,8 @@ ludwig-lm/
 - [ ] **T0.3 + T2** Learning rate and FP16 stability: first round done (all stable, ×2 best at 400 steps); second round, ×4 and ×1/×2 to 1,200 steps ([notebook](notebooks/t0_3_t2_lr_2xT4.ipynb))
 - [x] **Tokenizer** 64K BPE, fixed ([`tokenizer/`](tokenizer/)): 4.16 bytes per token on the trunk mix
 - [x] **T0.1b** The final tokenizer in llama.cpp: identical tokenization, every special id detected
-- [ ] **T1** Data: code source, deterministic loader with decontamination and manifests
+- [x] **Data mix v3** Sources and splits closed, code included ([`results/datos_tronco_v3/`](results/datos_tronco_v3/))
+- [ ] **T1** Data: pre-tokenized shards built on Kaggle's CPU, with decontamination and manifests
 - [ ] **G0** Gate: ≥6 h sustained, save, resume on another account, 16K
 - [ ] **T3** Trunk to 22.5B tokens
 - [ ] **T4** v1 branch: 2.5B tokens, 16K

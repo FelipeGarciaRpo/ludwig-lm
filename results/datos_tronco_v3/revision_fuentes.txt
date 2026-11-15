@@ -1,0 +1,70 @@
+# Revisión independiente de las fuentes de datos del tronco (mezcla v3), hecha en otro chat.
+# Recibida el 14 de noviembre de 2026. Texto sin editar; solo se quitó la primera línea, que nombraba a los destinatarios.
+# Pidió cerrar los 8 puntos abiertos de la v3 con evidencia; las tablas venían separadas por tabuladores.
+
+Ninguno de los ocho puntos mueve porcentajes de bloque: el total sigue en 100 y solo se cierran fuentes y repartos internos. La única acción que depende de Pipe es mandar un correo a Software Heritage (punto 2).
+
+Lo que medí hoy
+Crucé Stack-Edu con The Stack v3 por id, sobre 24 de los 8,192 shards de v3. Se puede porque el blob_id de Stack-Edu es el SHA-1 simple del contenido (lo comprobé bajando 4 archivos de Software Heritage) y el content_id de v3 es ese mismo SHA-1. The Stack v1 usa el hash de git, así que con v1 no hay cruce directo.
+
+Lenguaje	Permisivos en Stack-Edu	De esos, están en v3	Tokens que cubre v3
+Python	4.56M archivos, 26.6% de los bytes, ≈5.79B tokens	78.1% de los archivos, 83.0% de los bytes	≈4.80B
+JavaScript	2.60M, 24.5%, ≈2.72B tokens	64.5%, 56.4%	≈1.54B
+TypeScript	1.70M, 49.5%, ≈1.50B tokens	73.0%, 54.1%	≈0.81B
+Esto corrige el "ya resuelto": los permisivos pesan más que el promedio, así que hay ≈5.8B / 2.7B / 1.5B tokens, no 3.9 / 2.2 / 1.2. Los tokens están contados con la proporción de la ficha de Stack-Edu; con el tokenizador nuevo serán algo menos.
+
+1. DCLM: se queda
+Recomendación: mantener Zyphra/dclm-dedup en 11%.
+Por qué: la licencia es CC-BY-4.0. La frase "research use only" está en la sección "Out-of-Scope Use" y la ficha la justifica por rendimiento ("may not perform as well as domain-specific datasets… Due to these limitations"), no como condición de uso. Ludwig 2 es un modelo de investigación.
+Evidencia:
+Ficha de DCLM y ficha de Zyphra, que dice "the same license as the original DCLM dataset".
+La mezcla de OLMo 2 es 3.70T de DCLM sobre 3.90T, y sus pesos son Apache-2.0, igual que SmolLM2 y SmolLM3.
+En el estudio de FinePhrase, DCLM sola saca 13.77 contra 11.82 de lo mejor de FineWeb-Edu.
+Tabla: no cambia. La frase se anota en la ficha de datos. Si Pipe no quiere ninguna duda, el 11% pasa a FineWeb-Edu (0.10 pasadas a 90B), pero se pierde el texto conversacional.
+2. Contenido del código
+Recomendación: escribir hoy a datasets@softwareheritage.org y hacer el descargador de la T1 por SHA-1 con dos orígenes, Software Heritage y The Stack v3. El manifiesto es el mismo en los dos. Si el acuerdo llega antes de construir, todo sale de Software Heritage; si no, el primer tronco sale de v3.
+¿Hace falta el acuerdo? Sí conviene pedirlo. La ficha de The Stack v2 dice: "Downloading data in bulk requires an agreement with SoftwareHeritage and INRIA". No define "bulk", pero 4.6 millones de archivos lo son más que los 120 mil del tokenizador. El proyecto cumple sus tres principios: modelo abierto, lista de archivos publicada y retiros respetados.
+Por qué no depender de eso: v3 alcanza para el primer tronco de 22.5B, con 0.5 pasadas en Python y 1.1 en JS y TS. A 90B, JS y TS pasarían de 4 (4.3 y 4.4), y ahí sí hace falta Software Heritage. Con todos los permisivos son 1.7 / 2.4 / 2.4 pasadas.
+Costo de cada camino: Software Heritage son ~15–20 GB de descargas puntuales. v3 no tiene subconjuntos por lenguaje, así que hay que recorrer los 8,192 shards (3.55 TB) una vez.
+Licencia: v3 etiqueta como permisivo solo 1–6% de sus archivos, y coincide con Stack-Edu en 6–17% de los archivos comunes. La etiqueta es de la copia en un repo, no del contenido. La que vale es la de Stack-Edu, con su repo y ruta en el manifiesto.
+Evidencia: The Stack v2, Stack-Edu, The Stack v3, principios de Software Heritage (esa página no me abrió; los leí en resúmenes de terceros).
+Tabla: los porcentajes no cambian. La celda de fuente queda "Stack-Edu; contenido por SHA-1 desde Software Heritage o The Stack v3". El contenido de v3 trae los datos personales ya reemplazados, lo que de paso resuelve esa limpieza.
+3. HTML y CSS: The Stack v1
+Recomendación: bigcode/the-stack-dedup, carpetas data/html y data/css.
+Por qué: es lo que vio el tokenizador, solo tiene repos con licencia permisiva y viene por lenguaje. En v3 habría que recorrer todo, y allí solo el 2.1% de los HTML y el 0.8% de los CSS son permisivos.
+Evidencia: ficha de The Stack v1. Son 51.2 GB y 8.5 GB comprimidos, de sobra para 1.26B tokens a 90B.
+Tabla: cambia la fuente de esa fila, a 0.7 + 0.7. Hay que limpiar datos personales, porque v1 no los trae limpios.
+4. Fuentes que faltaban
+Hueco	Fuente	Licencia	Por qué
+StackExchange	HuggingFaceH4/stack-exchange-preferences, sin Stack Overflow	CC-BY-SA-4.0	Volcado de febrero de 2023; guarda autor, perfil y link de cada respuesta, que es lo que pide la atribución
+Notebooks	bigcode/starcoderdata, los dos subconjuntos jupyter-*	La de cada archivo	Sale de The Stack v1, sin duplicados y con datos personales removidos; ~13 GB
+Texto paralelo	ONU 0.35 + Europarl 0.15	ONU: solo pide citar la fuente. Europarl: sin restricciones conocidas	Traducción humana; 25.2M y 2.0M de pares. Fuera sus sets de prueba
+Instrucción	OpenMathReasoning 1.9 + OpenAssistant 0.1	CC-BY-4.0 y Apache-2.0	La primera son problemas de foros con soluciones de DeepSeek-R1 y QwQ; la segunda es texto escrito por personas
+¿Lleva español la instrucción? Sí, pero poco: OpenAssistant tiene 43,061 mensajes en español de 161,443, y con el tope de 4 pasadas no da para más de ~0.1% del tronco. El grueso del español de instrucción va en ramas y SFT.
+OpenThoughts3 queda fuera del tronco: parte de sus preguntas viene de un set sintético (openmath-2-math). Creo que se generó con Llama, que sería 🟡; no lo verifiqué, así que hay que auditarlo antes de usarlo.
+OpenMathReasoning: son problemas de olimpiada con soluciones largas. Para el tronco hay que filtrar las cortas (que quepan en 2K) y medir cuánto queda.
+5. Repartos internos
+FinePhrase: 1.5 por formato. Los cuatro quedan a un punto entre sí (15.31, 14.83, 14.45, 14.30) y nadie probó combinarlos.
+Wikipedia y StackExchange: 1.5 y 1.5. MobileLLM-R1 usó 5.03% y 5.03%. A 90B, Wikipedia queda en 0.37 pasadas.
+Notebooks, Markdown y Stack Overflow: 1.1, 1.0 y 1.0. JS y TS: 7.3 y 3.9. SQL y Shell: 0.55 cada uno.
+6. Tope de texto escrito por modelos
+Recomendación: generación libre ≤5% del tronco; reescritura ≤10% y ≤30% de la web en inglés; traducción ≤10% y ≤40% del español; total ≤20%; ningún modelo generador por encima de 10%.
+Por qué: la v3 queda en 4 / 6 / 8.5, total 18.5. El generador más grande es Mistral-7B con 8.5.
+Evidencia: Meta (la buena dosis de reescritura es ~30%), FinePhrase (de 10% a 90% todo supera a la web sola) y TransWeb-Edu (un modelo entrenado solo con texto traducido fue competitivo). El tope de traducción es criterio, no medición.
+Tabla: no cambia; se reescribe D19.
+7. Stack Overflow
+Recomendación: mikex86/stackoverflow-posts sirve para el tronco.
+Por qué: se publicó el 14 de junio de 2023, antes del cambio de julio de 2024, y cada fila trae su licencia (CC BY-SA 2.5, 3.0 o 4.0), el id del post y el id del autor.
+Atribución: indicar que viene de Stack Overflow, enlazar la pregunta original, mostrar el autor y enlazar su perfil. Para el tronco: guardar Id y OwnerUserId en el manifiesto y declarar fuente, fecha y licencias en la ficha de datos. Si algún día se publican los shards, van con CC-BY-SA.
+Evidencia: la política de atribución y la nota sobre el cambio de 2024.
+Tabla: 1.0% dentro del bloque de 3.1.
+8. La prueba de mezcla: no como compuerta
+Recomendación: no frenar el tronco por ella. Aquí cambio lo que dije antes.
+Por qué:
+La regla casi no puede fallar, como mostraron las dos revisiones.
+Si fallara, movería 4 puntos, y el español se puede subir en las ramas.
+Cuesta 64–80 h de T4 y 3 días.
+El riesgo grande, que es un error en los datos, ya lo cubre la G0.
+En su lugar: medir bits por byte por dominio desde el paso 0 y revisarlo en 1B y 2.25B tokens del tronco. Si igual quieren el dato, dos corridas de 0.5B en cuentas libres durante la primera semana.
+Evidencia: DataDecide: las comparaciones con modelos de 150M aciertan ~80% a 1B. La versión chica sería informativa, pero no cambia una decisión que es de objetivos.
+Tabla: no cambia.
