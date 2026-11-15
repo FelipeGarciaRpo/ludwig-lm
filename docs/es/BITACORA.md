@@ -574,3 +574,15 @@ Todo lo que se corre, se mide o se decide, en orden. Cada entrada dice qué se h
 
     Y fija `COMMIT`.
 - **Siguiente:** aplicar 0010 y 0011; el `plan` de la T1 y las 3 sesiones de construcción; después la G0.
+
+## 2026-11-15 · Patches 0010 y 0011: las pruebas en el PC
+
+- **Qué:** se aplicaron los patches 0010 (la T1) y 0011 (el relevo, el LR del tronco y el plan de la G0) sobre `0abcb97`, y se corrieron las pruebas en CPU.
+- **Dónde:** el PC de Pipe, en Windows y en CPU. Para que torchrun arranque en Windows, los 2 procesos se lanzan a mano: el código y las pruebas del repo no cambian.
+- **Resultado:**
+  - pyflakes limpio y notebooks en sincronía.
+  - `bench_afmoe.py` en CPU: restauración exacta.
+  - `test_train_cpu.py` y `test_relay_cpu.py`: PASS.
+  - `test_shards_cpu.py` falla en Windows: `_Files.find` (`ludwig_lm/shards.py`) compara `str(h).endswith(name)`, y en Windows las rutas usan `\` mientras el nombre del manifiesto usa `/`. Con `h.as_posix().endswith(name)`, probado solo en una copia local, da PASS completo. En Kaggle, que es Linux, no pasa.
+- **Pregunta abierta para el chat de diseño:** cambiar esa comparación por `as_posix()` en un próximo patch, para que la prueba también pase en Windows.
+- **Siguiente:** el `plan` de la T1 en Kaggle con este commit.
