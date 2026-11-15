@@ -393,3 +393,33 @@ Todo lo que se corre, se mide o se decide, en orden. Cada entrada dice qué se h
   - Frente a SmolLM2 usa 20.4% menos tokens en español (`DISENO.md` y `BITACORA.md`), 7.2% menos en inglés (`README.md` y `DECISIONS.md`) y 12.0% menos en Python (`ludwig_lm/` y `scripts/`).
 - **Ojo:** el patch 0009 no traía `README.es.md` ni la fila de `results/t0_1b_tokenizer.json` en `results/README.md`. Se agregaron aparte, con el mismo contenido que `README.md`.
 - **Siguiente:** nada; la entrada solo cierra la regla 1 para esos números.
+
+## 2026-11-14 · Segunda ronda de la T2: ×4 a 400 pasos
+
+- **Qué:** la corrida ×4 de la segunda ronda (P9): Muon 6e-3 y AdamW 2e-3, SMEBU con λ = 0.04 (P2b) y 400 pasos de 0.25M tokens, igual que la primera ronda, con FineWeb-Edu y el tokenizador de SmolLM2 como provisionales.
+- **Dónde:** Kaggle, 2× T4, con el código del zip `292f882` (= `3e4f66c`). Duró 8.2 h.
+- **Archivos:**
+  - `results/t0_3_t2/lr-x4.jsonl`, `lr-x4-prueba.jsonl` y `lr-x4.png`.
+  - Los `.jsonl` llegaron con CRLF y sin salto final, como en la primera ronda. Se restauraron (231,348 y 8,937 bytes) y se revisaron fila por fila: 413 y 14 filas, con los pasos 0–399 seguidos.
+  - No traen rutas con usuario: la corrida empezó de cero.
+- **Resultado:**
+
+| | ×0.5 | ×1 | ×2 | ×4 |
+|---|---|---|---|---|
+| Val, bits por byte, antes del enfriamiento | 1.4013 | 1.2879 | 1.2119 | 1.1884 |
+| Val, bits por byte, al final | 1.3470 | 1.2223 | 1.1516 | **1.1284** |
+| tokens/s en la última hora | 3,601 | 3,428 | 3,293 | 3,588 |
+| Ganancia máxima de qk | 1.14 | 1.29 | 1.59 | 2.14 |
+| Entropía del router al final | 3.450 | 3.262 | 2.865 | 2.185 |
+
+  - **Estable:**
+    - Sin NaN y sin pasos saltados.
+    - Escala de FP16 fija en 32,768 y 12.92 GiB reservados.
+    - La prueba de reanudación es exacta: el estado y el primer lote coinciden y la val sale igual.
+  - **×4 gana a 400 pasos,** 2.0% por debajo de ×2. La parábola en log2 del LR tiene su mínimo en ×3.81 a 105M tokens.
+  - **`scripts/lr_horizon.py` con las cuatro da ×1 para el tronco:** ×0.94 con el exponente 0.32 de la literatura. El exponente propio sale de las corridas de 1,200 pasos.
+- **Preguntas abiertas para el chat de diseño:**
+  - **Balanceo por ventanas (P2b):** en ×4 ninguna ventana pasa de 3; la mayor es 2.30, en la capa 14 y el paso 320. Pero en las capas 4–15 la media sube durante toda la corrida (1.08 en el paso 100, 1.49 en el 200, 1.90 en el 400) y no baja en el enfriamiento. En ×1 y ×2, esas capas bajan a 1.02 en el paso 400.
+  - **Balanceo por paso:** desde el paso 100, la carga máx/media de ×4 pasa de 3 en 289 de 300 pasos (media 6.40, máxima 8.32). Con la entropía del router más baja de las cuatro, el router se concentra más cuanto más alto es el LR.
+  - **qk:** la ganancia sigue subiendo con el LR (2.14 en ×4).
+- **Siguiente:** esperar lr-x2-1200 y lr-x1-1200 y volver a correr `scripts/lr_horizon.py` (P9). lr-x1-1200 corre desde cero: hasta el paso 320 tiene el mismo calendario y los mismos datos que el ×1 de la primera ronda, así que sus evaluaciones de los pasos 50 a 300 deberían coincidir.
