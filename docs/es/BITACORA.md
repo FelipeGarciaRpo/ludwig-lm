@@ -465,3 +465,33 @@ Todo lo que se corre, se mide o se decide, en orden. Cada entrada dice qué se h
   - **Texto escrito por modelos:** topes por tipo; la v3 queda en 18.5% del tronco.
   - **No hay prueba proxy de mezcla antes del tronco** (P17). En su lugar, bits por byte por dominio desde el paso 0, revisados a 1B y a 2.25B tokens.
 - **Siguiente:** el patch de la T1 del chat de diseño: el pre-tokenizado con estas fuentes. De Common Pile basta bajar los shards de esos lenguajes, ~45 GB.
+
+## 2026-11-15 · Segunda ronda de la T2: ×1 hasta el paso 1,110, y la comparación con ×2
+
+- **Qué:**
+  - lr-x1-1200 corrió desde cero con el LR de ×1: 1,200 pasos planeados, con el enfriamiento desde el paso 960.
+  - Fueron dos sesiones, de los pasos 0–566 y 567–1,109. Paró por tiempo en el 1,110, 90 pasos antes de terminar el enfriamiento.
+- **Dónde:** Kaggle, 2× T4, con el código del zip `292f882` (= `3e4f66c`). Las sesiones duraron 11.3 h y 11.2 h.
+- **Archivos:**
+  - `results/t0_3_t2/lr-x1-1200.jsonl` (trae las dos sesiones), `lr-x1-1200-prueba.jsonl` y `lr-x1-1200.png`.
+  - Los `.jsonl` llegaron con CRLF y sin salto final. Se restauraron (642,509 y 8,939 bytes) y se revisaron fila por fila: 1,144 y 14 filas, con los pasos 0–1,109 seguidos.
+  - La ruta de reanudación traía dos veces el usuario de Kaggle. Se cambió por `<usuario>` (regla 6).
+- **Resultado:**
+  - **Estable:**
+    - Sin NaN, sin pasos saltados y sin alarmas. La escala de FP16 subió de 32,768 a 65,536.
+    - 3,676 y 3,543 tokens/s, con 12.92 GiB reservados.
+    - La reanudación en el paso 567 fue exacta, en el estado y en el primer lote.
+  - **Val en bits por byte:** 1.0670 (paso 800), 1.0438 (960, antes del enfriamiento) y 1.0094 (1,100).
+  - **×1 contra ×2 en el mismo paso, los dos con el LR fijo:** la ventaja de ×2 baja de 6.65% (paso 300) a 4.09% (400), 2.69% (500), 1.79% (600), 1.35% (700) y 1.01% (800).
+  - **El método de P9, aplicado a los valores de antes del enfriamiento:** el mejor LR pasa de ×4.25 (paso 320) a ×1.67 (paso 800). El exponente entre esos dos puntos (~1.0) es mucho más alto que el de la literatura (0.32) y no sirve para extrapolar: llevado a 25B daría ×0.02.
+  - **`scripts/lr_horizon.py`** no cuenta esta corrida ni la de ×2, porque ninguna terminó el enfriamiento. Así, la regla P9 se queda con el exponente de la literatura y da **×1**.
+  - **Balanceo (P2b):** después del calentamiento ninguna ventana pasa de 3 (la mayor es 1.66, en el paso 850). Por paso, la carga máx/media pasa de 3 en 482 de 1,010 pasos (media 3.01).
+  - **qk:** la ganancia sube más lento que en ×2: 1.69 en el paso 800 (en ×2, 2.48) y 1.84 en el 1,100.
+  - **Repetición:**
+    - Con el mismo código, torch, GPU y datos, lr-x1-1200 no repite bit a bit al ×1 de la primera ronda: los pasos difieren desde el 1 (ce 11.30633 contra 11.30634).
+    - Las evaluaciones de los pasos 50 a 300 quedan a 0.11% o menos (paso 300: 1.31315 contra 1.31285).
+    - Hay un no determinismo chico en GPU entre corridas. La reanudación sí es exacta.
+- **Preguntas abiertas para el chat de diseño:**
+  - Confirmar ×1 para el tronco: lo da la regla, y la brecha con ×2 se cierra rápido.
+  - El no determinismo en GPU: de dónde sale (por ejemplo, operaciones con sumas atómicas en el backward) y si afecta a la G0, que al reanudar en otra cuenta compara el hash del primer lote.
+- **Siguiente:** la T1 y el relevo (patch 0010), y después la G0.
