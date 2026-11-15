@@ -14,7 +14,7 @@
 
 </div>
 
-> **Estado, 14 de noviembre de 2026.** El diseño v1.2 está aprobado: Ludwig 2 se guarda en el formato AFMoE de los modelos Trinity de Arcee, que corre en llama.cpp sin parche. El bucle de entrenamiento real hizo tres corridas de 400 pasos en 2×T4: todas estables en FP16, a **3,300–3,600 tokens/s, ~1,900–2,100 h para 25B tokens**. Una segunda ronda mide cuánto se mueve el mejor learning rate con la duración del entrenamiento ([notebook](notebooks/t0_3_t2_lr_2xT4.ipynb)), y el tokenizador de 64K quedó fijado ([`tokenizer/`](tokenizer/)): 4.16 bytes por token en la mezcla del tronco, contra 4.03 del de Qwen3, de 151K. El constructor de la T1 está listo para convertir los datos del tronco en shards pre-tokenizados en la CPU de Kaggle ([notebook](notebooks/t1_shards_cpu.ipynb)). **Todavía no hay pesos.** Este repositorio documenta el proyecto desde la primera prueba.
+> **Estado, 15 de noviembre de 2026.** El diseño v1.2 está aprobado: Ludwig 2 se guarda en el formato AFMoE de los modelos Trinity de Arcee, que corre en llama.cpp sin parche. El bucle de entrenamiento real hizo dos rondas de corridas cortas en 2×T4: todas estables en FP16, a **3,300–3,600 tokens/s, ~1,900–2,100 h para 25B tokens**, y el tronco entrena con ×1, el learning rate del Ludwig 1. El tokenizador de 64K quedó fijado ([`tokenizer/`](tokenizer/)): 4.16 bytes por token en la mezcla del tronco, contra 4.03 del de Qwen3, de 151K. Los datos del tronco se convierten en shards pre-tokenizados en la CPU de Kaggle ([notebook](notebooks/t1_shards_cpu.ipynb)). El relevo que lo entrena por turnos entre cuentas está listo: checkpoints en Hugging Face con candado y respaldo en Kaggle ([notebook](notebooks/tronco_relevo_2xT4.ipynb)). **Todavía no hay pesos.** Este repositorio documenta el proyecto desde la primera prueba.
 
 ## Por qué Ludwig 2
 
@@ -148,7 +148,7 @@ El modelo real de 1.906B en la clase de transformers, FSDP2 entre las dos T4, FP
 - **Checkpoint:** 11.29 GiB, se guarda en 54 s y se carga en 48 s, y se restaura exacto.
 - **Balanceo,** 60 pasos de texto sintético: SMEBU con λ = 0.01 dejó al experto más cargado en 2.41× el promedio; el bias de signo fijo del banco v1, en 7.57×. Ninguna medición saltó un paso en FP16.
 
-### T0.3 + T2: learning rate y estabilidad en FP16 (Kaggle, 13–14 de noviembre de 2026)
+### T0.3 + T2: learning rate y estabilidad en FP16 (Kaggle, 13–15 de noviembre de 2026)
 
 El modelo real con el bucle de entrenamiento real ([`scripts/train.py`](scripts/train.py)), con ×0.5, ×1 y ×2 los learning rates del Ludwig 1 (Muon 1.5e-3, AdamW 5e-4): 400 pasos de 0.25M tokens cada una (~105M tokens), una por cuenta de Kaggle, en paralelo ([`notebooks/t0_3_t2_lr_2xT4.ipynb`](notebooks/t0_3_t2_lr_2xT4.ipynb), [`results/t0_3_t2/`](results/t0_3_t2/)). Mientras se termina el tokenizador de 64K usan FineWeb-Edu y el tokenizador de SmolLM2, y se comparan en bits por byte.
 
@@ -159,7 +159,13 @@ El modelo real con el bucle de entrenamiento real ([`scripts/train.py`](scripts/
 | Experto más cargado en una ventana de 50 pasos, el peor desde el paso 150 | 1.24× | 1.60× | 4.22× (paso 320); 1.11× en el paso 400 |
 
 - **Estables:** sin NaN, sin pasos saltados, escala de FP16 fija en 32,768, 12.92 GiB reservados y la prueba de guardado y reanudación exacta, bit a bit, en las tres.
-- **×2 gana en el horizonte corto,** pero las corridas cortas favorecen los LR altos: el mejor LR baja cuando el entrenamiento es más largo. Una segunda ronda lo mide aquí: ×4 a 400 pasos, y ×1 y ×2 seguidas hasta 1,200 pasos. Después [`scripts/lr_horizon.py`](scripts/lr_horizon.py) fija el LR del tronco con una regla decidida de antemano ([`docs/DECISIONS.md`](docs/DECISIONS.md), P9). Con la primera ronda sola da ×1, la receta del Ludwig 1.
+- **×2 gana en el horizonte corto,** pero las corridas cortas favorecen los LR altos: el mejor LR baja cuando el entrenamiento es más largo.
+- **La segunda ronda lo midió:** ×4 a 400 pasos, y ×1 y ×2 seguidas con el LR fijo.
+  - ×4 es la mejor a 400 pasos (1.1284), pero su balanceo de expertos diverge en vez de converger.
+  - En el mismo paso, la ventaja de ×2 sobre ×1 baja de 6.65% en el paso 300 a 1.01% en el 800.
+  - ×1 llega a 1.0094 en el paso 1,100, dentro de su enfriamiento.
+- **El tronco entrena con ×1, la receta del Ludwig 1:** es lo que da la regla decidida de antemano ([`scripts/lr_horizon.py`](scripts/lr_horizon.py); [`docs/DECISIONS.md`](docs/DECISIONS.md), P9 y P25).
+- **Dos corridas idénticas difieren ≤0.11%** después de 300 pasos, porque las sumas en la GPU no se repiten bit a bit. Esto no afecta las verificaciones de la reanudación (P28).
 - **Las diferencias de velocidad son de las máquinas,** no del LR: dentro de cada corrida la velocidad no cambia con la carga de los expertos.
 
 ### El tokenizador de 64K (CPU de Kaggle, 14 de noviembre de 2026)
@@ -230,12 +236,17 @@ python scripts/test_train_cpu.py
 
 # T1: el constructor de shards sobre un Hub local pequeño, el lector de shards y el entrenamiento con shards (~1–3 min)
 python scripts/test_shards_cpu.py
+
+# El relevo: el candado y su valla, el respaldo, y tres turnos en tres "cuentas" que deben dar lo mismo, bit a bit,
+# que una corrida sin cortes (~1–3 min)
+python scripts/test_relay_cpu.py
 ```
 
 ### Correrlas en Kaggle
 
 | Notebook | Acelerador | Tiempo | Qué sale |
 |---|---|---|---|
+| [`tronco_relevo_2xT4.ipynb`](notebooks/tronco_relevo_2xT4.ipynb) | GPU T4 x2 | ~11.5 h por turno | Un turno del tronco; también el ensayo del relevo de la G0 (~15 min) y su prueba de 16K |
 | [`t1_shards_cpu.ipynb`](notebooks/t1_shards_cpu.ipynb) | None (CPU) | ~10 min (plan), después 3 sesiones de ~6–11 h | Los 168 shards del tronco (22.5B tokens), 56 por sesión, para guardar como datasets privados de Kaggle |
 | [`t0_3_t2_lr_2xT4.ipynb`](notebooks/t0_3_t2_lr_2xT4.ipynb) | GPU T4 x2 | ~9.5 h por corrida | `results/t0_3_t2/<corrida>.jsonl` y `.png`, y el checkpoint de antes del enfriamiento |
 | [`t0_2v2_afmoe_2xT4.ipynb`](notebooks/t0_2v2_afmoe_2xT4.ipynb) | GPU T4 x2 | ~1–1.25 h | `results/t0_2v2.jsonl` (hecha: [`results/t0_2v2_intento2/`](results/t0_2v2_intento2/)) |
@@ -250,10 +261,13 @@ ludwig-lm/
 ├── tokenizer/      # el tokenizador de 64K, fijado: receta, tokens de control y compresión en su README
 ├── ludwig_lm/      # afmoe.py: el modelo (AFMoE), su kernel, pérdidas y balanceo · muon.py · data.py: lector de parquet
 │                   # · shards.py: los shards de la T1 y su lector · sources.py, build.py: el constructor de shards
+│                   # · relay.py: el candado, las subidas y el respaldo del relevo
 │                   # · checkpoint.py: checkpoints con reanudación verificada · model.py: formato A (respaldo)
-├── configs/        # ludwig2_afmoe.json (el modelo real), tiny_afmoe.json (pruebas), data_v3.json (los datos del tronco);
+├── configs/        # ludwig2_afmoe.json (el modelo real), tiny_afmoe.json (pruebas), data_v3.json (los datos del tronco),
+│                   # tronco_v1.json (los argumentos de entrenamiento del tronco);
 │                   # ludwig2.json, tiny.json (formato A)
 ├── scripts/        # train.py (el bucle de entrenamiento) y test_train_cpu.py, build_shards.py (T1) y test_shards_cpu.py,
+│                   # test_relay_cpu.py,
 │                   # train_tokenizer.py, smoke_tokenizer.py (T0.1b),
 │                   # bench_afmoe.py (T0.2 v2), smoke_format_afmoe.py (T0.1-C),
 │                   # make_notebooks.py, convert_gguf.py, lo del formato A
@@ -271,12 +285,13 @@ ludwig-lm/
 - [x] **T0.1-C** Formato AFMoE: pasa en llama.cpp sin cambios
 - [x] **v1.2** Formato AFMoE aprobado
 - [x] **T0.2 v2** El entrenamiento real en 2×T4: el loop y el momento en la RAM, ~3,300 tokens/s esperados
-- [ ] **T0.3 + T2** Learning rate y estabilidad en FP16: primera ronda hecha (todas estables, ×2 la mejor a 400 pasos); segunda ronda, ×4 y ×1/×2 hasta 1,200 pasos ([notebook](notebooks/t0_3_t2_lr_2xT4.ipynb))
+- [x] **T0.3 + T2** Learning rate y estabilidad en FP16: dos rondas, todas estables; el tronco entrena con ×1, la receta del Ludwig 1
 - [x] **Tokenizador** BPE de 64K, fijado ([`tokenizer/`](tokenizer/)): 4.16 bytes por token en la mezcla del tronco
 - [x] **T0.1b** El tokenizador final en llama.cpp: tokenización idéntica y todos los ids especiales detectados
 - [x] **Mezcla v3** Fuentes y repartos cerrados, código incluido ([`results/datos_tronco_v3/`](results/datos_tronco_v3/))
 - [ ] **T1** Datos: el constructor y el lector de shards están listos y probados ([`scripts/build_shards.py`](scripts/build_shards.py)); la construcción son 3 sesiones de CPU de Kaggle ([notebook](notebooks/t1_shards_cpu.ipynb))
-- [ ] **G0** Compuerta: ≥6 h sostenidas, guardado, reanudación en otra cuenta, 16K
+- [x] **Relevo** Checkpoints en Hugging Face con candado y respaldo en Kaggle, probado en tres turnos ([notebook](notebooks/tronco_relevo_2xT4.ipynb))
+- [ ] **G0** Compuerta: el ensayo del relevo, 50 pasos a 16K y los dos primeros turnos del tronco (≥6 h sostenidas, subidas, una reanudación en otra cuenta)
 - [ ] **T3** Tronco hasta 22.5B tokens
 - [ ] **T4** Rama de la v1: 2.5B tokens, 16K
 - [ ] **T5** SFT, GGUF y evaluación: **Ludwig 2 · 25B publicado**

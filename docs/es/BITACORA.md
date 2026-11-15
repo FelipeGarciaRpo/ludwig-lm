@@ -532,3 +532,45 @@ Todo lo que se corre, se mide o se decide, en orden. Cada entrada dice qué se h
 - **Siguiente:**
   - El patch 0011: el relevo con Hugging Face, respaldo en Kaggle y candado.
   - En Kaggle: `plan` y después las 3 sesiones de construcción.
+
+## 2026-11-15 · El relevo, el LR del tronco y el plan de la G0 (patch 0011)
+
+- **Qué:**
+  - El relevo que aprobó Pipe (P26), con Hugging Face como principal y Kaggle de respaldo: `ludwig_lm/relay.py` y `notebooks/tronco_relevo_2xT4.ipynb`.
+    - **El candado** es un *lease* de 2 h en `lock.json`, que se renueva cada 30 min y con cada subida. La valla es el commit con `parent_commit`.
+    - **Un checkpoint cada 3 h**, subido mientras entrena, en un solo commit con el índice, la rotación (quedan 2) y la renovación del candado.
+    - **Al final de cada turno:** respaldo en el dataset de Kaggle que toque, aplastado del historial y entrega del candado.
+  - **El LR del tronco: ×1 (P25).** Los argumentos del tronco quedan en `configs/tronco_v1.json`: 46,800 pasos, 22.536B tokens.
+  - **El plan de la G0 (P27):** G0-0, el ensayo del relevo; G0-1, la prueba de 16K; G0-2 y G0-3, los dos primeros turnos del tronco.
+  - **El no determinismo de la segunda ronda (P28):** empieza en el primer backward y no afecta la G0.
+- **Dónde:** chat de diseño, en CPU, sin Hugging Face ni Kaggle. Un almacén local hizo de Hugging Face, y una carpeta, de Kaggle.
+- **Archivos:**
+  - `ludwig_lm/relay.py`, `configs/tronco_v1.json` y `scripts/test_relay_cpu.py`.
+  - `notebooks/tronco_relevo_2xT4.ipynb`, generado con `make_notebooks.py`.
+- **Resultado:**
+  - `test_relay_cpu.py` da PASS (23):
+    - El candado se niega mientras vive el *lease*. Vencido, otra sesión lo toma, y la primera falla en su próximo commit.
+    - Un commit sobre una cabeza vieja se rechaza, y el aplastado deja solo el árbol nuevo.
+    - Los respaldos se turnan.
+    - Tres turnos en tres "cuentas" dan bit a bit la corrida sin cortes, con reanudación exacta desde el respaldo y desde el almacén.
+    - El turno libera el disco: el checkpoint de partida y los locales viejos ya no están cuando se arma el respaldo.
+  - Las celdas del notebook (un turno del tronco y el ensayo) corrieron completas contra el almacén local.
+  - `test_train_cpu.py` y `test_shards_cpu.py` siguen en PASS.
+- **Ojo:**
+  - Al terminar sus pasos, `train.py` solo guarda con `--save-final`. La config del tronco lo lleva, porque de ese checkpoint sale la rama. Lo encontró la prueba.
+  - **El disco:** en el peor momento, un turno habría tenido ~57 GiB en `/tmp`: el checkpoint de partida, 3 locales y el tar del respaldo, contra los ~73 GB de disco de Kaggle. Quedó en dos checkpoints como máximo (~23 GiB):
+    - el de partida se borra después del primer guardado del turno;
+    - `keep` 1 en local, porque Hugging Face guarda 2 y los respaldos otros 2;
+    - antes del respaldo, solo queda el último.
+
+    La celda de preparación avisa si hay menos de 30 GiB libres.
+  - **Lo que solo se puede probar en Kaggle es la G0-0:**
+    - la velocidad de subida de ~11 GB a Hugging Face y a Kaggle;
+    - `kaggle datasets version` con el token de cada cuenta;
+    - el montaje de los datasets de respaldo.
+  - **Antes del primer turno, Pipe crea:**
+    - la organización y el repo privado del relevo, y el de prueba;
+    - los dos datasets de respaldo, vacíos y con los amigos como colaboradores.
+
+    Y fija `COMMIT`.
+- **Siguiente:** aplicar 0010 y 0011; el `plan` de la T1 y las 3 sesiones de construcción; después la G0.

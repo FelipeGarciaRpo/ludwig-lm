@@ -606,8 +606,174 @@ elif FASE == "muestras":
    - Revisa en el último reporte que el % real de cada fuente esté a menos de 0.1 punto de la receta, y que las columnas de repetidos y contaminación tengan sentido."""),
 ]
 
+# ----------------------------------------------------------------------------- the trunk's relay (2×T4)
+tronco = nbf.v4.new_notebook()
+tronco.cells = [
+    md("""# Tronco · un turno del relevo (Kaggle 2×T4)
+
+Un turno: toma el candado en Hugging Face, sigue desde el checkpoint más nuevo (de Hugging Face o de uno de los dos respaldos de Kaggle), entrena ~11 h, sube un checkpoint cada 3 h mientras entrena, deja el último en el respaldo que toca, aplasta el historial y suelta el candado (`ludwig_lm/relay.py`, D15, P26).
+
+**Una vez por cuenta:**
+1. Cuenta de Hugging Face, invitada a la organización del proyecto con rol *write*. Un token *fine-grained* con escritura solo en el repo del relevo.
+2. En Kaggle, *Add-ons → Secrets*: `HF_TOKEN` (ese token), y `KAGGLE_USERNAME` y `KAGGLE_KEY` (el token de la API de tu cuenta, *Settings → API*). Cada uno usa el suyo.
+3. Pipe te agrega como colaborador (*can edit*) en los dos datasets de respaldo y como lector en los tres de shards.
+
+**En cada turno:** acelerador *GPU T4 x2*, Internet *On*, y como entradas los tres datasets de shards (`ludwig2-tronco-v3-1`…`-3`) y los dos de respaldo. Pon tu `CUENTA` ("cuenta 4", nunca el usuario) y *Save Version → Save & Run All*. Avisa por WhatsApp al empezar y al terminar.
+
+| `MODO` | Qué hace | Tarda |
+|---|---|---|
+| `tronco` | Un turno del tronco | ~11.5 h |
+| `prueba-relevo` | **G0-0:** el relevo completo con un modelo diminuto, contra `HF_REPO_PRUEBA`: candado, subida, aplastado, respaldo y reanudación exacta | ~15 min |
+| `g0-16k` | **G0-1:** 50 pasos del modelo real a 16K de contexto, sin guardar (condición 5 de la G0) | ~30–60 min |"""),
+    code(r'''MODO = "tronco"          # tronco · prueba-relevo · g0-16k
+CUENTA = "cuenta 1"      # tu etiqueta en el relevo: nunca el usuario de Kaggle ni el correo
+COMMIT = "main"          # el commit del tronco: el MISMO en todos los turnos
+REPO_URL = "https://github.com/FelipeGarciaRpo/ludwig-lm"
+HF_REPO = "ludwig-lm/ludwig2-relevo"                # privado, de la organización
+HF_REPO_PRUEBA = "ludwig-lm/ludwig2-relevo-prueba"  # privado: solo para prueba-relevo
+RESPALDO = ["DUENO/ludwig2-respaldo-a", "DUENO/ludwig2-respaldo-b"]   # los dos datasets privados de Pipe
+SIN_CANDADO = False      # True solo si Hugging Face está caído y se coordinó por WhatsApp: sigue desde Kaggle
+import time
+T_SESION = time.time()'''),
+    code(r'''import os, subprocess, sys, json, glob, shutil
+os.chdir("/kaggle/working")
+if not os.path.exists("ludwig-lm"):
+    subprocess.run(["git", "clone", "-q", REPO_URL, "ludwig-lm"], check=True)
+subprocess.run(["git", "-C", "ludwig-lm", "checkout", "-q", COMMIT], check=True)
+os.chdir("/kaggle/working/ludwig-lm")
+print("commit", subprocess.run(["git", "rev-parse", "HEAD"], capture_output=True, text=True).stdout.strip())
+!pip install -q "transformers==5.22.2" safetensors sentencepiece protobuf hf_xet kaggle
+from kaggle_secrets import UserSecretsClient
+for k in ("HF_TOKEN", "KAGGLE_USERNAME", "KAGGLE_KEY"):
+    try:
+        os.environ[k] = UserSecretsClient().get_secret(k)
+    except Exception:
+        print(f"⚠️ falta el secreto {k}")
+os.environ["PYTORCH_CUDA_ALLOC_CONF"] = "expandable_segments:True"
+sys.path.insert(0, ".")
+from ludwig_lm.relay import HFStore, KaggleBackup, Lock, LocalStore, Session, train_command, Busy
+TRONCO = json.load(open("configs/tronco_v1.json"))
+manifiestos = sorted(glob.glob("/kaggle/input/**/manifest.json", recursive=True),
+                     key=lambda m: len(json.load(open(m))["shards"]))
+MANIFIESTO = manifiestos[-1] if manifiestos else None
+print("shards:", f"{len(json.load(open(MANIFIESTO))['shards'])} en {MANIFIESTO.split('/input/')[-1]}" if MANIFIESTO
+      else "⚠️ ninguno: agrega los datasets de shards")
+libre = shutil.disk_usage("/tmp").free / 2**30
+print(f"/tmp: {libre:.0f} GiB libres" + ("" if libre >= 30 else
+      " ⚠️ un turno necesita ~23 GiB (dos checkpoints de 11.3 GiB a la vez): avisa antes de entrenar"))
+!nvidia-smi --query-gpu=name,memory.total --format=csv,noheader'''),
+    md("""## G0-0 · `prueba-relevo`
+
+El relevo completo con el modelo diminuto (vocabulario de 64K, unos segundos por paso), contra `HF_REPO_PRUEBA` y los respaldos reales (con otra etiqueta, que el tronco ignora).
+
+1. La sesión A entrena 30 pasos: guarda en el 10 (lo sube mientras entrena) y se detiene en el 20 como si se acabara el tiempo. Sube, respalda, aplasta y suelta.
+2. Se prueba el candado: una sesión lo toma, otra recibe *ocupado*, y lo suelta.
+3. La sesión B sigue desde Hugging Face hasta el paso 30. Su reanudación debe ser exacta en el estado y en el primer lote."""),
+    code(r'''if MODO == "prueba-relevo":
+    c = json.load(open("configs/tiny_afmoe.json")); c.update(vocab_size=65536, pad_token_id=1, bos_token_id=0)
+    json.dump(c, open("/tmp/tiny_64k.json", "w"))
+    LOG = "/kaggle/working/results/relevo-prueba.jsonl"; os.makedirs(os.path.dirname(LOG), exist_ok=True)
+    base = dict(config="/tmp/tiny_64k.json", tokenizer="tokenizer/tokenizer.json", shards=MANIFIESTO,
+                shard_roots="/kaggle/input", seq=256, micro=4, tokens_per_step=2048, steps=30, warmup=5,
+                eval_every=10, eval_windows=2, log_every=5, save_final=True, tag="prueba-relevo", out=LOG)
+    tienda = HFStore(HF_REPO_PRUEBA, os.environ.get("HF_TOKEN"))
+    respaldo = KaggleBackup(RESPALDO, tag="prueba-relevo")
+    def sesion(extra):
+        a = dict(base, **extra)
+        return Session(tienda, respaldo, CUENTA, "prueba-relevo", f"/tmp/relevo-{len(extra)}",
+                       lambda r, d: train_command(a, r, d), LOG, lease_s=1800, renew_s=600, poll_s=10).run()
+    A = sesion({"save_at": [10], "pause_at_step": 20})
+    l1, l2 = Lock(tienda, "prueba 1", "s1"), Lock(tienda, "prueba 2", "s2")
+    h = l1.acquire()
+    try:
+        l2.acquire(); ocupado = False
+    except Busy:
+        ocupado = True
+    l1.release(h)
+    B = sesion({})
+    filas = [json.loads(x) for x in open(LOG)]
+    res = [r for r in filas if r["type"] == "resume"][-1:]
+    lote = [r for r in filas if r["type"] == "resume_check"][-1:]
+    subidas = [e for e in A["events"] + B["events"] if e["kind"] == "upload"]
+    ok = (len(subidas) >= 3 and any(e["kind"] == "backup" for e in A["events"]) and ocupado
+          and res and res[0]["state_exact"] and lote and lote[0]["batch_exact"] and B["resumed_from"]["step"] == 20)
+    for e in A["events"] + B["events"]:
+        print(" ", e["kind"], {k: v for k, v in e.items() if k not in ("kind", "time", "by", "session")})
+    print("\nG0-0:", "✅ el relevo funciona: subida, candado, respaldo, aplastado y reanudación exacta" if ok
+          else "❌ revisar los eventos de arriba")'''),
+    md("""## G0-1 · `g0-16k`
+
+50 pasos del modelo real a 16K de contexto (un lote de 16,384 tokens por GPU), con los shards reales, sin guardar. Pasa si termina sin falta de memoria."""),
+    code(r'''if MODO == "g0-16k":
+    LOG = "/kaggle/working/results/g0-16k.jsonl"; os.makedirs(os.path.dirname(LOG), exist_ok=True)
+    a = dict(TRONCO["args"], shards=MANIFIESTO, shard_roots="/kaggle/input", seq=16384, micro=1,
+             tokens_per_step=32768, ramp_tokens=0, steps=50, warmup=10, eval_every=0, eval_windows=2,
+             save_every_hours=0, save_final=False, keep=1, log_every=5, tag="g0-16k", out=LOG)
+    p = subprocess.run(train_command(a, None, "/tmp/g0_16k"))
+    fin = [json.loads(x) for x in open(LOG) if json.loads(x)["type"] == "end"][-1:] if os.path.exists(LOG) else []
+    if p.returncode == 0 and fin and fin[0]["status"] == "done":
+        f = fin[0]
+        print(f"G0-1 ✅ 50 pasos a 16K sin falta de memoria: pico {f['peak_reserved_GiB']} GiB reservada, "
+              f"{f['tokens_per_s_mean']} tokens/s")
+    else:
+        print("G0-1 ❌ no terminó: ver el log de arriba (¿out of memory?)")'''),
+    md("""## Tronco · un turno
+
+Entrena hasta ~11 h desde que empezó la sesión y deja ~45 min para la subida final, el respaldo (~11 GB a Kaggle) y el aplastado. Cada línea `[relevo]` es un evento: candado, de dónde siguió, cada subida, lo que se borra del disco, el respaldo y la entrega.
+
+En `/tmp` nunca hay más de dos checkpoints a la vez (~23 GiB). El de partida se borra después del primer guardado nuevo, se guarda localmente solo el periódico más nuevo, y antes del respaldo solo queda el último."""),
+    code(r'''if MODO == "tronco":
+    LOG = f"/kaggle/working/results/tronco/{time.strftime('%Y%m%d-%H%M')}-{CUENTA.replace(' ', '-')}.jsonl"
+    os.makedirs(os.path.dirname(LOG), exist_ok=True)
+    horas = round(11.0 - (time.time() - T_SESION) / 3600, 2)
+    a = dict(TRONCO["args"], shards=MANIFIESTO, shard_roots="/kaggle/input", max_hours=horas, tag=TRONCO["tag"], out=LOG)
+    tienda = None if SIN_CANDADO else HFStore(HF_REPO, os.environ.get("HF_TOKEN"))
+    if not SIN_CANDADO:
+        quien = Lock(tienda, CUENTA, "-").holder(tienda.head())
+        if quien and not quien.get("released") and quien["expires"] > time.time():
+            print(f"candado: lo tiene {quien['holder']} por {(quien['expires'] - time.time()) / 60:.0f} min más")
+        else:
+            print("candado: libre" + (f" (el último turno fue de {quien['holder']})" if quien else ""))
+    s = Session(tienda, KaggleBackup(RESPALDO, tag=TRONCO["tag"]), CUENTA, TRONCO["tag"], "/tmp/relevo",
+                lambda r, d: train_command(a, r, d), LOG, no_lock=SIN_CANDADO)
+    try:
+        RESUMEN = s.run()
+    except Busy as e:
+        raise SystemExit(f"⛔ el relevo está ocupado: {e}. No entrenes: avisa por WhatsApp.")
+    json.dump(RESUMEN, open(LOG.replace(".jsonl", ".relevo.json"), "w"), indent=1)
+    filas = [json.loads(x) for x in open(LOG)]
+    fin = ([r for r in filas if r["type"] == "end"] or [{}])[-1]
+    res = [r for r in filas if r["type"] == "resume"][-1:]
+    lote = [r for r in filas if r["type"] == "resume_check"][-1:]
+    subidas = [e for e in RESUMEN["events"] if e["kind"] == "upload"]
+    tps, pico = fin.get("tokens_per_s_last_hour"), fin.get("peak_reserved_GiB")
+    print(f"\n{fin.get('status')}: paso {fin.get('steps_done')}, {fin.get('tokens', 0) / 1e9:.3f}B tokens, "
+          f"{fin.get('hours_this_session')} h en esta sesión")
+    print("Condiciones de la G0 en este turno:")
+    print(f"  1. ≥6 h sin NaN, escala estable: {'✅' if (fin.get('hours_this_session') or 0) >= 6 and fin.get('status') != 'error' and (fin.get('loss_scale_last') or 0) >= 1 else '❌'} "
+          f"({fin.get('loss_scale_skips')} saltos de FP16, escala final {fin.get('loss_scale_last')})")
+    print(f"  2. ≥2,600 tokens/s en la última hora: {'✅' if tps and tps >= 2600 else '❌'} ({tps})")
+    print(f"  3. ≤13.5 GiB reservada: {'✅' if pico and pico <= 13.5 else '❌'} ({pico})")
+    print(f"  4. ≥2 subidas: {'✅' if len(subidas) >= 2 else '❌'} ({len(subidas)}); reanudación en otra cuenta: "
+          + (f"{'✅' if res[0]['state_exact'] and lote and lote[0]['batch_exact'] else '❌'} (desde {RESUMEN['resumed_from']})"
+             if res else "— (este turno empezó de cero)"))'''),
+    md("""## Qué hacer con el resultado
+
+1. **Del turno:**
+   - De la salida (`results/tronco/`): el `.jsonl` del turno y su `.relevo.json`, con los eventos del relevo.
+   - Van al repo en `results/tronco/`, con su fila en `results/README.md` y una entrada en la bitácora. El log también queda en `logs/` del repo de Hugging Face.
+2. **WhatsApp:** "relevo libre, paso N". Si el resumen dice `lock_lost`, otra sesión tomó el candado después de que este venciera, y esta paró sola: avisa.
+3. **La G0** está completa cuando:
+   - el primer turno del tronco pasa las condiciones 1–4 (menos la reanudación);
+   - el segundo turno, en otra cuenta, marca la reanudación ✅;
+   - `g0-16k` dio ✅.
+
+   Si algo falla, el checkpoint del primer turno sigue sirviendo salvo que lo que falló sea el entrenamiento mismo (NaN, escala)."""),
+]
+
 for nb, name in [(t01, "t0_1_formato_mtp_tokenizador.ipynb"), (t02, "t0_2_velocidad_memoria_2xT4.ipynb"),
-                 (t02v2, "t0_2v2_afmoe_2xT4.ipynb"), (t03, "t0_3_t2_lr_2xT4.ipynb"), (t1, "t1_shards_cpu.ipynb")]:
+                 (t02v2, "t0_2v2_afmoe_2xT4.ipynb"), (t03, "t0_3_t2_lr_2xT4.ipynb"), (t1, "t1_shards_cpu.ipynb"),
+                 (tronco, "tronco_relevo_2xT4.ipynb")]:
     for i, cell in enumerate(nb.cells):
         cell.id = f"cell-{i:02d}"          # stable ids: regenerating gives an identical file
     nb.metadata["kernelspec"] = {"name": "python3", "display_name": "Python 3", "language": "python"}

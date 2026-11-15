@@ -1,0 +1,29 @@
+{
+  "_nota": "Los argumentos de scripts/train.py para el tronco de la v1 (DISENO 5.1, D12; LR ×1 por P25). 46,800 pasos: 7,630 de 0.25M tokens hasta los 2B y 39,170 de 0.5M, 22.536B tokens en total, dentro de los 22.549B de los 168 shards de la T1. Cambiar algo a mitad del tronco queda en la fila resume como changed_args.",
+  "tag": "tronco",
+  "args": {
+    "config": "configs/ludwig2_afmoe.json",
+    "tokenizer": "tokenizer/tokenizer.json",
+    "seq": 2048,
+    "micro": 8,
+    "tokens_per_step": 262144,
+    "ramp_tokens": 2000000000,
+    "tokens_per_step_after": 524288,
+    "steps": 46800,
+    "warmup": 2000,
+    "decay_steps": 0,
+    "lr": 0.0015,
+    "adamw_lr": 0.0005,
+    "lr_mult": 1.0,
+    "weight_decay": 0.1,
+    "muon_wd_lr": "adamw",
+    "lam": 0.01,
+    "meta": "mask",
+    "eval_every": 1000,
+    "eval_windows": 32,
+    "save_every_hours": 3,
+    "save_final": true,
+    "keep": 1,
+    "log_every": 20
+  }
+}

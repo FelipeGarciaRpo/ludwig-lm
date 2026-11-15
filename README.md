@@ -14,7 +14,7 @@
 
 </div>
 
-> **Status, November 14, 2026.** Design v1.2 is approved: Ludwig 2 is stored in the AFMoE format of Arcee's Trinity models, which runs in llama.cpp unpatched. The real training loop ran three 400-step runs on 2×T4: all stable in FP16, at **3,300–3,600 tokens/s, ~1,900–2,100 h for 25B tokens**. A second round measures how the best learning rate moves with training length ([notebook](notebooks/t0_3_t2_lr_2xT4.ipynb)), and the 64K tokenizer is fixed ([`tokenizer/`](tokenizer/)): 4.16 bytes per token on the trunk mix, against 4.03 for Qwen3's 151K. T1's builder is ready to turn the trunk's data into pre-tokenized shards on Kaggle's CPU ([notebook](notebooks/t1_shards_cpu.ipynb)). **There are no weights yet.** This repository documents the project from its first test.
+> **Status, November 15, 2026.** Design v1.2 is approved: Ludwig 2 is stored in the AFMoE format of Arcee's Trinity models, which runs in llama.cpp unpatched. The real training loop ran two rounds of short runs on 2×T4: all stable in FP16, at **3,300–3,600 tokens/s, ~1,900–2,100 h for 25B tokens**, and the trunk trains at ×1, Ludwig 1's learning rate. The 64K tokenizer is fixed ([`tokenizer/`](tokenizer/)): 4.16 bytes per token on the trunk mix, against 4.03 for Qwen3's 151K. The trunk's data becomes pre-tokenized shards on Kaggle's CPU ([notebook](notebooks/t1_shards_cpu.ipynb)). The relay that trains it in turns across accounts is ready: checkpoints on Hugging Face with a lock, and a backup on Kaggle ([notebook](notebooks/tronco_relevo_2xT4.ipynb)). **There are no weights yet.** This repository documents the project from its first test.
 
 ## Why Ludwig 2
 
@@ -148,7 +148,7 @@ The real 1.906B model in the transformers class, FSDP2 over the two T4s, FP16, M
 - **Checkpoint:** 11.29 GiB, saved in 54 s and loaded in 48 s, restored exactly.
 - **Balancing,** 60 steps of synthetic text: SMEBU with λ = 0.01 ended with the busiest expert at 2.41× the mean load; the fixed-sign update of bench v1 at 7.57×. No FP16 step was skipped in any measurement.
 
-### T0.3 + T2: learning rate and FP16 stability (Kaggle, November 13–14, 2026)
+### T0.3 + T2: learning rate and FP16 stability (Kaggle, November 13–15, 2026)
 
 The real model and the real training loop ([`scripts/train.py`](scripts/train.py)) at ×0.5, ×1 and ×2 Ludwig 1's learning rates (Muon 1.5e-3, AdamW 5e-4): 400 steps of 0.25M tokens each (~105M tokens), one per Kaggle account, in parallel ([`notebooks/t0_3_t2_lr_2xT4.ipynb`](notebooks/t0_3_t2_lr_2xT4.ipynb), [`results/t0_3_t2/`](results/t0_3_t2/)). Until the 64K tokenizer is ready they use FineWeb-Edu and SmolLM2's tokenizer, compared in bits per byte.
 
@@ -159,7 +159,13 @@ The real model and the real training loop ([`scripts/train.py`](scripts/train.py
 | Busiest expert over a 50-step window, worst after step 150 | 1.24× | 1.60× | 4.22× (step 320); 1.11× at step 400 |
 
 - **Stable:** no NaN, no skipped step, FP16 scale fixed at 32,768, 12.92 GiB reserved, and the save-and-resume test bit-exact in all three.
-- **×2 wins the short horizon,** but short runs favour high learning rates: the best LR falls as training gets longer. A second round measures that here: ×4 at 400 steps, and ×1 and ×2 continued to 1,200 steps. [`scripts/lr_horizon.py`](scripts/lr_horizon.py) then sets the trunk's LR by a rule fixed in advance ([`docs/DECISIONS.md`](docs/DECISIONS.md), P9). With the first round alone it gives ×1, Ludwig 1's recipe.
+- **×2 wins the short horizon,** but short runs favour high learning rates: the best LR falls as training gets longer.
+- **The second round measured that:** ×4 at 400 steps, and ×1 and ×2 continued at constant LR.
+  - ×4 is the best at 400 steps (1.1284), but its expert balance diverges instead of converging.
+  - At equal steps, ×2's lead over ×1 falls from 6.65% at step 300 to 1.01% at step 800.
+  - ×1 reaches 1.0094 at step 1,100, inside its decay.
+- **The trunk trains at ×1, Ludwig 1's recipe:** that is what the rule fixed in advance gives ([`scripts/lr_horizon.py`](scripts/lr_horizon.py); [`docs/DECISIONS.md`](docs/DECISIONS.md), P9 and P25).
+- **Identical runs differ by ≤0.11%** after 300 steps, because GPU sums are not bit-for-bit repeatable. This does not affect the resume checks (P28).
 - **The speed differences are the machines,** not the LR: within each run the speed does not move with the expert load.
 
 ### The 64K tokenizer (Kaggle CPU, November 14, 2026)
@@ -230,12 +236,17 @@ python scripts/test_train_cpu.py
 
 # T1: the shard builder on a small local Hub, the shard reader and training on shards (~1–3 min)
 python scripts/test_shards_cpu.py
+
+# The relay: the lock and its fence, the backup, and three turns on three "accounts" that must equal an
+# uninterrupted run bit for bit (~1–3 min)
+python scripts/test_relay_cpu.py
 ```
 
 ### Run them on Kaggle
 
 | Notebook | Accelerator | Time | What you get |
 |---|---|---|---|
+| [`tronco_relevo_2xT4.ipynb`](notebooks/tronco_relevo_2xT4.ipynb) | GPU T4 x2 | ~11.5 h per turn | A turn of the trunk; also the G0's relay dry run (~15 min) and its 16K test |
 | [`t1_shards_cpu.ipynb`](notebooks/t1_shards_cpu.ipynb) | None (CPU) | ~10 min (plan), then 3 sessions of ~6–11 h | The trunk's 168 shards (22.5B tokens), 56 per session, to keep as private Kaggle datasets |
 | [`t0_3_t2_lr_2xT4.ipynb`](notebooks/t0_3_t2_lr_2xT4.ipynb) | GPU T4 x2 | ~9.5 h per run | `results/t0_3_t2/<run>.jsonl` and `.png`, and the checkpoint before the decay |
 | [`t0_2v2_afmoe_2xT4.ipynb`](notebooks/t0_2v2_afmoe_2xT4.ipynb) | GPU T4 x2 | ~1–1.25 h | `results/t0_2v2.jsonl` (done: [`results/t0_2v2_intento2/`](results/t0_2v2_intento2/)) |
@@ -250,10 +261,13 @@ ludwig-lm/
 ├── tokenizer/      # the 64K tokenizer, fixed: recipe, control tokens and compression in its README
 ├── ludwig_lm/      # afmoe.py: the model (AFMoE), its kernel, losses and balancer · muon.py · data.py: parquet reader
 │                   # · shards.py: T1's shards and their reader · sources.py, build.py: the shard builder
+│                   # · relay.py: the relay's lock, uploads and backup
 │                   # · checkpoint.py: checkpoints with a verified resume · model.py: format A (fallback)
-├── configs/        # ludwig2_afmoe.json (the real model), tiny_afmoe.json (tests), data_v3.json (the trunk's data);
+├── configs/        # ludwig2_afmoe.json (the real model), tiny_afmoe.json (tests), data_v3.json (the trunk's data),
+│                   # tronco_v1.json (the trunk's training arguments);
 │                   # ludwig2.json, tiny.json (format A)
 ├── scripts/        # train.py (the training loop) and test_train_cpu.py, build_shards.py (T1) and test_shards_cpu.py,
+│                   # test_relay_cpu.py,
 │                   # train_tokenizer.py, smoke_tokenizer.py (T0.1b),
 │                   # bench_afmoe.py (T0.2 v2), smoke_format_afmoe.py (T0.1-C),
 │                   # make_notebooks.py, convert_gguf.py, format-A tools
@@ -271,12 +285,13 @@ ludwig-lm/
 - [x] **T0.1-C** AFMoE format: passes on stock llama.cpp
 - [x] **v1.2** AFMoE format approved
 - [x] **T0.2 v2** The real training stack on 2×T4: the loop and momentum in RAM, ~3,300 tokens/s expected
-- [ ] **T0.3 + T2** Learning rate and FP16 stability: first round done (all stable, ×2 best at 400 steps); second round, ×4 and ×1/×2 to 1,200 steps ([notebook](notebooks/t0_3_t2_lr_2xT4.ipynb))
+- [x] **T0.3 + T2** Learning rate and FP16 stability: two rounds, all stable; the trunk trains at ×1, Ludwig 1's recipe
 - [x] **Tokenizer** 64K BPE, fixed ([`tokenizer/`](tokenizer/)): 4.16 bytes per token on the trunk mix
 - [x] **T0.1b** The final tokenizer in llama.cpp: identical tokenization, every special id detected
 - [x] **Data mix v3** Sources and splits closed, code included ([`results/datos_tronco_v3/`](results/datos_tronco_v3/))
 - [ ] **T1** Data: the builder and the shard reader are ready and tested ([`scripts/build_shards.py`](scripts/build_shards.py)); the build itself takes 3 Kaggle CPU sessions ([notebook](notebooks/t1_shards_cpu.ipynb))
-- [ ] **G0** Gate: ≥6 h sustained, save, resume on another account, 16K
+- [x] **Relay** Checkpoints on Hugging Face with a lock, a backup on Kaggle, tested on three turns ([notebook](notebooks/tronco_relevo_2xT4.ipynb))
+- [ ] **G0** Gate: the relay's dry run, 50 steps at 16K, and the trunk's first two turns (≥6 h sustained, uploads, a resume on another account)
 - [ ] **T3** Trunk to 22.5B tokens
 - [ ] **T4** v1 branch: 2.5B tokens, 16K
 - [ ] **T5** SFT, GGUF, evaluation: **Ludwig 2 · 25B released**

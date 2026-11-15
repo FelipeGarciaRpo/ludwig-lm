@@ -426,6 +426,16 @@ Esto sigue siendo una estimación: la cifra que vale es la que mida la T0.2 (`sc
 - **Dos checkpoints privados que se turnan,** más hitos públicos (solo pesos en bf16, ~4 GB). Hugging Face da 100 GB de almacenamiento privado gratis 📏.
 - **La reanudación se verifica:** se hashea el primer lote después de reanudar y se compara con el esperado.
 - Con ~10 cuentas hay ~300 h de T4 por semana. El relevo 24/7 usa ~168, y el resto queda para pruebas, evaluación, SFT y la fábrica de datos.
+- ✅ **Cómo quedó** (P26; `ludwig_lm/relay.py`, `notebooks/tronco_relevo_2xT4.ipynb`):
+  - **Principal:** un repo privado de Hugging Face de la organización del proyecto. El candado es un *lease* de 2 h en `lock.json`, que se renueva cada 30 min y con cada subida.
+  - **La valla:** cada escritura es un commit cuyo padre es el último que vio la sesión. Una sesión cuyo candado venció y tomó otra falla en su próximo commit y para sola.
+  - **Checkpoint cada 3 h:** cada uno se sube en un solo commit, con el índice, la rotación (quedan los 2 más nuevos) y la renovación del candado.
+  - Al final de cada turno se aplasta el historial, así que nunca pasa de ~68 GB de los 100 GB privados.
+  - **Respaldo:** el último checkpoint del turno va al de los dos datasets privados de Kaggle que tenga el más viejo, como un tar con su meta.
+  - **Disco:** en `/tmp` nunca hay más de dos checkpoints a la vez (~23 GiB de los ~73 GB de Kaggle). El de partida se borra después del primer guardado del turno, localmente queda solo el periódico más nuevo y, antes del respaldo, solo el último.
+  - **Reanudación:** desde el checkpoint completo más nuevo de los tres lugares; si empatan, gana la copia que ya está en el disco.
+  - **Credenciales:** cada cuenta usa las suyas: su token de Hugging Face con escritura en el repo y su token de la API de Kaggle.
+  - **Prueba:** `scripts/test_relay_cpu.py`. Tres turnos en tres cuentas dan bit a bit la corrida sin cortes.
 
 ### 5.4 Alarmas automáticas
 
@@ -463,6 +473,14 @@ No se arranca el tronco hasta cumplir todo esto con el modelo real y el lector d
 3. **Memoria pico ≤ 13.5 GiB reservada** (la que tiene tomada el asignador de PyTorch, como en el banco v1) durante toda la corrida, evaluación y guardado incluidos.
 4. **Al menos 2 guardados** subidos a Hugging Face y **una reanudación en otra cuenta**, con el hash del primer lote igual al esperado.
 5. **16K probado:** 50 pasos a 16K de contexto sin falta de memoria.
+
+**Plan (P27, propuesta de Pipe más un ensayo previo):** todas las partes corren con `notebooks/tronco_relevo_2xT4.ipynb`.
+- **G0-0, `prueba-relevo` (~15 min):** el relevo completo con el modelo diminuto, contra un repo de prueba. Prueba la subida, el candado, el respaldo, el aplastado y una reanudación exacta.
+- **G0-1, `g0-16k` (~30–60 min, en una cuenta libre):** la condición 5.
+- **G0-2, el primer turno del tronco:** las condiciones 1–4, menos la reanudación. Si pasa, sus checkpoints cuentan.
+- **G0-3, el segundo turno, en otra cuenta:** la reanudación, con el estado y el primer lote exactos.
+- **Antes de la G0-2:** leer `muestras.txt` de la construcción de la T1.
+- El no determinismo de la GPU no afecta la G0 (P28): la reanudación compara el estado y el hash del primer lote, no la curva.
 
 ---
 
@@ -642,9 +660,9 @@ Se agregan a medida que existan: `tokenizer/`, `data/` (recetas, lector, descont
 |---|---|---|---|---|
 | T0.1 | ✅ **Prueba de formato** (`notebooks/t0_1_formato_mtp_tokenizador.ipynb`): con parche, todo pasa (2.5). Falta correrla con el tokenizador real de 64K | CPU | ~0.5 | Hecho el 11 nov |
 | T0.2 | ✅ **Velocidad y memoria** (T0.2 v2, `notebooks/t0_2v2_afmoe_2xT4.ipynb`): piezas de velocidad, micro-lote, 2K/4K/16K, guardado y carga, balanceo | 2×T4 | ~1 | Hecho el 12 nov |
-| T0.3 + T2 | **LR y estabilidad en FP16** (`notebooks/t0_3_t2_lr_2xT4.ipynb`): 3 corridas de 400 pasos con LR ×0.5, ×1 y ×2, en paralelo en 3 cuentas, con datos y tokenizador provisionales. La ganadora se puede alargar como prueba de estabilidad | 2×T4 | ~3 × 9.5 | LR fijado y ninguna corrida inestable |
+| T0.3 + T2 | ✅ **LR y estabilidad en FP16** (`notebooks/t0_3_t2_lr_2xT4.ipynb`): dos rondas, todas estables. El tronco va a ×1, la receta del Ludwig 1 (P25) | 2×T4 | ~3 × 9.5 + 4 × 11 | Hecho el 15 nov |
 | T1 | **Datos:** fuentes cerradas (4.2, mezcla v3); pre-tokenizado con descontaminación y manifiestos. El código está listo y probado (P18–P24); faltan el `plan` contra el Hub y las 3 sesiones de construcción (`notebooks/t1_shards_cpu.ipynb`) | CPU | ~10 min + 3 × 6–11 | Los 168 shards del tronco, con sus manifiestos |
-| G0 | **Compuerta G0** (5.7): ≥6 h sostenidas, guardado, reanudación en otra cuenta, 16K | 2×T4 | ~8–10 | Pasan las 5 condiciones |
+| G0 | **Compuerta G0** (5.7, P27): G0-0 (ensayo del relevo), G0-1 (16K), y los dos primeros turnos del tronco, que cuentan si pasan | 2×T4 | ~1 + los dos primeros turnos | Pasan las 5 condiciones |
 | T3 | **Tronco** hasta 22.5B | Relevo | ~1,550–2,450 | — |
 | T4 | **Rama de la v1** (2.5B, con 16K y MTP) | Relevo | ~225–355 | Base lista |
 | T5 | **SFT, MTP, GGUF y evaluación** | 2×T4 | ~60–150 | Ludwig 2 · 25B publicado |
