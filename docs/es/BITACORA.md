@@ -495,3 +495,40 @@ Todo lo que se corre, se mide o se decide, en orden. Cada entrada dice qué se h
   - Confirmar ×1 para el tronco: lo da la regla, y la brecha con ×2 se cierra rápido.
   - El no determinismo en GPU: de dónde sale (por ejemplo, operaciones con sumas atómicas en el backward) y si afecta a la G0, que al reanudar en otra cuenta compara el hash del primer lote.
 - **Siguiente:** la T1 y el relevo (patch 0010), y después la G0.
+
+## 2026-11-15 · T1: el constructor de shards y su lector (patch 0010)
+
+- **Qué:**
+  - El pre-tokenizado que aprobó Pipe, con las fuentes de la mezcla v3 (P18–P24):
+    - `scripts/build_shards.py` (con `ludwig_lm/sources.py` y `ludwig_lm/build.py`) convierte las fuentes en shards de 256 MiB de ids uint16, en cuatro etapas: `plan`, `prepare`, `val` y `train`.
+    - La receta, con los ids del Hub, las columnas, los pesos, los dominios de evaluación y los 16 benchmarks, es `configs/data_v3.json`.
+  - El lector de shards (`ludwig_lm/shards.py`) entra en `train.py` con `--shards`:
+    - la validación por dominio (inglés, español, Python, JS y matemática), con un bits por byte por dominio en cada evaluación;
+    - `--meta` para las etiquetas de MeCo;
+    - un paro ordenado si se acaban los shards adjuntos.
+  - La pérdida acepta una máscara (`ludwig_lm/losses.py`), porque MeCo deja los metadatos fuera de la pérdida. Sin máscara, el cálculo es el mismo de siempre.
+  - `notebooks/t1_shards_cpu.ipynb`: la construcción en la CPU de Kaggle, con `plan` primero y después 3 sesiones de 56 shards.
+- **Dónde:** chat de diseño, en CPU, sin Hugging Face (no responde desde ahí). Todo se probó sobre un Hub sintético local.
+- **Archivos:** los de arriba y `scripts/test_shards_cpu.py`. El tokenizador asigna sus ids reservados 16 y 17 a las etiquetas (`tokenizer/README.md`; `tokenizer.json` no cambia).
+- **Resultado:**
+  - `test_shards_cpu.py` da PASS (48 revisiones):
+    - 10 shards construidos en una sesión y en dos (6 + 4) son idénticos byte a byte.
+    - Cada fuente queda a 0.12 puntos o menos de su peso.
+    - La página con la pregunta del benchmark sale, y la frase plantilla no cuenta.
+    - Ninguna URL entra en dos fuentes, ni una página junto a su reescritura.
+    - FIM, la plantilla de chat, la limpieza de código y de HTML, Stack Overflow y OpenAssistant salen como deben.
+    - El lector reanuda exacto, también en el modo sin etiquetas.
+    - Entrenar con shards y reanudar es bit a bit.
+  - `test_train_cpu.py` sigue en PASS.
+  - Velocidad del constructor: 460–760K tokens/s con 2 núcleos, con texto sintético.
+- **Ojo:**
+  - **Cambios al diseño:**
+    - La validación son los primeros documentos del último archivo, y el resto de ese archivo sí entrena (P19). Con archivos enteros, el código habría perdido 8% del Python, 6% del JavaScript y 20% del TypeScript.
+    - La descontaminación usa hashes exactos en vez de un filtro de Bloom (P20).
+  - **Escrito de memoria:** varios nombres de archivos y columnas de la receta, sobre todo los de los benchmarks, y Stack Exchange, Stack Overflow, la ONU y Europarl. Para eso está `plan`: lo que salga ❌ se corrige en la receta, no en el código.
+  - **El no determinismo de la segunda ronda nace en el primer backward:**
+    - El paso 0 es idéntico en las dos corridas: ce 11.32779, norma del gradiente 3.4302, el mismo lote.
+    - El paso 1 ya difiere en el quinto decimal.
+- **Siguiente:**
+  - El patch 0011: el relevo con Hugging Face, respaldo en Kaggle y candado.
+  - En Kaggle: `plan` y después las 3 sesiones de construcción.

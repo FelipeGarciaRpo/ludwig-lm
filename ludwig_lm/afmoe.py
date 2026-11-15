@@ -248,7 +248,8 @@ class LudwigAfmoe(nn.Module):
         init_ludwig(self.lm)
         self.fp32_residual = fp32_residual
 
-    def forward(self, input_ids, weights: LossWeights = LossWeights(), ce_chunk: int = 4096):
+    def forward(self, input_ids, weights: LossWeights = LossWeights(), ce_chunk: int = 4096, loss_mask=None):
+        """``loss_mask`` [B, T-1] (bool): the targets that count (MeCo: not the metadata spans)."""
         global _RECORD
         cfg = self.lm.config
         batch, seq = input_ids.shape
@@ -261,7 +262,7 @@ class LudwigAfmoe(nn.Module):
             h = self.lm.model(inputs_embeds=emb, use_cache=False).last_hidden_state      # after the final norm
         finally:
             _RECORD = previous
-        ce, z = chunked_cross_entropy(h[:, :-1], self.lm.lm_head.weight, input_ids[:, 1:], ce_chunk)
+        ce, z = chunked_cross_entropy(h[:, :-1], self.lm.lm_head.weight, input_ids[:, 1:], ce_chunk, mask=loss_mask)
         aux, rz, ent = moe_losses(records, batch, seq, cfg.num_experts, cfg.num_experts_per_tok)
         loss = ce + weights.output_z * z + weights.seq_aux * aux + weights.router_z * rz
         metrics = {"ce": ce.detach(), "z_out": z.detach(), "seq_aux": aux.detach(), "z_router": rz.detach(),

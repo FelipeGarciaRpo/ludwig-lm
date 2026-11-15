@@ -36,7 +36,8 @@ Trained by [`scripts/train_tokenizer.py`](../scripts/train_tokenizer.py) (v1.2) 
 | 6–9 | `<tool_call>`, `</tool_call>`, `<tool_response>`, `</tool_response>` | Tool calls |
 | 10–13 | `<\|fim_prefix\|>`, `<\|fim_middle\|>`, `<\|fim_suffix\|>`, `<\|fim_pad\|>` | Fill in the middle |
 | 14, 15 | `<\|repo_name\|>`, `<\|file_sep\|>` | Repository-level code |
-| 16–255 | `<\|reserved_0\|>` … `<\|reserved_239\|>` | Reserved |
+| 16, 17 | `<\|reserved_0\|>`, `<\|reserved_1\|>` | Start and end of a MeCo metadata span in the trunk's shards (T1, P21); out of the loss |
+| 18–255 | `<\|reserved_2\|>` … `<\|reserved_239\|>` | Reserved |
 
 `<think>` and the tool tags (ids 4–9) are added but not special, as in Qwen3. Decoding with `skip_special_tokens=True` keeps them, so a client still sees the reasoning and the calls.
 

@@ -7,6 +7,7 @@ sentencepiece
 protobuf
 numpy
 pyarrow               # the data reader (parquet)
+orjson                # optional: 3–10× faster JSON lines in T1's shard builder
 huggingface_hub       # downloads: data, tokenizers and, later, checkpoints
 
 # llama.cpp's GGUF converter (gguf-py itself is loaded from the llama.cpp checkout)

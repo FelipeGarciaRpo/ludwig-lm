@@ -494,8 +494,120 @@ if GUARDAR_CHECKPOINT:
 4. **Para seguir una corrida:** agrega como entrada la salida de la versión que la corrió y pon `REANUDAR = "auto"`. Sube `PASOS` y pon el `ENFRIAMIENTO` que toque. La corrida sigue con el mismo orden de datos, desde el checkpoint más avanzado de esa corrida que encuentre."""),
 ]
 
+# ----------------------------------------------------------------------------- T1 (shards, CPU)
+T1_RUN = r'''import subprocess, time, json, glob, os
+def correr(*args):
+    """Corre el constructor y va mostrando su salida; si falla, para el notebook."""
+    print(">>", " ".join(args), flush=True)
+    p = subprocess.Popen(["python", "scripts/build_shards.py", *args], stdout=subprocess.PIPE,
+                         stderr=subprocess.STDOUT, text=True)
+    for linea in p.stdout:
+        print(linea, end="", flush=True)
+    if p.wait() != 0:
+        raise SystemExit(f"build_shards.py terminó con código {p.returncode}")'''
+
+t1 = nbf.v4.new_notebook()
+t1.cells = [
+    md("""# T1 · Shards pre-tokenizados del tronco (Kaggle, CPU)
+
+Convierte las fuentes de la mezcla v3 (`configs/data_v3.json`, DISENO 4.4) en **shards de 256 MiB de ids uint16** que el entrenamiento solo lee: la sesión de GPU no descarga, no filtra ni tokeniza.
+
+Qué hace con cada documento: el formato de su fuente, descontaminación contra 16 benchmarks (13-gramas exactos), FIM en el 10% del código, la plantilla de chat con `<think>` como id en las trazas, la etiqueta MeCo de la fuente, y la mezcla exacta por tokens. Una página nunca entra dos veces entre fuentes ni entre sus formas (original, reescritura, traducción).
+
+**Kaggle:** sin acelerador (CPU), Internet *On*, y en *Add-ons → Secrets* un `HF_TOKEN` de la cuenta que aceptó los términos de `bigcode/the-stack-dedup`, `bigcode/starcoderdata` y `openlanguagedata/flores_plus`. *Save Version → Save & Run All*.
+
+**Las sesiones** (el tronco de la v1 son 168 shards = 22.5B tokens):
+
+| Sesión | `FASE` | Datos de entrada | Tarda | Sale |
+|---|---|---|---|---|
+| 0 | `plan` | ninguno | ~10 min | `plan.json`: cada fuente y cada benchmark contra el Hub |
+| 1 | `construir` | ninguno | ~6–11 h | descontaminación, listas de Stack-Edu, validación y los shards 0–55 |
+| 2 | `construir` | la salida de la sesión 1 (como dataset) | ~6–11 h | shards 56–111 |
+| 3 | `construir` | la de la sesión 2 | ~6–11 h | shards 112–167 |
+
+- **El commit queda fijo** en `COMMIT` para todas las sesiones. El constructor se niega a seguir con otro código, porque cambiaría los shards.
+- Si `plan` marca ❌, se corrige en `configs/data_v3.json`, no en el código. Por ejemplo, un nombre de columna o de carpeta. Después se vuelve a correr `plan`.
+- Cada sesión deja en la salida lo que necesita la siguiente: el estado, la validación y la descontaminación. Si una sesión muere, se pierde a lo más un shard."""),
+    code(r'''FASE = "plan"            # plan · construir · muestras
+COMMIT = "main"          # el commit de main con el patch de la T1: el MISMO en todas las sesiones
+REPO_URL = "https://github.com/FelipeGarciaRpo/ludwig-lm"
+SHARDS = 56              # por sesión: 56 × 256 MiB caben en los 20 GB de salida de Kaggle
+HORAS = 11.0             # tope de la sesión, contando desde aquí
+import time
+T_SESION = time.time()'''),
+    code(r'''import os, subprocess, sys
+os.chdir("/kaggle/working")
+if not os.path.exists("ludwig-lm"):
+    subprocess.run(["git", "clone", "-q", REPO_URL, "ludwig-lm"], check=True)
+subprocess.run(["git", "-C", "ludwig-lm", "checkout", "-q", COMMIT], check=True)
+os.chdir("/kaggle/working/ludwig-lm")
+print("commit", subprocess.run(["git", "rev-parse", "HEAD"], capture_output=True, text=True).stdout.strip())
+!pip install -q orjson hf_xet
+try:
+    from kaggle_secrets import UserSecretsClient
+    os.environ["HF_TOKEN"] = UserSecretsClient().get_secret("HF_TOKEN")
+    print("HF_TOKEN: sí")
+except Exception as e:
+    print("⚠️ sin HF_TOKEN: The Stack v1, StarCoderData y Flores+ no van a abrir", type(e).__name__)
+!nproc; free -g | head -2; df -h /kaggle/working | tail -1'''),
+    code(T1_RUN),
+    md("""## 1. Plan
+
+Lee el primer archivo de cada fuente y de cada benchmark y arma su primer documento. Así muestra qué archivos encontró, qué columnas trae cada uno y un ejemplo de texto. No construye nada."""),
+    code(r'''SALIDA = "/kaggle/working/t1"
+if FASE == "plan":
+    try:
+        correr("plan", "--out", SALIDA)
+    finally:
+        plan = json.load(open(f"{SALIDA}/plan.json"))
+        for n, r in plan["sources"].items():
+            if r["status"] == "ok":
+                print(f"\n✅ {n}: {r['files']} archivos, {r['bytes'] / 1e9:.1f} GB · columnas {list(r['columns'])[:12]}")
+                print(f"   {r['example'][:200]!r}")
+            else:
+                print(f"\n❌ {n}: {r['error']}")
+else:
+    print("FASE no es plan")'''),
+    md("""## 2. Construcción
+
+La primera sesión prepara la descontaminación y las listas de Stack-Edu, escribe la validación, y después construye shards. Las siguientes buscan solas el estado más avanzado en los datos de entrada y siguen desde ahí, exacto."""),
+    code(r'''if FASE == "construir":
+    horas = round(HORAS - (time.time() - T_SESION) / 3600 - 0.3, 2)
+    correr("build", "--out", SALIDA, "--from", "auto", "--roots", "/kaggle/input", "--shards", str(SHARDS),
+           "--max-hours", str(horas))
+    correr("samples", "--manifest", f"{SALIDA}/manifest.json", "--out", f"{SALIDA}/muestras.txt",
+           "--roots", "/kaggle/input")
+    rep = json.load(open(sorted(glob.glob(f"{SALIDA}/report_*.json"))[-1]))
+    receta = {s["name"]: s["weight"] for s in json.load(open(f"{SALIDA}/recipe.json"))["sources"]}
+    print(f"\n{rep['session_shards']} shards en esta sesión, {rep['total_shards']} en total, {rep['hours']} h "
+          f"({rep['minutes_per_shard']} min por shard)")
+    print(f"{'fuente':22s} {'% real':>7s} {'receta':>7s} {'docs':>9s} {'repetidos':>9s} {'contam.':>8s} {'val':>6s} {'largos':>7s} {'FIM':>6s}")
+    for n, pct in rep["share_by_source"].items():
+        st = rep["stats"][n]
+        print(f"{n:22s} {pct:7.2f} {receta[n]:7.2f} {st.get('docs', 0):9,} {st.get('dup', 0):9,} {st.get('decon', 0):8,} "
+              f"{st.get('val_excluded', 0):6,} {st.get('too_long', 0):7,} {st.get('fim', 0):6,}")
+elif FASE == "muestras":
+    correr("samples", "--manifest", sorted(glob.glob("/kaggle/input/**/manifest.json", recursive=True))[-1],
+           "--out", "/kaggle/working/muestras.txt", "--roots", "/kaggle/input")
+!du -sh /kaggle/working/t1 2>/dev/null; ls /kaggle/working/t1 2>/dev/null'''),
+    md("""## Qué hacer con el resultado
+
+1. **Después de cada sesión de `construir`:**
+   - En la salida del notebook: *New Dataset*, privado, con nombre `ludwig2-tronco-v3-1` (después `-2` y `-3`).
+   - Comparte el dataset con las cuentas del relevo (*Share → can view*).
+   - La siguiente sesión lo agrega como entrada (*Add Input*).
+2. **Al repo,** en `results/t1/` y con su fila en `results/README.md`:
+   - `plan.json`, `manifest.json`, los `report_*.json` y `muestras.txt` de cada sesión;
+   - `prep/prepare.json`, que cuenta los 13-gramas de cada benchmark y los archivos permisivos de Stack-Edu.
+
+   Los shards no van al repo, porque tienen texto y código de terceros; quedan privados en Kaggle. El manifiesto, con los sha256, sí va.
+3. **Antes de la G0:**
+   - Lee `muestras.txt`: tres documentos de cada fuente, decodificados con sus tokens de control. Ahí se ve si algo salió mal: un formato raro, etiquetas mal puestas, FIM o plantilla de chat rotos.
+   - Revisa en el último reporte que el % real de cada fuente esté a menos de 0.1 punto de la receta, y que las columnas de repetidos y contaminación tengan sentido."""),
+]
+
 for nb, name in [(t01, "t0_1_formato_mtp_tokenizador.ipynb"), (t02, "t0_2_velocidad_memoria_2xT4.ipynb"),
-                 (t02v2, "t0_2v2_afmoe_2xT4.ipynb"), (t03, "t0_3_t2_lr_2xT4.ipynb")]:
+                 (t02v2, "t0_2v2_afmoe_2xT4.ipynb"), (t03, "t0_3_t2_lr_2xT4.ipynb"), (t1, "t1_shards_cpu.ipynb")]:
     for i, cell in enumerate(nb.cells):
         cell.id = f"cell-{i:02d}"          # stable ids: regenerating gives an identical file
     nb.metadata["kernelspec"] = {"name": "python3", "display_name": "Python 3", "language": "python"}

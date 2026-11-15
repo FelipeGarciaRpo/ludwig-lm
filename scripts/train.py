@@ -6,10 +6,12 @@ defaults are the pieces it selected: one matmul per expert (``grouped_mm``, whic
 residual stream, FP16 gradient reduce-scatter, FSDP2 prefetch, and Muon's momentum in CPU RAM, which keeps
 the reserved memory under the G0 limit of 13.5 GiB. What a real run adds:
 
-  data         ludwig_lm.data.PackedReader: parquet -> tokens + EOS -> windows, with exact resume
+  data         --shards: T1's pre-tokenized shards (ludwig_lm.shards.ShardReader; MeCo tags left out of the
+               loss with --meta mask), with validation per domain; or --train/--val: parquet read by
+               ludwig_lm.data.PackedReader (T0.3/T2). Both resume exactly
   schedule     WSD: linear warm-up, constant, optional 1−√ decay over the last --decay-steps steps;
                optional batch ramp (--ramp-tokens)
-  evaluation   validation loss and bits per byte on fixed held-out windows (--val)
+  evaluation   validation loss and bits per byte on fixed held-out windows, per domain with --shards
   alarms       the design's table (5.4): a loss spike above mean + 4σ is skipped, 3 within 200 steps stop
                the run; everything else is logged as an alarm row
   checkpoints  ludwig_lm.checkpoint: the full state; each resume checks the state bit for bit and the first
@@ -23,6 +25,7 @@ Writes one JSON row per event to --out: config, step, eval, alarm, save, resume,
 from __future__ import annotations
 
 import argparse
+import hashlib
 import json
 import math
 import os
@@ -48,6 +51,7 @@ from ludwig_lm.afmoe import (ExpertBalancer, LossWeights, LudwigAfmoe, count_par
 from ludwig_lm.data import (PackedReader, batch_hash, eos_id_of, expand, load_tokenizer,  # noqa: E402
                             peek_batch, val_windows)
 from ludwig_lm.muon import DynamicLossScaler, build_optimizers  # noqa: E402
+from ludwig_lm.shards import ShardReader, TokenStream, loss_mask, val_sets  # noqa: E402
 
 T4_PEAK_TFLOPS = 65.0
 LN2 = math.log(2.0)
@@ -67,8 +71,14 @@ def parse(argv=None):
     g.add_argument("--seed", type=int, default=0, help="model initialisation")
     g = ap.add_argument_group("data")
     g.add_argument("--tokenizer", required=True, help="tokenizer.json")
-    g.add_argument("--train", nargs="+", required=True, help="parquet files or globs")
-    g.add_argument("--val", nargs="+", required=True, help="parquet files or globs, never trained on")
+    g.add_argument("--shards", default="", help="T1: the build's manifest.json (instead of --train/--val)")
+    g.add_argument("--shard-roots", nargs="*", default=["/kaggle/input"],
+                   help="where to look for shards not next to the manifest (one Kaggle dataset per batch)")
+    g.add_argument("--meta", default="mask", choices=["mask", "keep", "strip"],
+                   help="MeCo tags in the shards: out of the loss (mask), trained (keep) or removed (strip)")
+    g.add_argument("--eval-domains", nargs="*", default=[], help="with --shards: these domains (default: all)")
+    g.add_argument("--train", nargs="+", default=[], help="parquet files or globs")
+    g.add_argument("--val", nargs="+", default=[], help="parquet files or globs, never trained on")
     g.add_argument("--text-column", default="text")
     g.add_argument("--rows-per-slice", type=int, default=1024)
     g.add_argument("--data-seed", type=int, default=0)
@@ -99,7 +109,7 @@ def parse(argv=None):
     g.add_argument("--output-z", type=float, default=1e-4)
     g = ap.add_argument_group("evaluation and alarms")
     g.add_argument("--eval-every", type=int, default=50, help="0: only at the start, before the decay and at the end")
-    g.add_argument("--eval-windows", type=int, default=64, help="held-out windows per GPU")
+    g.add_argument("--eval-windows", type=int, default=64, help="held-out windows per GPU (per domain with --shards)")
     g.add_argument("--spike-sigma", type=float, default=4.0)
     g.add_argument("--spike-window", type=int, default=200)
     g.add_argument("--spike-min-history", type=int, default=50)
@@ -116,7 +126,12 @@ def parse(argv=None):
     a("--log-every", type=int, default=10, help="print every N steps (every step goes to --out)")
     a("--tag", default="run")
     a("--out", default=str(ROOT / "results" / "train.jsonl"))
-    return ap.parse_args(argv)
+    args = ap.parse_args(argv)
+    if bool(args.shards) == bool(args.train or args.val):
+        ap.error("give either --shards or both --train and --val")
+    if not args.shards and not (args.train and args.val):
+        ap.error("--train and --val go together")
+    return args
 
 
 def lr_factor(step: int, warmup: int, steps: int, decay: int) -> float:
@@ -271,11 +286,40 @@ class Trainer:
         self.weights = LossWeights(output_z=a.output_z, seq_aux=a.seq_aux, router_z=a.router_z)
         self.amp_dtype = torch.float16 if self.use_cuda else torch.bfloat16   # bf16 only exercises the CPU path
 
-        self.train_files, self.val_files = expand(a.train), expand(a.val)
-        if set(self.train_files) & set(self.val_files):
-            raise ValueError("a validation file is also a training file")
-        self.val_ids, self.val_bytes = val_windows(self.val_files, self.tok, a.seq, a.eval_windows, self.rank,
-                                                   self.world, self.eos, a.rows_per_slice, a.text_column)
+        if a.shards:
+            self.stream = TokenStream(a.shards, a.shard_roots)
+            man = self.stream.manifest
+            sha1 = hashlib.sha1(Path(a.tokenizer).read_bytes()).hexdigest()
+            if sha1 != man["tokenizer_sha1"]:
+                raise ValueError(f"--tokenizer is {sha1[:12]}; the shards were built with {man['tokenizer_sha1'][:12]}")
+            if self.eos != 0:
+                raise ValueError(f"the shards end each document with id 0; this tokenizer's EOS is {self.eos}")
+            self.mask_meta = a.meta == "mask" and man["meta"]["enabled"]
+            domains = man["eval_domains"]
+            if a.eval_domains:
+                domains = {d: domains[d] for d in a.eval_domains}
+            self.val_sets = val_sets(a.shards, self.tok, a.seq, a.eval_windows, self.rank, self.world,
+                                     a.shard_roots, domains)
+            self.train_files, self.val_files = [], []
+        else:
+            self.stream, self.mask_meta = None, False
+            self.train_files, self.val_files = expand(a.train), expand(a.val)
+            if set(self.train_files) & set(self.val_files):
+                raise ValueError("a validation file is also a training file")
+            self.val_sets = {"val": val_windows(self.val_files, self.tok, a.seq, a.eval_windows, self.rank,
+                                                self.world, self.eos, a.rows_per_slice, a.text_column)}
+
+    def make_reader(self, state):
+        a = self.args
+        if self.stream is not None:
+            return ShardReader(self.stream, a.seq, a.micro, self.rank, self.world, state=state, meta=a.meta)
+        return PackedReader(**self.reader_args(), state=state)
+
+    def peek(self, state):
+        """The batch a reader restarted from ``state`` gives first."""
+        if self.stream is not None:
+            return self.reader.peek(state)
+        return peek_batch(**self.reader_args(), state=state)
 
     def reader_args(self):
         a = self.args
@@ -292,8 +336,9 @@ class Trainer:
 
     # ------------------------------------------------------------------ one step
     def micro_step(self, ids, ga):
+        mask = loss_mask(ids) if self.mask_meta else None
         with torch.autocast(device_type=self.device.type, dtype=self.amp_dtype, enabled=self.fp32_residual):
-            loss, mets = self.model(ids, self.weights, ce_chunk=self.args.ce_chunk)
+            loss, mets = self.model(ids, self.weights, ce_chunk=self.args.ce_chunk, loss_mask=mask)
         (loss * (self.scaler.scale / ga)).backward()
         self.balancer.accumulate(mets["chosen"])
         return torch.stack([mets["ce"], mets["z_out"], mets["seq_aux"], mets["z_router"], mets["router_entropy"]])
@@ -324,31 +369,39 @@ class Trainer:
         a = self.args
         t = time.time()
         self.model.eval()
-        nats = torch.zeros((), dtype=torch.float64, device=self.device)
+        names = list(self.val_sets)
+        per = torch.zeros(len(names), 3, dtype=torch.float64, device=self.device)      # nats, tokens, bytes
         ent = torch.zeros((), dtype=torch.float64, device=self.device)
-        n_tok = n_mb = 0
-        for i in range(0, self.val_ids.shape[0], a.micro):
-            ids = self.val_ids[i:i + a.micro].to(self.device)
-            with torch.autocast(device_type=self.device.type, dtype=self.amp_dtype, enabled=self.fp32_residual):
-                _, mets = self.model(ids, self.weights, ce_chunk=a.ce_chunk)
-            n = ids.shape[0] * (ids.shape[1] - 1)
-            nats += mets["ce"].double() * n
-            ent += mets["router_entropy"].double()
-            n_tok += n
-            n_mb += 1
+        n_mb = 0
+        for j, name in enumerate(names):
+            val_ids, val_bytes = self.val_sets[name]
+            for i in range(0, val_ids.shape[0], a.micro):
+                ids = val_ids[i:i + a.micro].to(self.device)
+                with torch.autocast(device_type=self.device.type, dtype=self.amp_dtype, enabled=self.fp32_residual):
+                    _, mets = self.model(ids, self.weights, ce_chunk=a.ce_chunk)
+                n = ids.shape[0] * (ids.shape[1] - 1)
+                per[j, 0] += mets["ce"].double() * n
+                per[j, 1] += n
+                ent += mets["router_entropy"].double()
+                n_mb += 1
+            per[j, 2] += val_bytes
         self.model.train()
         if hasattr(self.model, "reshard"):
             self.model.reshard()                       # the root stays unsharded after a forward without backward
-        tot = torch.tensor([float(nats), float(n_tok), float(self.val_bytes), float(ent) / max(1, n_mb)],
-                           dtype=torch.float64, device=self.device)
+        tot = torch.cat([per.reshape(-1), (ent / max(1, n_mb)).reshape(1)])
         dist.all_reduce(tot)
-        ce = float(tot[0] / tot[1])
-        row = {"step": step, "tokens": tokens, "val_ce": round(ce, 5), "val_bpb": round(float(tot[0] / LN2 / tot[2]), 5),
-               "val_tokens": int(tot[1]), "val_bytes": int(tot[2]), "router_entropy": round(float(tot[3]) / self.world, 4),
+        per, ent_all = tot[:-1].reshape(len(names), 3), float(tot[-1])
+        nats, n_tok, n_bytes = (float(x) for x in per.sum(0))
+        ce = nats / n_tok
+        row = {"step": step, "tokens": tokens, "val_ce": round(ce, 5), "val_bpb": round(nats / LN2 / n_bytes, 5),
+               "val_tokens": int(n_tok), "val_bytes": int(n_bytes), "router_entropy": round(ent_all / self.world, 4),
                "qk_gain_max": round(self.qk_gain_max(), 3), "eval_s": round(time.time() - t, 1),
                **self.balancer.window_stats(), **extra}
+        if names != ["val"]:
+            row["val_bpb_by_domain"] = {n: round(float(per[j, 0] / LN2 / per[j, 2]), 5) for j, n in enumerate(names)}
         self.log.row("eval", **row)
-        self.log.say(f"[eval] step {step}: val bpb {row['val_bpb']:.4f}  ce {ce:.4f}  router entropy "
+        by = "".join(f"  {k} {v:.4f}" for k, v in row.get("val_bpb_by_domain", {}).items())
+        self.log.say(f"[eval] step {step}: val bpb {row['val_bpb']:.4f}{by}  ce {ce:.4f}  router entropy "
                      f"{row['router_entropy']:.3f}  qk gain {row['qk_gain_max']:.2f}  dead experts "
                      f"{row['dead_experts_window']}  ({row['eval_s']:.0f} s)")
         return row
@@ -379,7 +432,7 @@ class Trainer:
         path = Path(a.save_dir) / f"step_{step:06d}"
         try:
             rstate, nxt = self.reader.state_dict(), []
-            if not ckpt.all_ok(ckpt.local_step(lambda: nxt.append(peek_batch(**self.reader_args(), state=rstate)))):
+            if not ckpt.all_ok(ckpt.local_step(lambda: nxt.append(self.peek(rstate)))):
                 raise RuntimeError("could not read the batch that follows the checkpoint on every rank")
             meta = {"step": step, "tokens": tokens, "reason": reason, "tag": a.tag, "world": self.world,
                     "micro": a.micro, "seq": a.seq, "tokens_per_step": a.tokens_per_step, "lr_mult": a.lr_mult,
@@ -440,21 +493,33 @@ class Trainer:
             start, tokens, resumed = meta["step"], meta["tokens"], True
             hist.extend(meta.get("loss_history", []))
             self.hours_before = meta.get("train_hours", 0.0)
-        self.reader = PackedReader(**self.reader_args(), state=reader_state)
+        self.reader = self.make_reader(reader_state)
         tps_now, ga = self.tokens_per_step(tokens)
         flops_tok = flops_per_token(self.cfg, self.counts["active"], a.seq)
         gpu = torch.cuda.get_device_name(0) if self.use_cuda else "cpu"
+        if self.stream is not None:
+            man = self.stream.manifest
+            data = {"build_id": man["build_id"], "recipe": man["recipe"], "shards": len(man["shards"]),
+                    "tokens_available": self.stream.total, "start_token": self.reader.offset, "meta": a.meta,
+                    "eval_domains": {k: v for k, v in man["eval_domains"].items() if k in self.val_sets}}
+        else:
+            data = {"train_files": [Path(f).name for f in self.train_files],
+                    "val_files": [Path(f).name for f in self.val_files], "train_slices": self.reader.src.n_slices}
         self.log.row("config", args=vars(a), world=self.world, gpu=gpu, torch=torch.__version__, code=self.code,
                      params_total=self.counts["total"], params_active=self.counts["active"], vocab=self.tok.get_vocab_size(),
-                     eos_id=self.eos, grad_accum=ga, muon_weight_decay=self.muon_wd,
-                     train_files=[Path(f).name for f in self.train_files],
-                     val_files=[Path(f).name for f in self.val_files], train_slices=self.reader.src.n_slices,
-                     val_tokens_per_rank=int(self.val_ids.numel()), start_step=start, resumed=resumed)
+                     eos_id=self.eos, grad_accum=ga, muon_weight_decay=self.muon_wd, **data,
+                     val_tokens_per_rank={k: int(v[0].numel()) for k, v in self.val_sets.items()},
+                     start_step=start, resumed=resumed)
         self.log.say(f"[model] AFMoE {self.counts['total']/1e9:.3f}B total, {self.counts['active']/1e9:.3f}B active | "
                      f"moe={a.moe_impl} residual={a.residual} reduce={a.reduce} momentum={a.momentum_device} | "
                      f"{self.world} × {gpu}")
-        self.log.say(f"[data] {len(self.train_files)} train files ({self.reader.src.n_slices} slices), "
-                     f"{len(self.val_files)} val files | vocab {self.tok.get_vocab_size()} | eos {self.eos} | "
+        if self.stream is not None:
+            what = (f"build {data['build_id']}: {data['shards']} shards, {self.stream.total / 1e9:.2f}B tokens "
+                    f"(from token {self.reader.offset:,}), meta={a.meta}, val {', '.join(self.val_sets)}")
+        else:
+            what = (f"{len(self.train_files)} train files ({self.reader.src.n_slices} slices), "
+                    f"{len(self.val_files)} val files")
+        self.log.say(f"[data] {what} | vocab {self.tok.get_vocab_size()} | eos {self.eos} | "
                      f"{tps_now} tokens per step = {self.world} GPUs × {a.micro} × {a.seq} × {ga} micro-steps")
 
         self.t_loop = self.last_save = time.time()
@@ -480,6 +545,13 @@ class Trainer:
                 if can_save:
                     self.save(step, tokens, "time" if step != a.pause_at_step else "pause", hist)
                 status = "paused"
+                break
+            if self.stream is not None and self.reader.tokens_left() < self.tokens_per_step(tokens)[0]:
+                if can_save:                              # the next shards are not attached: stop in order
+                    self.save(step, tokens, "out_of_data", hist)
+                self.log.row("alarm", step=step, alarm="out_of_data", tokens_left=self.reader.tokens_left())
+                self.log.say(f"[alarm] step {step}: the attached shards end here; attach the next ones")
+                status = "out_of_data"
                 break
             if can_save:
                 if step == decay_start:

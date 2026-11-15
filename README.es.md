@@ -14,7 +14,7 @@
 
 </div>
 
-> **Estado, 14 de noviembre de 2026.** El diseño v1.2 está aprobado: Ludwig 2 se guarda en el formato AFMoE de los modelos Trinity de Arcee, que corre en llama.cpp sin parche. El bucle de entrenamiento real hizo tres corridas de 400 pasos en 2×T4: todas estables en FP16, a **3,300–3,600 tokens/s, ~1,900–2,100 h para 25B tokens**. Una segunda ronda mide cuánto se mueve el mejor learning rate con la duración del entrenamiento ([notebook](notebooks/t0_3_t2_lr_2xT4.ipynb)), y el tokenizador de 64K quedó fijado ([`tokenizer/`](tokenizer/)): 4.16 bytes por token en la mezcla del tronco, contra 4.03 del de Qwen3, de 151K. **Todavía no hay pesos.** Este repositorio documenta el proyecto desde la primera prueba.
+> **Estado, 14 de noviembre de 2026.** El diseño v1.2 está aprobado: Ludwig 2 se guarda en el formato AFMoE de los modelos Trinity de Arcee, que corre en llama.cpp sin parche. El bucle de entrenamiento real hizo tres corridas de 400 pasos en 2×T4: todas estables en FP16, a **3,300–3,600 tokens/s, ~1,900–2,100 h para 25B tokens**. Una segunda ronda mide cuánto se mueve el mejor learning rate con la duración del entrenamiento ([notebook](notebooks/t0_3_t2_lr_2xT4.ipynb)), y el tokenizador de 64K quedó fijado ([`tokenizer/`](tokenizer/)): 4.16 bytes por token en la mezcla del tronco, contra 4.03 del de Qwen3, de 151K. El constructor de la T1 está listo para convertir los datos del tronco en shards pre-tokenizados en la CPU de Kaggle ([notebook](notebooks/t1_shards_cpu.ipynb)). **Todavía no hay pesos.** Este repositorio documenta el proyecto desde la primera prueba.
 
 ## Por qué Ludwig 2
 
@@ -192,7 +192,13 @@ BPE a nivel de bytes con 65,536 tokens y la regex de corte de Qwen2, entrenado e
   La tabla completa está en [`docs/es/DISENO.md`](docs/es/DISENO.md) (4.2–4.4), y la revisión que la respalda, en [`results/datos_tronco_v3/`](results/datos_tronco_v3/).
 - **Licencias:** solo texto humano abierto y salidas de modelos abiertos con licencia permisiva. **Nunca salidas de APIs cerradas.** Los pesos se publican solo después de auditar la ficha de datos fuente por fuente.
 - **Texto escrito por modelos:** con topes por tipo en el tronco (generación libre ≤5%, reescritura ≤10%, traducción ≤10%, ≤20% en total; la v3 queda en 18.5%) y de 35% en cada rama, de al menos 3 familias de maestros.
-- **Descontaminación** contra los benchmarks con filtros de Bloom de 13-gramas; el val de cada fuente nunca se entrena.
+- **Descontaminación** contra 16 benchmarks en inglés y español, con hashes exactos de 13-gramas de tokens. Los documentos de validación de cada fuente nunca se entrenan.
+- **Pre-tokenizado una sola vez (T1)** en shards de 256 MiB de ids uint16, con un manifiesto de hashes ([`scripts/build_shards.py`](scripts/build_shards.py), receta en [`configs/data_v3.json`](configs/data_v3.json)):
+  - las etiquetas de fuente de MeCo, fuera de la pérdida;
+  - FIM en el 10% del código;
+  - la plantilla de chat, con `<think>` como token, en las trazas de razonamiento.
+
+  Construidos en una sesión o en varias, los shards salen idénticos byte a byte.
 
 ### Por qué 24% de español
 
@@ -221,12 +227,16 @@ torchrun --nproc_per_node 2 scripts/bench_afmoe.py --config configs/tiny_afmoe.j
 
 # El bucle de entrenamiento y su lector de datos: una corrida reanudada debe dar lo mismo, bit a bit, que una sin cortes (~1–4 min)
 python scripts/test_train_cpu.py
+
+# T1: el constructor de shards sobre un Hub local pequeño, el lector de shards y el entrenamiento con shards (~1–3 min)
+python scripts/test_shards_cpu.py
 ```
 
 ### Correrlas en Kaggle
 
 | Notebook | Acelerador | Tiempo | Qué sale |
 |---|---|---|---|
+| [`t1_shards_cpu.ipynb`](notebooks/t1_shards_cpu.ipynb) | None (CPU) | ~10 min (plan), después 3 sesiones de ~6–11 h | Los 168 shards del tronco (22.5B tokens), 56 por sesión, para guardar como datasets privados de Kaggle |
 | [`t0_3_t2_lr_2xT4.ipynb`](notebooks/t0_3_t2_lr_2xT4.ipynb) | GPU T4 x2 | ~9.5 h por corrida | `results/t0_3_t2/<corrida>.jsonl` y `.png`, y el checkpoint de antes del enfriamiento |
 | [`t0_2v2_afmoe_2xT4.ipynb`](notebooks/t0_2v2_afmoe_2xT4.ipynb) | GPU T4 x2 | ~1–1.25 h | `results/t0_2v2.jsonl` (hecha: [`results/t0_2v2_intento2/`](results/t0_2v2_intento2/)) |
 | [`t0_1_formato_mtp_tokenizador.ipynb`](notebooks/t0_1_formato_mtp_tokenizador.ipynb) | None (CPU) | ~15–25 min | Pruebas del formato A y del tokenizador, guardadas como registro: la del tokenizador ahora es `scripts/smoke_tokenizer.py` (T0.1b) |
@@ -238,10 +248,13 @@ En cada notebook pon `REPO_URL` con la URL de tu repo (o sube el repo como datas
 ```
 ludwig-lm/
 ├── tokenizer/      # el tokenizador de 64K, fijado: receta, tokens de control y compresión en su README
-├── ludwig_lm/      # afmoe.py: el modelo (AFMoE), su kernel, pérdidas y balanceo · muon.py · data.py: lector de datos provisional
+├── ludwig_lm/      # afmoe.py: el modelo (AFMoE), su kernel, pérdidas y balanceo · muon.py · data.py: lector de parquet
+│                   # · shards.py: los shards de la T1 y su lector · sources.py, build.py: el constructor de shards
 │                   # · checkpoint.py: checkpoints con reanudación verificada · model.py: formato A (respaldo)
-├── configs/        # ludwig2_afmoe.json (el modelo real), tiny_afmoe.json (pruebas); ludwig2.json, tiny.json (formato A)
-├── scripts/        # train.py (el bucle de entrenamiento) y test_train_cpu.py, train_tokenizer.py, smoke_tokenizer.py (T0.1b),
+├── configs/        # ludwig2_afmoe.json (el modelo real), tiny_afmoe.json (pruebas), data_v3.json (los datos del tronco);
+│                   # ludwig2.json, tiny.json (formato A)
+├── scripts/        # train.py (el bucle de entrenamiento) y test_train_cpu.py, build_shards.py (T1) y test_shards_cpu.py,
+│                   # train_tokenizer.py, smoke_tokenizer.py (T0.1b),
 │                   # bench_afmoe.py (T0.2 v2), smoke_format_afmoe.py (T0.1-C),
 │                   # make_notebooks.py, convert_gguf.py, lo del formato A
 ├── notebooks/      # notebooks de Kaggle, generados con scripts/make_notebooks.py
@@ -262,7 +275,7 @@ ludwig-lm/
 - [x] **Tokenizador** BPE de 64K, fijado ([`tokenizer/`](tokenizer/)): 4.16 bytes por token en la mezcla del tronco
 - [x] **T0.1b** El tokenizador final en llama.cpp: tokenización idéntica y todos los ids especiales detectados
 - [x] **Mezcla v3** Fuentes y repartos cerrados, código incluido ([`results/datos_tronco_v3/`](results/datos_tronco_v3/))
-- [ ] **T1** Datos: archivos pre-tokenizados, construidos en la CPU de Kaggle, con descontaminación y manifiestos
+- [ ] **T1** Datos: el constructor y el lector de shards están listos y probados ([`scripts/build_shards.py`](scripts/build_shards.py)); la construcción son 3 sesiones de CPU de Kaggle ([notebook](notebooks/t1_shards_cpu.ipynb))
 - [ ] **G0** Compuerta: ≥6 h sostenidas, guardado, reanudación en otra cuenta, 16K
 - [ ] **T3** Tronco hasta 22.5B tokens
 - [ ] **T4** Rama de la v1: 2.5B tokens, 16K

@@ -256,6 +256,9 @@ La T0.1 (`scripts/smoke_format.py`) arma un modelo diminuto con exactamente la e
    - Se construye en sesiones de CPU de Kaggle, que no gastan cuota de GPU. La sesión de GPU no descarga, no filtra ni tokeniza: reanudar exacto es un offset, y reproducir es comparar hashes.
    - Para la v1 son ~50 GB. Los archivos quedan privados, porque tienen texto y código de terceros. Se publican la receta, los manifiestos y los hashes.
    - EOS al final de cada documento y ventanas de largo fijo sin botar colas, como en el lector actual.
+   - ✅ **Hecho** (P18–P24): `scripts/build_shards.py`, con la receta en `configs/data_v3.json`, y el lector en `ludwig_lm/shards.py`.
+     - Shards de 2^27 tokens (256 MiB): el tronco de la v1 son 168, en 3 sesiones de 56 (`notebooks/t1_shards_cpu.ipynb`).
+     - Construidos en una sesión o en varias, salen idénticos byte a byte (`scripts/test_shards_cpu.py`).
 2. **Duplicados:** FineWeb-Edu y DCLM entran en sus versiones sin duplicados, porque según el informe de Zyda-2 las originales traen ~80% de duplicados internos. Entre FineWeb-Edu y DCLM se quitan además las URL repetidas, con un hash de 64 bits.
 3. **Un documento, una sola forma:** el original en inglés, su reescritura en FinePhrase y su traducción en TransWeb-Edu no entran juntos. Se cruzan por el id o la URL de Common Crawl, que las dos conservan. La excepción es el 0.5% de texto paralelo.
 4. **Código:**
@@ -263,10 +266,14 @@ La T0.1 (`scripts/smoke_format.py`) arma un modelo diminuto con exactamente la e
    - Fuera los encabezados de licencia y los archivos generados o minificados.
    - Common Pile ya reemplaza correos, teléfonos e IP. Aquí se limpian llaves y contraseñas; en HTML y CSS, que vienen de The Stack v1, también los datos personales.
    - El manifiesto guarda `repo_name`, `path`, `license`, `url` y `blob_id`, y en Stack Overflow, `Id` y `OwnerUserId`: es la atribución.
-5. **Descontaminación** en el momento, con un filtro de Bloom de los 13-gramas de GSM8K, MATH, HumanEval, MBPP, MultiPL-E, MMLU, ARC, HellaSwag, PIQA y WinoGrande, y de los de español: MGSM, Belebele, Global-MMLU, HellaSwag en español y Flores.
+5. **Descontaminación** en el momento, con los 13-gramas de GSM8K, MATH (y MATH-500), HumanEval, MBPP, MultiPL-E, MMLU, ARC, HellaSwag, PIQA y WinoGrande, y de los de español: MGSM, Belebele, Global-MMLU, HellaSwag en español y Flores.
+   - ✅ Son 13-gramas de tokens con hashes exactos de 64 bits, en vez de un filtro de Bloom: caben en 80 MB y no dan falsos positivos (P20).
+   - Un 13-grama que aparece en más de 10 ítems es una plantilla y no cuenta.
 6. **Etiquetas de fuente** al estilo MeCo 🧪: la fuente antepuesta en el tronco y nada en las ramas, para que el modelo final funcione sin etiquetas.
-7. **FIM** en el 10% del código. Los ids 10–13 los pone el lector, no el texto.
-8. **Val:** el último archivo de cada fuente nunca se entrena. La pérdida se reporta en bits por byte, por dominio, desde el paso 0 (P17).
+   - ✅ Forma (P21): `<|reserved_0|>` + "URL: dominio" + `<|reserved_1|>`, fuera de la pérdida como en MeCo.
+   - `--meta strip` las quita al leer, así que se puede entrenar sin ellas con los mismos shards.
+7. **FIM** en el 10% del código. Los ids 10–13 los pone el lector, no el texto. ✅ En el orden prefijo-sufijo-medio del Qwen2.5-Coder, cortado en dos caracteres al azar (P24).
+8. **Val:** los primeros documentos del último archivo de cada fuente nunca se entrenan; el resto de ese archivo sí (P19). Así el código no pierde un shard entero de Common Pile por lenguaje. La pérdida se reporta en bits por byte, por dominio, desde el paso 0 (P17).
 9. **Trazas y chat** con la plantilla de chat y `<think>` como token (id 4), nunca como texto plano. Si no, el modelo aprende dos formatos para lo mismo.
 
 ### 4.4 Mezcla del tronco v3 (estacionaria) ✅
@@ -636,7 +643,7 @@ Se agregan a medida que existan: `tokenizer/`, `data/` (recetas, lector, descont
 | T0.1 | ✅ **Prueba de formato** (`notebooks/t0_1_formato_mtp_tokenizador.ipynb`): con parche, todo pasa (2.5). Falta correrla con el tokenizador real de 64K | CPU | ~0.5 | Hecho el 11 nov |
 | T0.2 | ✅ **Velocidad y memoria** (T0.2 v2, `notebooks/t0_2v2_afmoe_2xT4.ipynb`): piezas de velocidad, micro-lote, 2K/4K/16K, guardado y carga, balanceo | 2×T4 | ~1 | Hecho el 12 nov |
 | T0.3 + T2 | **LR y estabilidad en FP16** (`notebooks/t0_3_t2_lr_2xT4.ipynb`): 3 corridas de 400 pasos con LR ×0.5, ×1 y ×2, en paralelo en 3 cuentas, con datos y tokenizador provisionales. La ganadora se puede alargar como prueba de estabilidad | 2×T4 | ~3 × 9.5 | LR fijado y ninguna corrida inestable |
-| T1 | **Datos:** fuentes cerradas (4.2, mezcla v3); pre-tokenizado con descontaminación y manifiestos | CPU | — | Determinista y reanuda exacto |
+| T1 | **Datos:** fuentes cerradas (4.2, mezcla v3); pre-tokenizado con descontaminación y manifiestos. El código está listo y probado (P18–P24); faltan el `plan` contra el Hub y las 3 sesiones de construcción (`notebooks/t1_shards_cpu.ipynb`) | CPU | ~10 min + 3 × 6–11 | Los 168 shards del tronco, con sus manifiestos |
 | G0 | **Compuerta G0** (5.7): ≥6 h sostenidas, guardado, reanudación en otra cuenta, 16K | 2×T4 | ~8–10 | Pasan las 5 condiciones |
 | T3 | **Tronco** hasta 22.5B | Relevo | ~1,550–2,450 | — |
 | T4 | **Rama de la v1** (2.5B, con 16K y MTP) | Relevo | ~225–355 | Base lista |
