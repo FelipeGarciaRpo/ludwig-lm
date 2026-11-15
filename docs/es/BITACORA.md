@@ -423,3 +423,28 @@ Todo lo que se corre, se mide o se decide, en orden. Cada entrada dice qué se h
   - **Balanceo por paso:** desde el paso 100, la carga máx/media de ×4 pasa de 3 en 289 de 300 pasos (media 6.40, máxima 8.32). Con la entropía del router más baja de las cuatro, el router se concentra más cuanto más alto es el LR.
   - **qk:** la ganancia sigue subiendo con el LR (2.14 en ×4).
 - **Siguiente:** esperar lr-x2-1200 y lr-x1-1200 y volver a correr `scripts/lr_horizon.py` (P9). lr-x1-1200 corre desde cero: hasta el paso 320 tiene el mismo calendario y los mismos datos que el ×1 de la primera ronda, así que sus evaluaciones de los pasos 50 a 300 deberían coincidir.
+
+## 2026-11-14 · Segunda ronda de la T2: ×2 de 320 a 800 pasos (se queda ahí)
+
+- **Qué:**
+  - lr-x2-1200 siguió desde el checkpoint del paso 320 del ×2 de la primera ronda, con λ = 0.01 y el LR de ×2 fijo. El enfriamiento empezaba en el paso 960.
+  - La sesión llegó al paso 800 y paró por tiempo (pausa en el 801).
+  - Pipe decidió no reanudarla, porque el notebook no dejaba retomarla.
+- **Dónde:** Kaggle, 2× T4, con el código del zip `292f882` (= `3e4f66c`). Duró 11.2 h.
+- **Archivos:**
+  - `results/t0_3_t2/lr-x2-320-800.jsonl` (tag `lr-x2-1200`), `lr-x2-320-800-prueba.jsonl` y `lr-x2-320-800.png`.
+  - Los `.jsonl` llegaron con CRLF y sin salto final. Se restauraron (277,108 y 8,945 bytes) y se revisaron fila por fila: 497 y 14 filas, con los pasos 320–800 seguidos.
+  - El `.jsonl` traía dos veces el usuario de Kaggle en la ruta de reanudación (`args.resume` y la fila `resume`). Se cambió por `<usuario>` (regla 6), y es el único cambio.
+- **Resultado:**
+  - **La reanudación fue exacta:** el estado y el primer lote coinciden, y la val del paso 320 da 1.2119, igual que en la primera ronda.
+  - **Estable:**
+    - Sin NaN y sin pasos saltados.
+    - Escala de FP16 fija en 32,768 y 12.9 GiB reservados.
+    - 3,152 tokens/s, en una máquina más lenta.
+  - **Val en bits por byte, con el LR fijo:** 1.1572 (paso 400), 1.1179 (500), 1.0933 (600), 1.0733 (700) y 1.0563 (800). En el paso 400, la corrida de la primera ronda, que ya había enfriado, daba 1.1516.
+  - **qk y router:** la ganancia de qk sube sin parar, de 1.54 (paso 320) a 2.00 (600) y 2.48 (800). La entropía del router baja de 2.89 a 2.38.
+  - **Balanceo (P2b):** las capas 4–15 quedan en ~1.04, pero la capa 0 pasa de 3 en tres ventanas (3.21 en el paso 400, 4.13 en el 450 y 3.35 en el 650), como en la primera ronda. Por paso, la carga máx/media pasa de 3 en 405 de 481 pasos (media 3.98).
+- **Ojo (para el chat de diseño):**
+  - Sin el enfriamiento, esta corrida no cuenta para `scripts/lr_horizon.py`, que solo usa corridas terminadas. Si lr-x1-1200 tampoco llega al paso 1,200, la regla P9 se queda con el exponente de la literatura, o sea ×1.
+  - Propuesta: comparar ×1 y ×2 en el mismo paso, antes del enfriamiento, hasta el paso 800. En la primera ronda, la brecha antes del enfriamiento (6.3%) fue casi igual a la del final (6.1%).
+- **Siguiente:** lr-x1-1200 sigue desde el paso 530 por ~7 h, hasta cerca del paso 850.
