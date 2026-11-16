@@ -16,6 +16,9 @@
 4. Reader: exact resume, two ranks, windows across shard boundaries, the metadata mask, the strip mode.
 5. Trains the tiny model on the shards with 2 processes: A runs 8 steps and saves before step 4; B resumes
    there and must equal A's steps 4–7 bit for bit; evaluations report bits per byte per domain.
+0. First, the reads from the Hub: Stack-Edu's lists and a source's rows, through a read-ahead window like
+   HfFileSystem's, must fetch each byte once, and a busy Hub (503) must be retried while a missing file
+   (404) is not.
 """
 from __future__ import annotations
 
@@ -464,8 +467,106 @@ def test_training():
     check(cfg.get("shards") == 10 and cfg.get("meta") == "mask", "the config row names the build and the meta mode")
 
 
+class HubError(Exception):
+    """What huggingface_hub raises for an HTTP error: the status is in ``.response.status_code``."""
+
+    def __init__(self, status):
+        super().__init__(f"HTTP {status}")
+        self.response = type("Response", (), {"status_code": status})()
+
+
+def test_remote_reads():
+    """Stack-Edu's 1,000-row groups, read as from the Hub. Before pyarrow 26, ``ParquetFile.read`` pulls
+    ~130× the file through one read-ahead window (each column in its own thread): the builder must not."""
+    try:
+        from fsspec.spec import AbstractBufferedFile, AbstractFileSystem
+    except ImportError:
+        print("  --    reads from the Hub: skipped, fsspec is not installed (it comes with huggingface_hub)")
+        return
+    import ludwig_lm.sources as src
+
+    class Remote(AbstractBufferedFile):
+        """A Hub file as HfFileSystem opens it (read-ahead cache, BLOCK bytes per request), served from disk."""
+
+        def __init__(self, path, hub):
+            self.local, self.hub = open(path, "rb"), hub
+            super().__init__(AbstractFileSystem(), str(path), mode="rb", block_size=hub.block,
+                             size=path.stat().st_size)
+
+        def _fetch_range(self, start, end):
+            self.hub.requests += 1
+            if self.hub.requests == self.hub.fail_at:
+                raise self.hub.error
+            self.local.seek(start)
+            data = self.local.read(end - start)
+            self.hub.fetched += len(data)
+            return data
+
+        def close(self):
+            self.local.close()
+            super().close()
+
+    class RemoteHub(src.LocalHub):
+        fetched = requests = opens = 0
+        fail_at, error, block = None, None, src.BLOCK
+
+        def open(self, repo, path, revision=None):
+            self.opens += 1
+            return Remote(self.root / repo / path, self)
+
+    root = WORK / "remote"
+    shutil.rmtree(root, ignore_errors=True)
+    f = root / "t" / "stack-edu" / "Python" / "train-000.parquet"
+    f.parent.mkdir(parents=True)
+    r, w = random.Random(3), None
+    for _ in range(200):                                       # Stack-Edu's layout: 1,000 files per row group
+        n = 1000
+        t = pa.table({"blob_id": ["%040x" % r.getrandbits(160) for _ in range(n)], "language": ["Python"] * n,
+                      "repo_name": [f"user{r.randrange(9999)}/repo{r.randrange(9999)}" for _ in range(n)],
+                      "path": [f"src/mod{r.randrange(99999)}.py" for _ in range(n)], "src_encoding": ["UTF-8"] * n,
+                      "length_bytes": [r.randrange(100, 50000) for _ in range(n)],
+                      "score": [r.random() * 5 for _ in range(n)], "int_score": [r.randrange(6) for _ in range(n)],
+                      "detected_licenses": [["mit"] if r.random() < .4 else [] for _ in range(n)],
+                      "license_type": [r.choice(["permissive", "no_license"]) for _ in range(n)]})
+        if w is None:
+            w = pq.ParquetWriter(f, t.schema)
+        w.write_table(t)
+    w.close()
+    size, spec, quiet = f.stat().st_size, {"repo": "t/stack-edu", "prefix": "Python/"}, (lambda *a: None)
+    hub = RemoteHub(root)
+    p = src.Permissive.build(hub, spec, say=quiet)
+    check(hub.fetched <= 1.1 * size and len(p) > 0,
+          f"Stack-Edu's columns come from the Hub once: {hub.fetched / size:.2f}× the file in {hub.requests} requests")
+    hub.fetched = hub.requests = 0
+    rows = list(src.iter_rows(hub, "t/stack-edu", "Python/train-000.parquet", "parquet", ["blob_id", "license_type"]))
+    check(hub.fetched <= 1.1 * size and len(rows) == 200_000,
+          f"a source's rows come from the Hub once: {hub.fetched / size:.2f}× the file in {hub.requests} requests")
+    real_wait, src.wait = src.wait, (lambda fails: None)
+    hub.block = 1 << 20                                         # ~14 requests per file: the 503 falls mid-file
+    try:
+        hub.opens, hub.fail_at, hub.error = 0, hub.requests + 6, HubError(503)
+        again = src.Permissive.build(hub, spec, say=quiet)
+        check(again.table.equals(p.table) and hub.opens == 2, "a 503 in the middle of a file: read again, same list")
+        hub.opens, hub.fail_at, got, reopened = 0, hub.requests + 6, [], None
+        for i, row in src.iter_rows(hub, "t/stack-edu", "Python/train-000.parquet", "parquet", ["blob_id", "license_type"]):
+            if reopened is None and hub.opens == 2:
+                reopened = i
+            got.append((i, row))
+        check(got == rows and bool(reopened), f"a 503 in the middle of a source's file: it continues from its row "
+                                              f"({reopened}), same rows")
+        hub.opens, hub.fail_at, hub.error = 0, hub.requests + 2, HubError(404)
+        try:
+            src.Permissive.build(hub, spec, say=quiet)
+            check(False, "a 404 is not retried")
+        except HubError:
+            check(hub.opens == 1, "a 404 is not retried")
+    finally:
+        src.wait = real_wait
+
+
 def main():
     WORK.mkdir(parents=True, exist_ok=True)
+    test_remote_reads()
     special = make_hub()
     outs = test_builder(special)
     if outs:

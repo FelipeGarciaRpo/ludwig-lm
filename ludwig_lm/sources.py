@@ -35,7 +35,26 @@ try:                                    # 3–10× faster on the JSON-lines sour
 except ImportError:  # pragma: no cover
     _loads = json.loads
 
-RETRYABLE = (OSError, EOFError, TimeoutError)   # dropped connections; corrupt data is not retried
+BLOCK = 16 << 20                        # bytes per request to the Hub: the read-ahead window of each open file
+RETRY_STATUS = {408, 425, 429, 500, 502, 503, 504}
+
+
+def transient(e: BaseException) -> bool:
+    """Worth retrying: a dropped connection, a timeout, or the Hub busy (429, 5xx). A missing file, a refused
+    token or corrupt data is not: retrying those only delays the error."""
+    status = getattr(getattr(e, "response", None), "status_code", None)
+    if isinstance(status, int):
+        return status in RETRY_STATUS
+    if isinstance(e, (FileNotFoundError, PermissionError, IsADirectoryError, NotADirectoryError)):
+        return False
+    if isinstance(e, (OSError, EOFError)):
+        return True
+    return type(e).__module__.split(".")[0] in ("httpx", "httpx2", "requests", "urllib3", "aiohttp")
+
+
+def wait(fails: int) -> None:
+    """5 s, 10, 20, 40, 80, then 120 s each time: ten failures in a row is the Hub down for ~12 min."""
+    time.sleep(min(120, 5 * 2 ** (fails - 1)))
 
 
 # ----------------------------------------------------------------------------- access
@@ -66,7 +85,7 @@ class Hub:
 
     def open(self, repo: str, path: str, revision: str | None = None):
         rev = f"@{quote(revision, safe='')}" if revision else ""
-        return self._fsys().open(f"datasets/{repo}{rev}/{path}", "rb", block_size=4 << 20)
+        return self._fsys().open(f"datasets/{repo}{rev}/{path}", "rb", block_size=BLOCK)
 
 
 class LocalHub(Hub):
@@ -117,7 +136,9 @@ def _rows(hub, repo, path, fmt, columns, start, revision):
             names = set(pf.schema_arrow.names)
             cols = [c for c in (columns or []) if c in names] or None
             pos = starts[g0] if md.num_row_groups else 0
-            for batch in pf.iter_batches(batch_size=256, row_groups=list(range(g0, md.num_row_groups)), columns=cols):
+            # one thread: the column chunks are read in file order, so each byte comes from the Hub once
+            for batch in pf.iter_batches(batch_size=256, row_groups=list(range(g0, md.num_row_groups)), columns=cols,
+                                         use_threads=False):
                 for row in batch.to_pylist():
                     if pos >= start:
                         yield pos, row
@@ -137,20 +158,51 @@ def _rows(hub, repo, path, fmt, columns, start, revision):
         fh.close()
 
 
-def iter_rows(hub, repo, path, fmt="parquet", columns=None, start=0, revision=None, retries=5):
-    """(row index, row) from row ``start``. If the connection drops, reopen and continue where it was."""
+def iter_rows(hub, repo, path, fmt="parquet", columns=None, start=0, revision=None, retries=10):
+    """(row index, row) from row ``start``. If the connection drops or the Hub is busy, reopen and continue
+    where it was."""
     nxt, fails = start, 0
     while True:
         try:
             for i, row in _rows(hub, repo, path, fmt, columns, nxt, revision):
-                nxt = i + 1
+                nxt, fails = i + 1, 0
                 yield i, row
             return
-        except RETRYABLE:
-            fails += 1
-            if fails > retries:
+        except Exception as e:  # noqa: BLE001 - transient() decides
+            if not transient(e) or fails >= retries:
                 raise
-            time.sleep(min(60, 5 * fails))
+            fails += 1
+            print(f"  ⚠ {repo}/{path}: {type(e).__name__}: {str(e)[:160]} · retry {fails}/{retries} from row {nxt}",
+                  flush=True)
+            wait(fails)
+
+
+def read_columns(hub, repo, path, columns, revision=None, retries=10) -> pa.Table:
+    """The given columns of a whole parquet file (those it has), read row group after row group in one thread.
+
+    Not ``ParquetFile.read``: before pyarrow 26 it reads each column through all row groups in its own
+    thread. Over a remote file with one read-ahead window, the threads then take turns refilling the window
+    at their own positions, and each ~20 KB chunk costs a whole block: ~130× the file on Stack-Edu's
+    1,000-row groups. In order, each byte comes once (``scripts/test_shards_cpu.py`` measures it)."""
+    fails = 0
+    while True:
+        fh = None
+        try:
+            fh = hub.open(repo, path, revision)
+            pf = pq.ParquetFile(fh, buffer_size=4 << 20)
+            cols = [c for c in columns if c in pf.schema_arrow.names]
+            batches = list(pf.iter_batches(batch_size=65536, columns=cols, use_threads=False))
+            return pa.Table.from_batches(batches) if batches else pf.schema_arrow.empty_table().select(cols)
+        except Exception as e:  # noqa: BLE001 - transient() decides
+            if not transient(e) or fails >= retries:
+                raise
+            fails += 1
+            print(f"  ⚠ {repo}/{path}: {type(e).__name__}: {str(e)[:160]} · retry {fails}/{retries} of the whole file",
+                  flush=True)
+            wait(fails)
+        finally:
+            if fh is not None:
+                fh.close()
 
 
 def get(row, path, default=None):
@@ -367,20 +419,20 @@ class Permissive:
         return int(str(blob_id)[:16], 16)
 
     @classmethod
-    def build(cls, hub: Hub, spec: dict) -> "Permissive":
-        files = select_files(hub.tree(spec["repo"], spec.get("revision")), {"prefix": spec["prefix"]})
+    def build(cls, hub: Hub, spec: dict, say=print) -> "Permissive":
+        tree = hub.tree(spec["repo"], spec.get("revision"))
+        files = select_files(tree, {"prefix": spec["prefix"]})
         if not files:
             raise FileNotFoundError(f"{spec['repo']}: no parquet files under {spec['prefix']!r}")
         parts = []
-        for f in files:
-            fh = hub.open(spec["repo"], f, spec.get("revision"))
-            try:
-                pf = pq.ParquetFile(fh, buffer_size=4 << 20)
-                cols = [c for c in cls.COLUMNS if c in pf.schema_arrow.names]
-                t = pf.read(columns=cols)
-            finally:
-                fh.close()
+        for n, f in enumerate(files, 1):
+            t0 = time.time()
+            t = read_columns(hub, spec["repo"], f, cls.COLUMNS, spec.get("revision"))
+            rows = t.num_rows
             t = t.filter(pc.equal(t.column("license_type"), "permissive"))
+            s = max(time.time() - t0, 1e-3)
+            say(f"    {f} ({n}/{len(files)}): {tree.get(f, 0) / 1e9:.2f} GB in {s:.0f} s "
+                f"({tree.get(f, 0) / 1e6 / s:.1f} MB/s), {rows:,} files, {t.num_rows:,} permissive")
             if "detected_licenses" in t.column_names:
                 lic = [", ".join(x) if isinstance(x, list) else (x or "") for x in t.column("detected_licenses").to_pylist()]
             else:

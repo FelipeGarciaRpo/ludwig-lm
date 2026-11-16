@@ -87,7 +87,7 @@ class _Files:
             for r in self.roots:
                 for f in glob.glob(str(r / "**" / "*.bin"), recursive=True):
                     self._index.setdefault(Path(f).name, []).append(Path(f))
-        hits = [h for h in self._index.get(Path(name).name, []) if str(h).endswith(name)]
+        hits = [h for h in self._index.get(Path(name).name, []) if h.as_posix().endswith(name)]
         if not hits:
             raise FileNotFoundError(f"{name}: not next to the manifest nor under {', '.join(map(str, self.roots))}")
         return hits[0]

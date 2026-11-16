@@ -612,3 +612,42 @@ Todo lo que se corre, se mide o se decide, en orden. Cada entrada dice qué se h
 - **Siguiente:**
   - Las sesiones 2 y 3 usan el notebook nuevo con el mismo `COMMIT`.
   - Bajar los parquet de Stack-Edu enteros sería mucho más rápido. Queda como pregunta para el chat de diseño, para después de la T1, porque el código no cambia entre sesiones.
+
+## 2026-11-16 · T1: Stack-Edu se lee en orden y una sola vez (patch 0012)
+
+- **Qué:** la sesión 1 de la T1 se quedaba horas en `[prepare]`, bajando ~12 MB/s sin avanzar.
+  - La sesión A iba por el segundo archivo de Python a las 2.9 h, recibió un HTTP 503 y murió.
+  - La B había bajado 23.7 GB a los 35 min, cuando los seis lenguajes de Stack-Edu suman 6.9 GB.
+- **La causa:** `Permissive.build` leía cada archivo con `ParquetFile.read`.
+  - Antes de pyarrow 26, eso lee cada columna, a lo largo de todos los grupos de filas, en su propio hilo.
+  - Los hilos piden posiciones lejanas del mismo archivo remoto, y la única ventana de lectura anticipada del archivo (4 MiB) se rellena en la posición de cada uno. Cada pedazo de ~20 KB cuesta un bloque entero.
+  - **Medido en local,** con un archivo como los de Stack-Edu (grupos de 1,000 filas) detrás de una ventana como la de `HfFileSystem`:
+
+    | pyarrow | Bajado |
+    |---|---|
+    | 19 | ~163× el archivo |
+    | 21 | 37–136×: varía de una corrida a otra, según cómo se turnen los hilos |
+    | 26 | 1.0×, porque junta las columnas de cada grupo en una sola lectura |
+
+  - En Kaggle, con 4 núcleos, el ritmo de la A da ~100–200×: uno o dos archivos de Python de ~0.5 GB en 2.8 h, a ~12 MB/s. A ese ritmo, los seis lenguajes eran más de un día de descarga, más de lo que dura una sesión.
+- **Cambio** (`ludwig_lm/sources.py`):
+  - **`read_columns`** lee un archivo grupo por grupo, en un solo hilo: 1.02× el archivo con pyarrow 19, 21 y 26. `Permissive.build` lo usa, e imprime una línea por archivo con su velocidad.
+  - **Las filas de las fuentes** (`iter_rows`) también se leen en un hilo: estaban en ~1.2–1.3× y quedan en 1.02×.
+  - **16 MiB por pedido** en vez de 4, así que hay 4 veces menos pedidos al Hub.
+  - **Reintentos:**
+    - Un error pasajero (conexión caída, tiempo agotado, 429 o 5xx) se reintenta hasta 10 veces, con esperas de 5 s a 2 min (~12 min en total), y el aviso queda en el log.
+    - Un 404 o un 401 falla de una.
+    - Antes, la lista de Stack-Edu no tenía reintentos, así que un 503 tumbaba la sesión (probablemente lo que mató a la A). Las filas esperaban ~75 s en total.
+  - **`shards.py`:** `as_posix()` en `_Files.find`, para que `test_shards_cpu.py` pase en Windows.
+  - **El notebook de la T1** imprime las versiones de pyarrow, fsspec y huggingface_hub.
+- **Dónde:** chat de diseño, en CPU, sin Hugging Face. Las mediciones con pyarrow 19 y 21 corrieron en entornos aparte.
+- **Resultado:**
+  - `test_shards_cpu.py` suma 5 chequeos:
+    - la lista de Stack-Edu y las filas de un archivo con grupos de 1,000 filas, leídas a través de una ventana como la de `HfFileSystem`, bajan ≤1.1× el archivo;
+    - un 503 a mitad de archivo se reintenta y da la misma lista, o las mismas filas;
+    - un 404 no se reintenta.
+  - Los 5 pasan también con pyarrow 19 y 21.
+- **Ojo:**
+  - El código del constructor cambió, así que el `COMMIT` de la T1 pasa a ser el de este patch, para las 3 sesiones. Como todavía no hay shards, no se pierde nada.
+  - La sesión B no puede terminar `[prepare]` con el código viejo: hay que detenerla.
+- **Siguiente:** repetir la sesión 1 con el commit nuevo. `[prepare]` debería tardar ~15 min, y en el log debe salir una línea por archivo de Stack-Edu, a la velocidad de la red.

@@ -592,6 +592,8 @@ try:
     print("HF_TOKEN: sí")
 except Exception as e:
     print("⚠️ sin HF_TOKEN: The Stack v1, StarCoderData y Flores+ no van a abrir", type(e).__name__)
+import pyarrow, fsspec, huggingface_hub
+print("pyarrow", pyarrow.__version__, "· fsspec", fsspec.__version__, "· huggingface_hub", huggingface_hub.__version__)
 !nproc; free -g | head -2; df -h /kaggle/working | tail -1'''),
     code(T1_RUN),
     md("""## 1. Plan

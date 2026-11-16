@@ -577,7 +577,8 @@ def stage_prepare(recipe, hub, coder, out):
     langs = {}
     for s in recipe["sources"]:
         if s["kind"] == "code" and s["language"] not in langs:
-            p = Permissive.build(hub, s["permissive"])
+            log(f"  Stack-Edu {s['language']}: {s['permissive']['repo']}/{s['permissive']['prefix']}")
+            p = Permissive.build(hub, s["permissive"], say=log)
             p.save(out / "prep" / f"permissive_{s['language']}.parquet")
             langs[s["language"]] = len(p)
             log(f"  Stack-Edu {s['language']}: {len(p):,} permissive files")
