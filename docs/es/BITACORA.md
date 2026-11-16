@@ -586,3 +586,16 @@ Todo lo que se corre, se mide o se decide, en orden. Cada entrada dice qué se h
   - `test_shards_cpu.py` falla en Windows: `_Files.find` (`ludwig_lm/shards.py`) compara `str(h).endswith(name)`, y en Windows las rutas usan `\` mientras el nombre del manifiesto usa `/`. Con `h.as_posix().endswith(name)`, probado solo en una copia local, da PASS completo. En Kaggle, que es Linux, no pasa.
 - **Pregunta abierta para el chat de diseño:** cambiar esa comparación por `as_posix()` en un próximo patch, para que la prueba también pase en Windows.
 - **Siguiente:** el `plan` de la T1 en Kaggle con este commit.
+
+## 2026-11-15 · T1, sesión 0: el plan, y dos benchmarks corregidos en la receta
+
+- **Qué:** la sesión 0 de la T1 (`FASE = "plan"`) en Kaggle, con el commit `f971c9b`. Lee el primer archivo de cada fuente y de cada benchmark, y no construye nada.
+- **Dónde:** Kaggle, CPU (4 núcleos, 31 GB de RAM). Duró ~2.5 min.
+- **Archivos:** `results/t1/plan_intento1_salida_kaggle.txt`, el log copiado del visor de Kaggle.
+- **Resultado:**
+  - 43 de 45 entradas salieron ✅: las 29 fuentes del tronco y 14 de los 16 benchmarks, con las columnas que espera la receta.
+  - `hellaswag-es` y `flores` salieron ❌ ("no files under ''"). Sus archivos son `.jsonl`, y a su entrada en la receta le faltaba `"format": "jsonl"`, así que el constructor buscaba `.parquet`. HellaSwag en español está en `alexandrainst/m_hellaswag`, en `data/es/val.jsonl`. Flores+ está en `dev/` y `devtest/`, como `eng_Latn.jsonl` y `spa_Latn.jsonl`.
+  - **Arreglo en `configs/data_v3.json`, antes del primer shard (regla de la T1):** `"format": "jsonl"` en las dos, y `"prefix": "data/es/"` en `hellaswag-es`.
+  - Se comprobó contra los archivos reales de Hugging Face con `select_files`: la receta vieja no encuentra nada, y la nueva encuentra `data/es/val.jsonl` y los cuatro de Flores+. Las columnas (`ctx` y `endings`; `text`) ya estaban bien.
+  - **Los ejemplos de código del plan muestran otros lenguajes** (PHP en `python`, Java en `javascript`, Swift en `typescript`, Rust en `sql` y `shell`). No es un error: el plan enseña la primera fila del primer archivo, que en Common Pile cae en el límite con el lenguaje anterior, y el constructor filtra cada lenguaje por la lista de archivos permisivos de Stack-Edu.
+- **Siguiente:** repetir el `plan` con el commit nuevo. Si sale todo ✅, la sesión 1 de construcción con ese mismo commit.

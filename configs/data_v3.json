@@ -153,7 +153,7 @@
     {"name": "mgsm-es", "repo": "juletxara/mgsm", "revision": "refs/convert/parquet", "prefix": "es/", "fields": ["question"]},
     {"name": "belebele-es", "repo": "facebook/belebele", "prefix": "data/spa_Latn", "format": "jsonl", "fields": ["flores_passage", "question", "mc_answer1", "mc_answer2", "mc_answer3", "mc_answer4"]},
     {"name": "global-mmlu-es", "repo": "CohereLabs/Global-MMLU", "prefix": "es/", "contains": ["/test-", "/dev-"], "fields": ["question", "option_a", "option_b", "option_c", "option_d"]},
-    {"name": "hellaswag-es", "repo": "alexandrainst/m_hellaswag", "prefix": "", "contains": ["es"], "fields": ["ctx", "endings"]},
-    {"name": "flores", "repo": "openlanguagedata/flores_plus", "prefix": "", "contains": ["spa_Latn", "eng_Latn"], "fields": ["text"]}
+    {"name": "hellaswag-es", "repo": "alexandrainst/m_hellaswag", "prefix": "data/es/", "contains": ["es"], "format": "jsonl", "fields": ["ctx", "endings"]},
+    {"name": "flores", "repo": "openlanguagedata/flores_plus", "prefix": "", "contains": ["spa_Latn", "eng_Latn"], "format": "jsonl", "fields": ["text"]}
   ]
 }

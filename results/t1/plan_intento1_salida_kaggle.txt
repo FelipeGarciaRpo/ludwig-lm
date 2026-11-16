@@ -1,0 +1,182 @@
+# T1, sesión 0 (FASE = "plan"), primer intento, en Kaggle CPU con el commit f971c9b. Log copiado del visor de Kaggle, sin editar.
+# 43 de 45 entradas ✅; hellaswag-es y flores ❌ porque su receta no decía que los archivos son .jsonl.
+Time	#	Log Message
+8.5s	1	0.00s - Debugger warning: It seems that frozen modules are being used, which may
+8.5s	2	0.00s - make the debugger miss breakpoints. Please pass -Xfrozen_modules=off
+8.5s	3	0.00s - to python to disable frozen modules.
+8.5s	4	0.00s - Note: Debugging will proceed. Set PYDEVD_DISABLE_FILE_VALIDATION=1 to disable this validation.
+9.3s	5	0.00s - Debugger warning: It seems that frozen modules are being used, which may
+9.3s	6	0.00s - make the debugger miss breakpoints. Please pass -Xfrozen_modules=off
+9.3s	7	0.00s - to python to disable frozen modules.
+9.3s	8	0.00s - Note: Debugging will proceed. Set PYDEVD_DISABLE_FILE_VALIDATION=1 to disable this validation.
+12.2s	9	commit f971c9b57d24a38f6be35714d60610121ba7b84a
+15.6s	10	HF_TOKEN: sí
+15.6s	11	4
+15.6s	12	               total        used        free      shared  buff/cache   available
+15.6s	13	Mem:              31           1          26           0           4          30
+15.6s	14	/dev/loop2       20G   16M   20G   1% /kaggle/working
+15.7s	15	>> plan --out /kaggle/working/t1
+149.2s	16	  ✅ fineweb-edu: 234 files, 550.1 GB · 790 tokens
+149.2s	17	  ✅ dclm: 13144 files, 2051.7 GB · 500 tokens
+149.2s	18	  ✅ finephrase-faq: 6791 files, 1370.4 GB · 37 tokens
+149.2s	19	  ✅ finephrase-tutorial: 6754 files, 1378.1 GB · 116 tokens
+149.2s	20	  ✅ finephrase-math: 6787 files, 1210.0 GB · 441 tokens
+149.2s	21	  ✅ finephrase-table: 6772 files, 1203.2 GB · 54 tokens
+149.2s	22	  ✅ wiki-en: 41 files, 11.6 GB · 9137 tokens
+149.2s	23	  ✅ stackexchange: 758 files, 19.7 GB · 493 tokens
+149.2s	24	  ✅ cosmopedia: 104 files, 122.4 GB · 706 tokens
+149.2s	25	  ✅ fineweb2-hq: 504 files, 553.0 GB · 2010 tokens
+149.2s	26	  ✅ transweb: 56 files, 300.5 GB · 1091 tokens
+149.2s	27	  ✅ wiki-es: 13 files, 3.5 GB · 13777 tokens
+149.2s	28	  ✅ un-parallel: 17 files, 4.0 GB · 746 tokens
+149.2s	29	  ✅ europarl: 2 files, 0.4 GB · 1088 tokens
+149.2s	30	  ✅ python: 13 files, 12.6 GB · 173 tokens
+149.2s	31	  ✅ javascript: 16 files, 15.4 GB · 1016 tokens
+149.2s	32	  ✅ typescript: 5 files, 4.4 GB · 1966 tokens
+149.2s	33	  ✅ notebooks-scripts: 8 files, 3.3 GB · 3368 tokens
+149.2s	34	  ✅ notebooks-structured: 6 files, 2.8 GB · 2799 tokens
+149.2s	35	  ✅ markdown: 18 files, 9.2 GB · 49 tokens
+149.2s	36	  ✅ stackoverflow: 59 files, 34.1 GB · 114 tokens
+149.2s	37	  ✅ html: 308 files, 51.2 GB · 669 tokens
+149.2s	38	  ✅ css: 49 files, 8.5 GB · 362 tokens
+149.2s	39	  ✅ sql: 1 files, 1.0 GB · 8676 tokens
+149.3s	40	  ✅ shell: 3 files, 3.0 GB · 8676 tokens
+149.3s	41	  ✅ finemath-4plus: 64 files, 18.4 GB · 510 tokens
+149.3s	42	  ✅ infiwebmath-4plus: 32 files, 19.2 GB · 2444 tokens
+149.3s	43	  ✅ openmathreasoning: 144 files, 31.9 GB · 1265 tokens
+149.3s	44	  ✅ oasst: 2 files, 0.0 GB · 455 tokens
+149.3s	45	  ✅ gsm8k: 1 files, 0.0 GB ·  tokens
+149.3s	46	  ✅ math: 7 files, 0.0 GB ·  tokens
+149.3s	47	  ✅ math500: 1 files, 0.0 GB ·  tokens
+149.3s	48	  ✅ humaneval: 1 files, 0.0 GB ·  tokens
+149.3s	49	  ✅ mbpp: 3 files, 0.0 GB ·  tokens
+149.3s	50	  ✅ multipl-e: 6 files, 0.0 GB ·  tokens
+149.3s	51	  ✅ mmlu: 3 files, 0.0 GB ·  tokens
+149.3s	52	  ✅ arc: 4 files, 0.0 GB ·  tokens
+149.3s	53	  ✅ hellaswag: 2 files, 0.0 GB ·  tokens
+149.3s	54	  ✅ piqa: 2 files, 0.0 GB ·  tokens
+149.3s	55	  ✅ winogrande: 2 files, 0.0 GB ·  tokens
+149.3s	56	  ✅ mgsm-es: 2 files, 0.0 GB ·  tokens
+149.3s	57	  ✅ belebele-es: 1 files, 0.0 GB ·  tokens
+149.3s	58	  ✅ global-mmlu-es: 2 files, 0.0 GB ·  tokens
+149.3s	59	  ❌ hellaswag-es: FileNotFoundError: no files under ''
+149.3s	60	  ❌ flores: FileNotFoundError: no files under ''
+149.3s	61
+149.3s	62	plan: fix the ❌ above in the recipe
+149.9s	63
+149.9s	64	✅ fineweb-edu: 234 archivos, 550.1 GB · columnas ['text', 'id', 'metadata']
+149.9s	65	   'No. 24; Updated March 2011\nClick here to download and print a PDF version of this document.\nParents are usually the first to recognize that their child has a problem with emotions or behavior. Still, '
+149.9s	66
+149.9s	67	✅ dclm: 13144 archivos, 2051.7 GB · columnas ['fasttext_score', 'id', 'language', 'language_score', 'text', 'url', 'nemo_id']
+149.9s	68	   "Take the 2-minute tour ×\n\nI am attempting to filter every notification through espeak. However, I can't seem to find a way to get the notification body from a python script, or even what signal_name t"
+149.9s	69
+149.9s	70	✅ finephrase-faq: 6791 archivos, 1370.4 GB · columnas ['text', 'id', 'dump', 'url', 'file_path', 'language', 'language_score', 'token_count', 'score', 'int_score', 'dataset', 'rollout_results']
+149.9s	71	   'What are some conservation efforts for the Northern Ireland pollan species? How can people contribute to restoring Northern Ireland lakes to high water quality status and prevent the further spread of'
+149.9s	72
+149.9s	73	✅ finephrase-tutorial: 6754 archivos, 1378.1 GB · columnas ['text', 'id', 'dump', 'url', 'file_path', 'language', 'language_score', 'token_count', 'score', 'int_score', 'dataset', 'rollout_results']
+149.9s	74	   'Elevator to Space!\n\nNews story originally written on October 15, 2000\n\nWould you like to take an elevator to space? Scientists are working on one!\nA really long cable will stretch from Earth to space.'
+149.9s	75
+149.9s	76	✅ finephrase-math: 6787 archivos, 1210.0 GB · columnas ['text', 'id', 'dump', 'url', 'file_path', 'language', 'language_score', 'token_count', 'score', 'int_score', 'dataset', 'rollout_results']
+149.9s	77	   'Problem: A kpc-sized shell was observed in the ISM of a spiral galaxy. Estimate the energy released during the shell formation event based on the given energy scale.\n\nSolution:\nStep 1: Determine the i'
+149.9s	78
+149.9s	79	✅ finephrase-table: 6772 archivos, 1203.2 GB · columnas ['text', 'id', 'dump', 'url', 'file_path', 'language', 'language_score', 'token_count', 'score', 'int_score', 'dataset', 'rollout_results']
+149.9s	80	   '| Header | Description |\n| --- | --- |\n| "Visit Your National Wildlife Refuges:" | Celebrate America’s wildlife heritage, and see what refuges are doing to conserve it during National Wildlife Refuge '
+149.9s	81
+149.9s	82	✅ wiki-en: 41 archivos, 11.6 GB · columnas ['id', 'url', 'title', 'text']
+149.9s	83	   'Anarchism is a political philosophy and movement that is skeptical of all justifications for authority and seeks to abolish the institutions it claims maintain unnecessary coercion and hierarchy, typi'
+149.9s	84
+149.9s	85	✅ stackexchange: 758 archivos, 19.7 GB · columnas ['qid', 'question', 'answers', 'date', 'metadata']
+149.9s	86	   'I have been wanting to learn about 3D printing a long time so I really want this site to succeed but I have no previous experience with the subject. \n \nI was wondering how can I help the site at this '
+149.9s	87
+149.9s	88	✅ cosmopedia: 104 archivos, 122.4 GB · columnas ['prompt', 'text', 'token_length', 'audience', 'format', 'seed_data']
+149.9s	89	   " In today's ever-evolving world, technology has become an integral part of our lives, shaping the way we learn, work, and communicate. The COVID-19 pandemic has only accelerated this trend, forcing ed"
+149.9s	90
+149.9s	91	✅ fineweb2-hq: 504 archivos, 553.0 GB · columnas ['text', 'id', 'date', 'dump', 'embeddings', 'file_path', 'language', 'language_score', 'language_script', 'minhash_cluster_size', 'top_langs', 'url']
+149.9s	92	   'Información general\nEl 11 de agosto tuvieron lugar las segundas elecciones celebradas en el país desde el final del conflicto, en 2002. En septiembre, en la segunda vuelta, Ernest Koroma, candidato de'
+149.9s	93
+149.9s	94	✅ transweb: 56 archivos, 300.5 GB · columnas ['text_es', 'uid_prefix', 'meta_data']
+149.9s	95	   'Rescatadores de mar de 38 países se reunieron en Bremerhaven para hablar sobre la situación de los refugiados en el Mediterráneo. Ellos advertieron que podría ser mucho peor esta verano. Todo el mundo'
+149.9s	96
+149.9s	97	✅ wiki-es: 13 archivos, 3.5 GB · columnas ['id', 'url', 'title', 'text']
+149.9s	98	   'Andorra, oficialmente Principado de Andorra () es un micro-Estado soberano sin litoral ubicado en el suroeste de Europa, entre España y Francia, en el límite de la península ibérica. Se constituye en '
+149.9s	99
+149.9s	100	✅ un-parallel: 17 archivos, 4.0 GB · columnas ['translation']
+149.9s	101	   'Distr.\nDistr.\n\nGENERAL\nGENERAL\n\nUNEP/OzL.Pro.3/11\nUNEP/OzL.Pro.3/11\n\n21 de junio de 1991\n21 June 1991\n\nOriginal: INGLES\nORIGINAL: ENGLISH\n\nTERCERA REUNION DE LAS PARTES EN EL PROTOCOLO\nTHIRD MEETING O'
+149.9s	102
+149.9s	103	✅ europarl: 2 archivos, 0.4 GB · columnas ['translation']
+149.9s	104	   'Resumption of the session\nReanudación del período de sesiones\n\nI declare resumed the session of the European Parliament adjourned on Friday 17 December 1999, and I would like once again to wish you a '
+149.9s	105
+149.9s	106	✅ python: 13 archivos, 12.6 GB · columnas ['added', 'created', 'id', 'int_score', 'metadata', 'score', 'source', 'text']
+149.9s	107	   '<?php\n\nnamespace App\\Http\\Controllers\\Administrator\\Geolocation\\Cities;\n\nuse Illuminate\\Http\\Request;\nuse App\\Http\\Controllers\\Controller;\nuse Khsing\\World\\Models\\City;\n\nclass CitiesController extends'
+149.9s	108
+149.9s	109	✅ javascript: 16 archivos, 15.4 GB · columnas ['added', 'created', 'id', 'int_score', 'metadata', 'score', 'source', 'text']
+149.9s	110	   'package com.github.megatronking.svg.iconlibs;\n\nimport android.content.Context;\nimport android.graphics.Canvas;\nimport android.graphics.ColorFilter;\nimport android.graphics.Paint;\n\nimport com.github.me'
+149.9s	111
+149.9s	112	✅ typescript: 5 archivos, 4.4 GB · columnas ['added', 'created', 'id', 'int_score', 'metadata', 'score', 'source', 'text']
+149.9s	113	   'import XCTest\nimport Foundation\n@testable import Log4swift\n\nimport os.log\n\n@available(iOS 10.0, macOS 10.12, *)\nclass AppleUnifiedLoggerAppenderTests: XCTestCase {\n  let testLoggerName = "Log4swift.te'
+149.9s	114
+149.9s	115	✅ notebooks-scripts: 8 archivos, 3.3 GB · columnas ['hexsha', 'ext', 'lang', 'max_stars_repo_path', 'max_stars_repo_name', 'max_stars_repo_licenses', 'avg_line_length', 'alphanum_fraction', 'size', 'id', 'content']
+149.9s	116	   "# ---\n# jupyter:\n#   jupytext:\n#     text_representation:\n#       extension: .py\n#       format_name: light\n#       format_version: '1.5'\n#       jupytext_version: 1.14.4\n#   kernelspec:\n#     display"
+149.9s	117
+149.9s	118	✅ notebooks-structured: 6 archivos, 2.8 GB · columnas ['license', 'path', 'repo_name', 'chain_length', 'size', 'id', 'content']
+149.9s	119	   '<jupyter_start><jupyter_text>09 Strain GageThis is one of the most commonly used sensor.  It is used in many transducers.  Its fundamental operating principle is fairly easy to understand and it will '
+149.9s	120
+149.9s	121	✅ markdown: 18 archivos, 9.2 GB · columnas ['added', 'created', 'id', 'int_score', 'metadata', 'score', 'source', 'text']
+149.9s	122	   '# HTML Website\n\nThis folder contains the web project directly served by nginx.\n\n## Sample\nThis is just a demo example to show how nginx serves html, css and javascript directly from\nthe volume and onl'
+149.9s	123
+149.9s	124	✅ stackoverflow: 59 archivos, 34.1 GB · columnas ['Id', 'PostTypeId', 'AcceptedAnswerId', 'ParentId', 'Score', 'ViewCount', 'Body', 'Title', 'ContentLicense', 'FavoriteCount', 'CreationDate', 'LastActivityDate']
+149.9s	125	   'Binary Data in MySQL\n\nHow do I store binary data in [MySQL](http://en.wikipedia.org/wiki/MySQL)?\n\n\nAnswer:\nThe answer by phpguy is correct but I think there is a lot of confusion in the  additional de'
+149.9s	126
+149.9s	127	✅ html: 308 archivos, 51.2 GB · columnas ['hexsha', 'size', 'ext', 'lang', 'max_stars_repo_path', 'max_stars_repo_name', 'max_stars_repo_head_hexsha', 'max_stars_repo_licenses', 'max_stars_count', 'max_stars_repo_stars_event_min_datetime', 'max_stars_repo_stars_event_max_datetime', 'max_issues_repo_path']
+149.9s	128	   '<!doctype html>\n<html lang="en">\n\n<head>\n  <meta charset="utf-8">\n  <meta name="viewport" content="width=device-width, initial-scale=1">\n  <title>AngularJS • TodoMVC</title>\n  <link rel="stylesheet" h'
+149.9s	129
+149.9s	130	✅ css: 49 archivos, 8.5 GB · columnas ['hexsha', 'size', 'ext', 'lang', 'max_stars_repo_path', 'max_stars_repo_name', 'max_stars_repo_head_hexsha', 'max_stars_repo_licenses', 'max_stars_count', 'max_stars_repo_stars_event_min_datetime', 'max_stars_repo_stars_event_max_datetime', 'max_issues_repo_path']
+149.9s	131	   '.container {\n  font-family: "Inter", sans-serif;\n  font-size: 0.75rem;\n  font-weight: 400;\n  line-height: 1rem;\n  letter-spacing: 0em;\n  text-align: left;\n\n  display: flex;\n\n  box-shadow: 0px 24px 48p'
+149.9s	132
+149.9s	133	✅ sql: 1 archivos, 1.0 GB · columnas ['added', 'created', 'id', 'int_score', 'metadata', 'score', 'source', 'text']
+149.9s	134	   '#[cfg(test)]\nmod tests {\n    use is_kanji::*;\n    use is_kana::*;\n    use is_katakana::*;\n    use is_romaji::*;\n    use is_japanese::*;\n    use is_hiragana::*;\n    use is_mixed::*;\n    use to_kana::*;'
+149.9s	135
+149.9s	136	✅ shell: 3 archivos, 3.0 GB · columnas ['added', 'created', 'id', 'int_score', 'metadata', 'score', 'source', 'text']
+149.9s	137	   '#[cfg(test)]\nmod tests {\n    use is_kanji::*;\n    use is_kana::*;\n    use is_katakana::*;\n    use is_romaji::*;\n    use is_japanese::*;\n    use is_hiragana::*;\n    use is_mixed::*;\n    use to_kana::*;'
+149.9s	138
+149.9s	139	✅ finemath-4plus: 64 archivos, 18.4 GB · columnas ['url', 'fetch_time', 'content_mime_type', 'warc_filename', 'warc_record_offset', 'warc_record_length', 'text', 'token_count', 'char_count', 'metadata', 'score', 'int_score']
+149.9s	140	   '# What is the term”exclamation mark” in mathematics?\n\nThe answer is easy. Below are some approaches to inform as soon as an equation can be really actually a multiplication equation and also how to ad'
+149.9s	141
+149.9s	142	✅ infiwebmath-4plus: 32 archivos, 19.2 GB · columnas ['url', 'metadata', 'score', 'int_score', 'token_count', 'char_count', 'text']
+149.9s	143	   ' High Quality, Fast Delivery, Plagiarism Free - Just in 3 Steps\n\n## Upload Questions Details and Instructions: Select Assignment Files\n\nAssignment solution along with originality report.\n\nGet assignme'
+149.9s	144
+149.9s	145	✅ openmathreasoning: 144 archivos, 31.9 GB · columnas ['problem', 'inference_mode', 'problem_type', 'expected_answer', 'used_in_kaggle', 'generation_model', 'pass_rate_72b_tir', 'generated_solution', 'problem_source']
+149.9s	146	   'user: Given a group of \\( N \\) balls consisting of \\( C \\) colors, where the number of balls in each color is represented as \\( n_1, n_2, \\ldots, n_C \\) (with \\( n_1 + n_2 + \\ldots + n_C = N \\)), what'
+149.9s	147
+149.9s	148	✅ oasst: 2 archivos, 0.0 GB · columnas ['message_id', 'parent_id', 'user_id', 'created_date', 'text', 'role', 'lang', 'review_count', 'review_result', 'deleted', 'rank', 'synthetic']
+149.9s	149	   'user: Hola! Quiero hacer una macro en Excel para que tome al valor de la celda A1 de la "Hoja1" y lo copie en la celda B1 de la "Hoja2". | assistant: Claro, aquí te dejo las instrucciones para poder l'
+149.9s	150	/usr/local/lib/python3.13/dist-packages/IPython/core/interactiveshell.py:3561: UserWarning: To exit: use 'exit', 'quit', or Ctrl-D.
+149.9s	151	  warn("To exit: use 'exit', 'quit', or Ctrl-D.", stacklevel=1)
+149.9s	152
+149.9s	153	/usr/local/lib/python3.13/dist-packages/IPython/core/interactiveshell.py:3561: UserWarning: To exit: use 'exit', 'quit', or Ctrl-D.
+149.9s	154	  warn("To exit: use 'exit', 'quit', or Ctrl-D.", stacklevel=1)
+150.4s	155	Traceback (most recent call last):
+150.4s	156	  File "<string>", line 1, in <module>
+150.4s	157	    import sys;import papermill as pm;pm.execute_notebook("__notebook__.ipynb","__notebook__.ipynb",progress_bar=False,log_output=True,stdout_file=sys.stdout,stderr_file=sys.stderr,allow_errors=False,timeout=43200)
+150.4s	158	                                      ~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+150.4s	159	  File "/usr/local/lib/python3.13/dist-packages/papermill/execute.py", line 131, in execute_notebook
+150.4s	160	    raise_for_execution_errors(nb, output_path)
+150.4s	161	    ~~~~~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^
+150.4s	162	  File "/usr/local/lib/python3.13/dist-packages/papermill/execute.py", line 251, in raise_for_execution_errors
+150.4s	163	    raise error
+150.4s	164	papermill.exceptions.PapermillExecutionError:
+150.4s	165	---------------------------------------------------------------------------
+150.4s	166	Exception encountered at "In [4]":
+150.4s	167	An exception has occurred, use %tb to see the full traceback.
+150.4s	168
+150.4s	169	SystemExit: build_shards.py terminó con código 1
+150.4s	170
+150.4s	171
+153.3s	172	/usr/local/lib/python3.13/dist-packages/mistune.py:435: SyntaxWarning: invalid escape sequence '\|'
+153.3s	173	  cells[i][c] = re.sub('\\\\\|', '|', cell)
+153.6s	174	/usr/local/lib/python3.13/dist-packages/nbconvert/filters/filter_links.py:36: SyntaxWarning: invalid escape sequence '\_'
+153.6s	175	  text = re.sub(r'_', '\_', text) # Escape underscores in display text
+154.5s	176	[NbConvertApp] Converting notebook __notebook__.ipynb to notebook
+154.6s	177	[NbConvertApp] Writing 28441 bytes to __notebook__.ipynb
+157.9s	178	[NbConvertApp] Converting notebook __notebook__.ipynb to html
+158.6s	179	[NbConvertApp] Writing 319124 bytes to __results__.html
