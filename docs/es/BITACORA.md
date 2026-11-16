@@ -651,3 +651,17 @@ Todo lo que se corre, se mide o se decide, en orden. Cada entrada dice qué se h
   - El código del constructor cambió, así que el `COMMIT` de la T1 pasa a ser el de este patch, para las 3 sesiones. Como todavía no hay shards, no se pierde nada.
   - La sesión B no puede terminar `[prepare]` con el código viejo: hay que detenerla.
 - **Siguiente:** repetir la sesión 1 con el commit nuevo. `[prepare]` debería tardar ~15 min, y en el log debe salir una línea por archivo de Stack-Edu, a la velocidad de la red.
+
+## 2026-11-16 · Patch 0012: las pruebas en el PC, y una corrección
+
+- **Qué:** se aplicó el patch 0012 sobre `2f4c718` y se corrieron las pruebas en CPU.
+- **Dónde:** el PC de Pipe, en Windows y en CPU, con los 2 procesos lanzados a mano.
+- **Resultado:**
+  - pyflakes limpio y notebooks en sincronía.
+  - `bench_afmoe.py`: restauración exacta.
+  - `test_shards_cpu.py` (53 revisiones), `test_train_cpu.py` (36) y `test_relay_cpu.py` (23): PASS. La de shards ya pasa en Windows, con el `as_posix()` del patch.
+  - **La lectura nueva, contra Stack-Edu de verdad:** `read_columns` sobre `SQL/train-00000-of-00001.parquet` (261 MB) hizo 10 pedidos y bajó 264 MB, 1.01× el archivo, en 358 s.
+- **Corrección a la entrada del latido (2026-11-16):**
+  - Los 0.7 MB/s medidos desde el PC eran el ancho de banda del PC, no pedidos de más. Aquí pyarrow es 26.0.1, que ya junta las columnas de cada grupo, así que en el PC el código anterior tampoco multiplicaba la lectura.
+  - En Kaggle, con un pyarrow anterior al 26, sí la multiplicaba: es la causa que encontró el 0012.
+- **Siguiente:** la sesión 1 de la T1 otra vez, con el commit nuevo.
