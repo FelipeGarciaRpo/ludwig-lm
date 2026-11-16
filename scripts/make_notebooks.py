@@ -495,14 +495,57 @@ if GUARDAR_CHECKPOINT:
 ]
 
 # ----------------------------------------------------------------------------- T1 (shards, CPU)
-T1_RUN = r'''import subprocess, time, json, glob, os
+T1_RUN = r'''import subprocess, time, json, glob, os, threading
+LATIDO = 300             # cada cuántos segundos imprime una línea de avance (0 = nunca)
+
+def _red():
+    """Bytes recibidos por la red desde que arrancó la máquina, sin contar la interfaz local."""
+    total = 0
+    for linea in open("/proc/net/dev"):
+        if ":" in linea:
+            nombre, datos = linea.split(":", 1)
+            if nombre.strip() != "lo":
+                total += int(datos.split()[0])
+    return total
+
+def _cpu():
+    v = [int(x) for x in open("/proc/stat").readline().split()[1:]]
+    return sum(v), v[3] + v[4]                       # todo, y el tiempo ocioso o esperando disco
+
+def _latido(salida, fin, t0):
+    """Mientras corre el constructor: la red, la CPU, la RAM y lo que ya dejó en la salida. Algunas etapas
+    (las listas de Stack-Edu en prepare) trabajan mucho rato sin imprimir nada."""
+    r0, (c0, i0), antes = _red(), _cpu(), time.time()
+    while not fin.wait(LATIDO):
+        r1, (c1, i1), ahora = _red(), _cpu(), time.time()
+        mem = {l.split(":")[0]: int(l.split()[1]) for l in open("/proc/meminfo")}
+        ram = (mem["MemTotal"] - mem["MemAvailable"]) / 2**20
+        cpu = 100 * (1 - (i1 - i0) / max(c1 - c0, 1))
+        prep = sorted(os.path.basename(p) for p in glob.glob(f"{salida}/prep/*"))
+        shards = len(glob.glob(f"{salida}/train/shard_*.bin"))
+        usado = sum(os.path.getsize(p) for p in glob.glob(f"{salida}/**/*", recursive=True) if os.path.isfile(p)) / 2**30
+        h, m = divmod(int((ahora - t0) / 60), 60)
+        print(f"⏱ {h}h{m:02d} · bajando {(r1 - r0) / (ahora - antes) / 1e6:.1f} MB/s ({r1 / 1e9:.1f} GB en total) · "
+              f"CPU {cpu:.0f}% · RAM {ram:.1f} GB · salida {usado:.1f} GB · prep: {', '.join(prep) or '—'} · "
+              f"shards: {shards}", flush=True)
+        r0, c0, i0, antes = r1, c1, i1, ahora
+
 def correr(*args):
-    """Corre el constructor y va mostrando su salida; si falla, para el notebook."""
+    """Corre el constructor y va mostrando su salida; si falla, para el notebook. Cada LATIDO segundos suma
+    una línea ⏱ con el avance."""
     print(">>", " ".join(args), flush=True)
+    salida = args[args.index("--out") + 1] if "--out" in args else "/kaggle/working/t1"
+    salida = os.path.dirname(salida) if salida.endswith(".txt") else salida
+    fin = threading.Event()
+    if LATIDO:
+        threading.Thread(target=_latido, args=(salida, fin, time.time()), daemon=True).start()
     p = subprocess.Popen(["python", "scripts/build_shards.py", *args], stdout=subprocess.PIPE,
                          stderr=subprocess.STDOUT, text=True)
-    for linea in p.stdout:
-        print(linea, end="", flush=True)
+    try:
+        for linea in p.stdout:
+            print(linea, end="", flush=True)
+    finally:
+        fin.set()
     if p.wait() != 0:
         raise SystemExit(f"build_shards.py terminó con código {p.returncode}")'''
 

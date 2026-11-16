@@ -599,3 +599,16 @@ Todo lo que se corre, se mide o se decide, en orden. Cada entrada dice qué se h
   - Se comprobó contra los archivos reales de Hugging Face con `select_files`: la receta vieja no encuentra nada, y la nueva encuentra `data/es/val.jsonl` y los cuatro de Flores+. Las columnas (`ctx` y `endings`; `text`) ya estaban bien.
   - **Los ejemplos de código del plan muestran otros lenguajes** (PHP en `python`, Java en `javascript`, Swift en `typescript`, Rust en `sql` y `shell`). No es un error: el plan enseña la primera fila del primer archivo, que en Common Pile cae en el límite con el lenguaje anterior, y el constructor filtra cada lenguaje por la lista de archivos permisivos de Stack-Edu.
 - **Siguiente:** repetir el `plan` con el commit nuevo. Si sale todo ✅, la sesión 1 de construcción con ese mismo commit.
+
+## 2026-11-16 · T1: el notebook imprime su avance cada 5 minutos
+
+- **Qué:** la sesión 1 de la T1 (commit `a52a76d`) lleva más de 2 h en `[prepare]` sin imprimir nada.
+  - Esa etapa baja de Stack-Edu la lista de archivos permisivos de cada lenguaje, y solo escribe una línea al terminar cada uno.
+  - Sus parquet vienen en grupos de 1,000 filas (SQL: 2,505 grupos y 10 columnas), así que leerlos con `HfFileSystem` son miles de pedidos chicos. Desde el PC, el de SQL (0.26 GB) tardó 328 s, 0.7 MB/s.
+  - A ese ritmo, los seis lenguajes (~6.9 GB) toman ~2.5–3 h, una sola vez: las sesiones siguientes reutilizan `prep/`.
+- **Cambio:**
+  - En `notebooks/t1_shards_cpu.ipynb`, generado con `make_notebooks.py`, `correr()` imprime cada `LATIDO` = 300 s una línea ⏱ con lo que baja la red, la CPU, la RAM, el tamaño de la salida, los archivos de `prep/` y los shards.
+  - Es código de la celda, no del repo: con `COMMIT = a52a76d` en la celda, el constructor y los shards no cambian, y el chequeo de `builder_commit` entre sesiones sigue igual.
+- **Siguiente:**
+  - Las sesiones 2 y 3 usan el notebook nuevo con el mismo `COMMIT`.
+  - Bajar los parquet de Stack-Edu enteros sería mucho más rápido. Queda como pregunta para el chat de diseño, para después de la T1, porque el código no cambia entre sesiones.
