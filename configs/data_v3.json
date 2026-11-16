@@ -112,7 +112,7 @@
      "attr": {"repo": "max_stars_repo_name", "path": "max_stars_repo_path", "license": "max_stars_repo_licenses"},
      "val_tokens": 1000000},
     {"name": "sql", "domain": "code", "weight": 0.55, "license": "la de cada archivo (Stack-Edu, solo permisivos)",
-     "repo": "common-pile/stackv2_edu_filtered", "prefix": "", "format": "jsonl.gz", "number_range": [86, 86],
+     "repo": "common-pile/stackv2_edu_filtered", "prefix": "", "format": "jsonl.gz", "number_range": [88, 88],
      "kind": "code", "language": "sql", "blob": "id|metadata.blob_id", "text": "text", "comments": "sql",
      "permissive": {"repo": "HuggingFaceTB/stack-edu", "prefix": "SQL/"}, "fim": 0.1, "tag": "github.com",
      "val_tokens": 1000000},

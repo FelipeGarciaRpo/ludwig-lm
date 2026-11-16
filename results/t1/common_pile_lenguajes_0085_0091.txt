@@ -1,0 +1,19 @@
+# Qué lenguaje hay en los shards 0085–0091 de common-pile/stackv2_edu_filtered (metadata.language de cada fila).
+# Medido el 16 de noviembre de 2026 desde el PC de Pipe, con HfFileSystem: para 0085–0091, las primeras filas de
+# cada shard (los primeros 3 MB comprimidos); para 0088, el shard entero.
+# Sirve para corregir el rango de shards de SQL en configs/data_v3.json (decía [86, 86]).
+
+Primeras filas de cada shard:
+shard 0085: primeras 3,273 filas · lenguajes {'Ruby': 3273} · primera stack-edu-0067.json.gz:1 · última leída stack-edu-0067.json.gz:3274
+shard 0086: primeras 1,862 filas · lenguajes {'Rust': 1862} · primera stack-edu-0068.json.gz:1 · última leída stack-edu-0068.json.gz:1863
+shard 0087: primeras 3,645 filas · lenguajes {'Shell': 3645} · primera stack-edu-0069.json.gz:1 · última leída stack-edu-0069.json.gz:3649
+shard 0088: primeras 3,602 filas · lenguajes {'Shell': 3602} · primera stack-edu-0070.json.gz:1 · última leída stack-edu-0070.json.gz:3608
+shard 0089: primeras 2,844 filas · lenguajes {'Swift': 2844} · primera stack-edu-0071.json.gz:1 · última leída stack-edu-0071.json.gz:2845
+shard 0090: primeras 2,900 filas · lenguajes {'Swift': 2900} · primera stack-edu-0072.json.gz:1 · última leída stack-edu-0072.json.gz:2901
+shard 0091: primeras 3,253 filas · lenguajes {'TypeScript': 3253} · primera stack-edu-0073.json.gz:1 · última leída stack-edu-0073.json.gz:3254
+
+El shard 0088 entero:
+RESULTADO shard 0088: 655521 filas; {'Shell': 217221, 'SQL': 388612, 'Swift': 49688} ; primera fila de cada lenguaje: {'Shell': (1, 'stack-edu-0070.json.gz:1'), 'SQL': (217222, 'stack-edu-0070.json.gz:217517'), 'Swift': (605834, 'stack-edu-0070.json.gz:609514')}
+
+Además, la sesión 1 de la T1 leyó el shard 0086 entero y no encontró ningún archivo de la lista permisiva de SQL de Stack-Edu (sesion1_intento1_salida_kaggle.txt).
+Conclusión: SQL está entero en el shard 0088, entre Shell y Swift (orden alfabético sin mayúsculas: Rust, Shell, SQL, Swift).

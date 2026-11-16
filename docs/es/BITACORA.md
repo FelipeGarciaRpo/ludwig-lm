@@ -665,3 +665,18 @@ Todo lo que se corre, se mide o se decide, en orden. Cada entrada dice qué se h
   - Los 0.7 MB/s medidos desde el PC eran el ancho de banda del PC, no pedidos de más. Aquí pyarrow es 26.0.1, que ya junta las columnas de cada grupo, así que en el PC el código anterior tampoco multiplicaba la lectura.
   - En Kaggle, con un pyarrow anterior al 26, sí la multiplicaba: es la causa que encontró el 0012.
 - **Siguiente:** la sesión 1 de la T1 otra vez, con el commit nuevo.
+
+## 2026-11-16 · T1, sesión 1: `prepare` en 47 min, y SQL estaba en otro shard
+
+- **Qué:** la sesión 1 de la T1 con el commit `3260960` (patch 0012).
+- **Dónde:** Kaggle, CPU (4 núcleos, 31 GB), con pyarrow 23.0.1, fsspec 2025.12.0 y huggingface_hub 1.33.0.
+- **Archivos:**
+  - `results/t1/sesion1_intento1_salida_kaggle.txt`, el log.
+  - `results/t1/common_pile_lenguajes_0085_0091.txt`, la medición de los shards hecha desde el PC.
+- **Resultado:**
+  - **pyarrow < 26 en Kaggle,** como dijo el diagnóstico del 0012.
+  - **`[prepare]` terminó en 47 min (2,830 s).** Cada archivo de Stack-Edu bajó una vez, a 2–4 MB/s; dos timeouts se reintentaron solos. Quedaron los permisivos de Python (4,563,384), JavaScript (2,596,127), TypeScript (1,703,720), Markdown (7,176,540), SQL (397,805) y Shell (1,394,774), y la descontaminación: 7,048,101 13-gramas de 16 benchmarks, con 1,240 descartados como plantillas.
+  - **`[val]`:** 22 fuentes bien, hasta CSS. Falló en SQL: "its last file gave no validation document".
+  - **La causa:** la receta buscaba SQL en el shard `0086` de Common Pile, que es Rust. Leyendo el comienzo de los shards 0085–0091 y el 0088 entero, el orden es Ruby (0085), Rust (0086), Shell (0087–0088), SQL (dentro del 0088, de la fila 217,222 a la 605,833: 388,612 filas), Swift (desde el final del 0088 hasta el 0090) y TypeScript (0091–0094). El mapa de la revisión independiente ponía SQL en el 0086.
+  - **Arreglo en `configs/data_v3.json`, antes del primer shard:** el rango de SQL pasa de `[86, 86]` a `[88, 88]`. Shell queda en `[86, 88]`. `select_files` sobre el Hub elige `stack-edu-0088.json.gz` para SQL.
+- **Siguiente:** la sesión 1 otra vez, de cero, con el commit nuevo. `prepare` se rehace (~47 min) y después vienen la validación y los shards.

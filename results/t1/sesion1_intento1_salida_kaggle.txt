@@ -1,0 +1,130 @@
+# T1, sesión 1 (FASE = "construir"), intento con el commit 3260960 (patch 0012), en Kaggle CPU. Log copiado del visor de Kaggle, sin editar.
+# [prepare] terminó en 47 min; [val] falló en sql: la receta lo buscaba en el shard 0086 de Common Pile, y SQL está en el 0088.
+Time	#	Log Message
+9.7s	1	0.00s - Debugger warning: It seems that frozen modules are being used, which may
+9.7s	2	0.00s - make the debugger miss breakpoints. Please pass -Xfrozen_modules=off
+9.7s	3	0.00s - to python to disable frozen modules.
+9.7s	4	0.00s - Note: Debugging will proceed. Set PYDEVD_DISABLE_FILE_VALIDATION=1 to disable this validation.
+10.5s	5	0.00s - Debugger warning: It seems that frozen modules are being used, which may
+10.5s	6	0.00s - make the debugger miss breakpoints. Please pass -Xfrozen_modules=off
+10.5s	7	0.00s - to python to disable frozen modules.
+10.5s	8	0.00s - Note: Debugging will proceed. Set PYDEVD_DISABLE_FILE_VALIDATION=1 to disable this validation.
+13.6s	9	commit 3260960de011301e509140e8ae7294a516640efa
+17.4s	10	HF_TOKEN: sí
+17.4s	11	pyarrow 23.0.1 · fsspec 2025.12.0 · huggingface_hub 1.33.0
+17.4s	12	4
+17.4s	13	               total        used        free      shared  buff/cache   available
+17.4s	14	Mem:              31           1          26           0           4          30
+17.4s	15	/dev/loop2       20G   16M   20G   1% /kaggle/working
+17.6s	16	FASE no es plan
+17.6s	17	>> build --out /kaggle/working/t1 --from auto --roots /kaggle/input --shards 56 --max-hours 10.7
+22.0s	18	no previous state under /kaggle/input: this is the first session
+22.0s	19	build 76ab9afefe6fe57c (tronco-v3, tokenizer 0b7da8fdb062)
+22.0s	20	[prepare]
+131.5s	21	  Stack-Edu python: HuggingFaceTB/stack-edu/Python/
+271.1s	22	    Python/train-00000-of-00005.parquet (1/5): 0.50 GB in 139 s (3.6 MB/s), 5,057,204 files, 913,638 permissive
+317.6s	23	⏱ 0h05 · bajando 8.6 MB/s (2.6 GB en total) · CPU 7% · RAM 2.4 GB · salida 0.1 GB · prep: decon.npz · shards: 0
+408.5s	24	    Python/train-00001-of-00005.parquet (2/5): 0.50 GB in 135 s (3.7 MB/s), 5,057,204 files, 911,793 permissive
+554.2s	25	    Python/train-00002-of-00005.parquet (3/5): 0.50 GB in 143 s (3.5 MB/s), 5,057,204 files, 911,178 permissive
+617.6s	26	⏱ 0h10 · bajando 13.8 MB/s (6.7 GB en total) · CPU 3% · RAM 2.8 GB · salida 0.1 GB · prep: decon.npz · shards: 0
+691.4s	27	    Python/train-00003-of-00005.parquet (4/5): 0.50 GB in 134 s (3.7 MB/s), 5,057,204 files, 913,423 permissive
+829.3s	28	    Python/train-00004-of-00005.parquet (5/5): 0.50 GB in 135 s (3.7 MB/s), 5,057,203 files, 913,352 permissive
+837.9s	29	  Stack-Edu python: 4,563,384 permissive files
+837.9s	30	  Stack-Edu javascript: HuggingFaceTB/stack-edu/JavaScript/
+917.6s	31	⏱ 0h15 · bajando 12.6 MB/s (10.5 GB en total) · CPU 3% · RAM 2.7 GB · salida 0.3 GB · prep: decon.npz, permissive_python.parquet · shards: 0
+1020.7s	32	    JavaScript/train-00000-of-00003.parquet (1/3): 0.43 GB in 183 s (2.3 MB/s), 4,417,811 files, 865,411 permissive
+1207.4s	33	'The read operation timed out' thrown while requesting GET https://huggingface.co/datasets/HuggingFaceTB/stack-edu/resolve/main/JavaScript/train-00001-of-00003.parquet
+1207.4s	34	Retrying in 1s [Retry 1/5].
+1216.9s	35	    JavaScript/train-00001-of-00003.parquet (2/3): 0.43 GB in 194 s (2.2 MB/s), 4,417,810 files, 865,374 permissive
+1217.6s	36	⏱ 0h20 · bajando 8.7 MB/s (13.1 GB en total) · CPU 2% · RAM 3.7 GB · salida 0.3 GB · prep: decon.npz, permissive_python.parquet · shards: 0
+1342.8s	37	    JavaScript/train-00002-of-00003.parquet (3/3): 0.43 GB in 123 s (3.5 MB/s), 4,417,810 files, 865,342 permissive
+1348.7s	38	  Stack-Edu javascript: 2,596,127 permissive files
+1348.7s	39	  Stack-Edu typescript: HuggingFaceTB/stack-edu/TypeScript/
+1473.0s	40	'The read operation timed out' thrown while requesting GET https://huggingface.co/datasets/HuggingFaceTB/stack-edu/resolve/main/TypeScript/train-00000-of-00001.parquet
+1473.0s	41	Retrying in 1s [Retry 1/5].
+1517.6s	42	⏱ 0h25 · bajando 9.5 MB/s (16.0 GB en total) · CPU 3% · RAM 2.5 GB · salida 0.5 GB · prep: decon.npz, permissive_javascript.parquet, permissive_python.parquet · shards: 0
+1569.9s	43	    TypeScript/train-00000-of-00001.parquet (1/1): 0.43 GB in 221 s (1.9 MB/s), 4,290,356 files, 1,703,720 permissive
+1577.0s	44	  Stack-Edu typescript: 1,703,720 permissive files
+1577.0s	45	  Stack-Edu markdown: HuggingFaceTB/stack-edu/Markdown/
+1779.9s	46	    Markdown/train-00000-of-00005.parquet (1/5): 0.41 GB in 203 s (2.0 MB/s), 4,137,416 files, 1,434,693 permissive
+1817.6s	47	⏱ 0h30 · bajando 7.5 MB/s (18.2 GB en total) · CPU 3% · RAM 3.5 GB · salida 0.6 GB · prep: decon.npz, permissive_javascript.parquet, permissive_python.parquet, permissive_typescript.parquet · shards: 0
+1974.9s	48	    Markdown/train-00001-of-00005.parquet (2/5): 0.41 GB in 191 s (2.2 MB/s), 4,137,416 files, 1,436,107 permissive
+2117.6s	49	⏱ 0h35 · bajando 8.2 MB/s (20.7 GB en total) · CPU 2% · RAM 4.0 GB · salida 0.6 GB · prep: decon.npz, permissive_javascript.parquet, permissive_python.parquet, permissive_typescript.parquet · shards: 0
+2173.6s	50	    Markdown/train-00002-of-00005.parquet (3/5): 0.41 GB in 194 s (2.1 MB/s), 4,137,415 files, 1,435,426 permissive
+2375.2s	51	    Markdown/train-00003-of-00005.parquet (4/5): 0.41 GB in 197 s (2.1 MB/s), 4,137,415 files, 1,435,069 permissive
+2417.6s	52	⏱ 0h40 · bajando 7.6 MB/s (23.0 GB en total) · CPU 3% · RAM 3.4 GB · salida 0.6 GB · prep: decon.npz, permissive_javascript.parquet, permissive_python.parquet, permissive_typescript.parquet · shards: 0
+2573.8s	53	    Markdown/train-00004-of-00005.parquet (5/5): 0.41 GB in 194 s (2.1 MB/s), 4,137,415 files, 1,435,245 permissive
+2588.4s	54	  Stack-Edu markdown: 7,176,540 permissive files
+2588.4s	55	  Stack-Edu sql: HuggingFaceTB/stack-edu/SQL/
+2657.3s	56	    SQL/train-00000-of-00001.parquet (1/1): 0.26 GB in 69 s (3.8 MB/s), 2,504,412 files, 397,805 permissive
+2659.1s	57	  Stack-Edu sql: 397,805 permissive files
+2659.1s	58	  Stack-Edu shell: HuggingFaceTB/stack-edu/Shell/
+2717.6s	59	⏱ 0h45 · bajando 9.1 MB/s (25.7 GB en total) · CPU 3% · RAM 2.2 GB · salida 1.0 GB · prep: decon.npz, permissive_javascript.parquet, permissive_markdown.parquet, permissive_python.parquet, permissive_sql.parquet, permissive_typescript.parquet · shards: 0
+2845.7s	60	    Shell/train-00000-of-00001.parquet (1/1): 0.39 GB in 187 s (2.1 MB/s), 4,133,547 files, 1,394,774 permissive
+2851.8s	61	  Stack-Edu shell: 1,394,774 permissive files
+2851.8s	62	  decontamination: 7,048,101 13-grams from 16 benchmarks (1,240 dropped as templates)
+2851.8s	63	[val]
+2865.1s	64	  val fineweb-edu: 2,000,460 tokens, 1,903 documents from fineweb-edu-dedup/train-00233-of-00234.parquet
+2892.5s	65	  val dclm: 2,067,782 tokens, 1,782 documents from data/dclm-dedup/global-shard_10_of_10/part.999.parquet
+2922.0s	66	  val finephrase-faq: 507,252 tokens, 1,212 documents from faq/001_00099_9.parquet
+2937.1s	67	  val finephrase-tutorial: 515,062 tokens, 1,275 documents from tutorial/001_00099_9.parquet
+2950.6s	68	  val finephrase-math: 516,141 tokens, 1,709 documents from math/001_00099_9.parquet
+2963.1s	69	  val finephrase-table: 501,890 tokens, 1,978 documents from table/001_00099_9.parquet
+2970.2s	70	  val wiki-en: 1,006,412 tokens, 880 documents from 20231101.en/train-00040-of-00041.parquet
+2983.0s	71	  val stackexchange: 1,032,803 tokens, 1,279 documents from data/writers.stackexchange.com/train-00000-of-00001.parquet
+2989.1s	72	  val cosmopedia: 1,028,523 tokens, 1,459 documents from cosmopedia-v2/train-00103-of-00104.parquet
+3012.1s	73	  val fineweb2-hq: 2,045,458 tokens, 2,803 documents from spa_Latn/000_00503.parquet
+3017.6s	74	⏱ 0h50 · bajando 4.7 MB/s (27.1 GB en total) · CPU 7% · RAM 4.6 GB · salida 1.1 GB · prep: decon.npz, permissive_javascript.parquet, permissive_markdown.parquet, permissive_python.parquet, permissive_shell.parquet, permissive_sql.parquet, permissive_typescript.parquet, prepare.json · shards: 0
+3022.3s	75	  val transweb: 1,045,499 tokens, 1,021 documents from es_chunk56.jsonl
+3028.2s	76	  val wiki-es: 1,040,021 tokens, 1,209 documents from 20231101.es/train-00012-of-00013.parquet
+3039.0s	77	  val un-parallel: 517,792 tokens, 433 documents from en-es/train-00016-of-00017.parquet
+3052.1s	78	  val europarl: 533,864 tokens, 448 documents from en-es/train-00001-of-00002.parquet
+3060.8s	79	  val python: 2,042,599 tokens, 2,231 documents from stack-edu-0084.json.gz
+3071.4s	80	  val javascript: 2,029,406 tokens, 2,639 documents from stack-edu-0064.json.gz
+3076.5s	81	  val typescript: 1,004,640 tokens, 1,514 documents from stack-edu-0094.json.gz
+3087.9s	82	  val notebooks-scripts: 1,042,095 tokens, 482 documents from jupyter-scripts-dedup-filtered/train-00007-of-00008.parquet
+3103.1s	83	  val notebooks-structured: 1,005,744 tokens, 446 documents from jupyter-structured-clean-dedup/train-00005-of-00006.parquet
+3111.4s	84	  val markdown: 1,000,513 tokens, 951 documents from stack-edu-0017.json.gz
+3134.1s	85	  val stackoverflow: 1,036,688 tokens, 1,292 documents from stackoverflow-posts-00058-of-00058.parquet
+3150.8s	86	  val html: 1,006,357 tokens, 564 documents from data/html/data-00307-of-00308.parquet
+3164.3s	87	  val css: 1,044,108 tokens, 1,257 documents from data/css/data-00048-of-00049.parquet
+3272.6s	88	Traceback (most recent call last):
+3272.6s	89	  File "/kaggle/working/ludwig-lm/scripts/build_shards.py", line 128, in <module>
+3272.6s	90	    sys.exit(main())
+3272.6s	91	             ~~~~^^
+3272.6s	92	  File "/kaggle/working/ludwig-lm/scripts/build_shards.py", line 112, in main
+3272.6s	93	    stage_val(recipe, hub, coder, out, manifest)
+3272.6s	94	    ~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+3272.6s	95	  File "/kaggle/working/ludwig-lm/ludwig_lm/build.py", line 611, in stage_val
+3272.6s	96	    raise RuntimeError(f"{s['name']}: its last file gave no validation document")
+3272.6s	97	RuntimeError: sql: its last file gave no validation document
+3273.8s	98	/usr/local/lib/python3.13/dist-packages/IPython/core/interactiveshell.py:3561: UserWarning: To exit: use 'exit', 'quit', or Ctrl-D.
+3273.8s	99	  warn("To exit: use 'exit', 'quit', or Ctrl-D.", stacklevel=1)
+3273.8s	100
+3273.8s	101	/usr/local/lib/python3.13/dist-packages/IPython/core/interactiveshell.py:3561: UserWarning: To exit: use 'exit', 'quit', or Ctrl-D.
+3273.8s	102	  warn("To exit: use 'exit', 'quit', or Ctrl-D.", stacklevel=1)
+3274.3s	103	Traceback (most recent call last):
+3274.3s	104	  File "<string>", line 1, in <module>
+3274.3s	105	    import sys;import papermill as pm;pm.execute_notebook("__notebook__.ipynb","__notebook__.ipynb",progress_bar=False,log_output=True,stdout_file=sys.stdout,stderr_file=sys.stderr,allow_errors=False,timeout=43200)
+3274.3s	106	                                      ~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+3274.3s	107	  File "/usr/local/lib/python3.13/dist-packages/papermill/execute.py", line 131, in execute_notebook
+3274.3s	108	    raise_for_execution_errors(nb, output_path)
+3274.3s	109	    ~~~~~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^
+3274.3s	110	  File "/usr/local/lib/python3.13/dist-packages/papermill/execute.py", line 251, in raise_for_execution_errors
+3274.3s	111	    raise error
+3274.3s	112	papermill.exceptions.PapermillExecutionError:
+3274.3s	113	---------------------------------------------------------------------------
+3274.3s	114	Exception encountered at "In [5]":
+3274.3s	115	An exception has occurred, use %tb to see the full traceback.
+3274.3s	116
+3274.3s	117	SystemExit: build_shards.py terminó con código 1
+3274.3s	118
+3274.3s	119
+3276.8s	120	/usr/local/lib/python3.13/dist-packages/mistune.py:435: SyntaxWarning: invalid escape sequence '\|'
+3276.8s	121	  cells[i][c] = re.sub('\\\\\|', '|', cell)
+3277.0s	122	/usr/local/lib/python3.13/dist-packages/nbconvert/filters/filter_links.py:36: SyntaxWarning: invalid escape sequence '\_'
+3277.0s	123	  text = re.sub(r'_', '\_', text) # Escape underscores in display text
+3277.8s	124	[NbConvertApp] Converting notebook __notebook__.ipynb to notebook
+3277.9s	125	[NbConvertApp] Writing 26081 bytes to __notebook__.ipynb
+3280.5s	126	[NbConvertApp] Converting notebook __notebook__.ipynb to html
+3281.0s	127	[NbConvertApp] Writing 327109 bytes to __results__.html
