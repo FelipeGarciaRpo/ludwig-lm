@@ -576,6 +576,8 @@ COMMIT = "main"          # el commit de main con el patch de la T1: el MISMO en 
 REPO_URL = "https://github.com/FelipeGarciaRpo/ludwig-lm"
 SHARDS = 56              # por sesión: 56 × 256 MiB caben en los 20 GB de salida de Kaggle
 HORAS = 11.0             # tope de la sesión, contando desde aquí
+OTRO_COMMIT = False      # True solo si la bitácora lo indica: sigue un build empezado con otro commit, cuando el
+                         # cambio no puede alterar los shards (--allow-code-change)
 import time
 T_SESION = time.time()'''),
     code(r'''import os, subprocess, sys
@@ -619,7 +621,7 @@ La primera sesión prepara la descontaminación y las listas de Stack-Edu, escri
     code(r'''if FASE == "construir":
     horas = round(HORAS - (time.time() - T_SESION) / 3600 - 0.3, 2)
     correr("build", "--out", SALIDA, "--from", "auto", "--roots", "/kaggle/input", "--shards", str(SHARDS),
-           "--max-hours", str(horas))
+           "--max-hours", str(horas), *(["--allow-code-change"] if OTRO_COMMIT else []))
     correr("samples", "--manifest", f"{SALIDA}/manifest.json", "--out", f"{SALIDA}/muestras.txt",
            "--roots", "/kaggle/input")
     rep = json.load(open(sorted(glob.glob(f"{SALIDA}/report_*.json"))[-1]))

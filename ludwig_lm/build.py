@@ -683,11 +683,11 @@ def stage_train(recipe, hub, coder, out, prev=None, n_shards=56, max_hours=11.0)
         s, d = mixer.next()
         tag = np.zeros(0, DTYPE)
         if meta_on and d.label:
-            if d.label not in tags:
-                tags[d.label] = coder.tag(d.label, tmpl)
-                if len(tags) > 200_000:
+            tag = tags.get(d.label)
+            if tag is None:
+                if len(tags) >= 200_000:                    # only a cache: clearing it never changes a shard
                     tags.clear()
-            tag = tags[d.label]
+                tag = tags[d.label] = coder.tag(d.label, tmpl)
         ids = np.concatenate([tag, d.ids, np.array([EOS], DTYPE)])
         mixer.emitted[s] += len(ids)                       # before any save: the state must include this document
         row = {"source": streams[s].name, "key": d.key, "tag": len(tag), "fim": d.fim, "chat": d.chat, "attr": d.attr}

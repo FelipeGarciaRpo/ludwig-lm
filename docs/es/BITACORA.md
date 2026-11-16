@@ -680,3 +680,28 @@ Todo lo que se corre, se mide o se decide, en orden. Cada entrada dice qué se h
   - **La causa:** la receta buscaba SQL en el shard `0086` de Common Pile, que es Rust. Leyendo el comienzo de los shards 0085–0091 y el 0088 entero, el orden es Ruby (0085), Rust (0086), Shell (0087–0088), SQL (dentro del 0088, de la fila 217,222 a la 605,833: 388,612 filas), Swift (desde el final del 0088 hasta el 0090) y TypeScript (0091–0094). El mapa de la revisión independiente ponía SQL en el 0086.
   - **Arreglo en `configs/data_v3.json`, antes del primer shard:** el rango de SQL pasa de `[86, 86]` a `[88, 88]`. Shell queda en `[86, 88]`. `select_files` sobre el Hub elige `stack-edu-0088.json.gz` para SQL.
 - **Siguiente:** la sesión 1 otra vez, de cero, con el commit nuevo. `prepare` se rehace (~47 min) y después vienen la validación y los shards.
+
+## 2026-11-16 · T1, sesión 1: 6 shards, y un error en el caché de etiquetas
+
+- **Qué:** la sesión 1 de la T1 con el commit `2d79a37` (SQL en el shard 0088).
+- **Dónde:** Kaggle, CPU (4 núcleos), con pyarrow 23.0.1.
+- **Archivos:** `results/t1/sesion1_intento2_salida_kaggle.txt`, el log.
+- **Resultado:**
+  - **`[prepare]` en 22 min,** con la red de Kaggle a ~20 MB/s.
+  - **`[val]` completa:** las 29 fuentes, con SQL y Shell desde el shard 0088.
+  - **`[train]`: 6 shards (0–5).** El primero tardó 43.6 min y los otros 22–24 min cada uno, a 94–101K tokens/s, con la CPU al ~35% de 4 núcleos y la red a ~2 MB/s.
+  - **Después del shard 5, `KeyError: 'northjersey.com'`.** El caché de etiquetas MeCo se vaciaba al pasar de 200,000 dominios justo después de guardar el nuevo, y la línea siguiente lo buscaba. Le tocó al dominio 200,001.
+- **Arreglo (`ludwig_lm/build.py`):**
+  - El caché se vacía antes de guardar la etiqueta nueva. Es solo un caché: cada etiqueta sale igual con o sin él, así que los shards no cambian, y `BUILDER_VERSION` y el `build_id` siguen iguales.
+  - Se comprobó con una simulación: el bucle viejo falla en cuanto se llena el caché, y el nuevo da lo mismo que sin caché.
+- **Para seguir desde los 6 shards:**
+  - El notebook de la T1 suma `OTRO_COMMIT`, que pasa `--allow-code-change`.
+  - La sesión siguiente usa el commit nuevo con `OTRO_COMMIT = True`, porque el manifiesto guarda `builder_commit = 2d79a37`. Las que vengan después también, mientras el manifiesto no cambie ese campo.
+- **Ojo:**
+  - A ~23 min por shard, una sesión de 10.7 h da ~27 shards, no 56, así que los 168 piden 6–7 sesiones.
+  - El tronco gasta ~1 shard por turno (~137M tokens en 11 h a ~3,450 tokens/s), así que la T1 va muy por delante.
+  - Con la CPU al ~35%, el constructor corre casi todo en un solo hilo. Queda como pregunta para el chat de diseño.
+- **Siguiente:**
+  - Con la salida de esta sesión (los 6 shards y su estado), el dataset `ludwig2-tronco-v3-1`.
+  - La sesión siguiente con el commit nuevo.
+  - En paralelo, la G0-0 y la G0-1.

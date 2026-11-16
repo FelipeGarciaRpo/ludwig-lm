@@ -1,0 +1,166 @@
+# T1, sesión 1 (FASE = "construir"), intento con el commit 2d79a37 (SQL en el shard 0088), en Kaggle CPU. Log copiado del visor de Kaggle, sin editar.
+# prepare 22 min, val completa, 6 shards (0–5) a ~23 min cada uno; después KeyError en la etiqueta del dominio 200,001 (el caché de etiquetas se vaciaba después de guardar la nueva).
+Time	#	Log Message
+9.3s	1	0.00s - Debugger warning: It seems that frozen modules are being used, which may
+9.3s	2	0.00s - make the debugger miss breakpoints. Please pass -Xfrozen_modules=off
+9.3s	3	0.00s - to python to disable frozen modules.
+9.3s	4	0.00s - Note: Debugging will proceed. Set PYDEVD_DISABLE_FILE_VALIDATION=1 to disable this validation.
+10.2s	5	0.00s - Debugger warning: It seems that frozen modules are being used, which may
+10.2s	6	0.00s - make the debugger miss breakpoints. Please pass -Xfrozen_modules=off
+10.2s	7	0.00s - to python to disable frozen modules.
+10.2s	8	0.00s - Note: Debugging will proceed. Set PYDEVD_DISABLE_FILE_VALIDATION=1 to disable this validation.
+13.2s	9	commit 2d79a37cf76b7cc5ca0d8532d15548f3890492a6
+17.0s	10	HF_TOKEN: sí
+17.0s	11	pyarrow 23.0.1 · fsspec 2025.12.0 · huggingface_hub 1.33.0
+17.0s	12	4
+17.0s	13	               total        used        free      shared  buff/cache   available
+17.0s	14	Mem:              31           1          26           0           4          30
+17.0s	15	/dev/loop2       20G   16M   20G   1% /kaggle/working
+17.1s	16	FASE no es plan
+17.1s	17	>> build --out /kaggle/working/t1 --from auto --roots /kaggle/input --shards 56 --max-hours 10.7
+21.7s	18	no previous state under /kaggle/input: this is the first session
+21.7s	19	build 367d680aef5a0689 (tronco-v3, tokenizer 0b7da8fdb062)
+21.7s	20	[prepare]
+104.1s	21	  Stack-Edu python: HuggingFaceTB/stack-edu/Python/
+166.1s	22	    Python/train-00000-of-00005.parquet (1/5): 0.50 GB in 62 s (8.1 MB/s), 5,057,204 files, 913,638 permissive
+228.9s	23	    Python/train-00001-of-00005.parquet (2/5): 0.50 GB in 58 s (8.6 MB/s), 5,057,204 files, 911,793 permissive
+294.9s	24	    Python/train-00002-of-00005.parquet (3/5): 0.50 GB in 61 s (8.2 MB/s), 5,057,204 files, 911,178 permissive
+317.1s	25	⏱ 0h05 · bajando 21.0 MB/s (6.3 GB en total) · CPU 14% · RAM 2.7 GB · salida 0.1 GB · prep: decon.npz · shards: 0
+364.0s	26	    Python/train-00003-of-00005.parquet (4/5): 0.50 GB in 64 s (7.8 MB/s), 5,057,204 files, 913,423 permissive
+426.8s	27	    Python/train-00004-of-00005.parquet (5/5): 0.50 GB in 58 s (8.6 MB/s), 5,057,203 files, 913,352 permissive
+439.6s	28	  Stack-Edu python: 4,563,384 permissive files
+439.6s	29	  Stack-Edu javascript: HuggingFaceTB/stack-edu/JavaScript/
+521.6s	30	    JavaScript/train-00000-of-00003.parquet (1/3): 0.43 GB in 82 s (5.2 MB/s), 4,417,811 files, 865,411 permissive
+605.4s	31	    JavaScript/train-00001-of-00003.parquet (2/3): 0.43 GB in 79 s (5.4 MB/s), 4,417,810 files, 865,374 permissive
+617.1s	32	⏱ 0h10 · bajando 23.0 MB/s (13.2 GB en total) · CPU 7% · RAM 2.8 GB · salida 0.3 GB · prep: decon.npz, permissive_python.parquet · shards: 0
+690.6s	33	    JavaScript/train-00002-of-00003.parquet (3/3): 0.43 GB in 81 s (5.3 MB/s), 4,417,810 files, 865,342 permissive
+699.3s	34	  Stack-Edu javascript: 2,596,127 permissive files
+699.3s	35	  Stack-Edu typescript: HuggingFaceTB/stack-edu/TypeScript/
+751.0s	36	    TypeScript/train-00000-of-00001.parquet (1/1): 0.43 GB in 52 s (8.2 MB/s), 4,290,356 files, 1,703,720 permissive
+762.3s	37	  Stack-Edu typescript: 1,703,720 permissive files
+762.3s	38	  Stack-Edu markdown: HuggingFaceTB/stack-edu/Markdown/
+841.5s	39	    Markdown/train-00000-of-00005.parquet (1/5): 0.41 GB in 79 s (5.2 MB/s), 4,137,416 files, 1,434,693 permissive
+917.2s	40	⏱ 0h15 · bajando 20.8 MB/s (19.4 GB en total) · CPU 7% · RAM 3.6 GB · salida 0.6 GB · prep: decon.npz, permissive_javascript.parquet, permissive_python.parquet, permissive_typescript.parquet · shards: 0
+922.1s	41	    Markdown/train-00001-of-00005.parquet (2/5): 0.41 GB in 73 s (5.6 MB/s), 4,137,416 files, 1,436,107 permissive
+1002.7s	42	    Markdown/train-00002-of-00005.parquet (3/5): 0.41 GB in 73 s (5.6 MB/s), 4,137,415 files, 1,435,426 permissive
+1088.6s	43	    Markdown/train-00003-of-00005.parquet (4/5): 0.41 GB in 79 s (5.2 MB/s), 4,137,415 files, 1,435,069 permissive
+1168.7s	44	    Markdown/train-00004-of-00005.parquet (5/5): 0.41 GB in 72 s (5.7 MB/s), 4,137,415 files, 1,435,245 permissive
+1189.1s	45	  Stack-Edu markdown: 7,176,540 permissive files
+1189.1s	46	  Stack-Edu sql: HuggingFaceTB/stack-edu/SQL/
+1217.2s	47	⏱ 0h20 · bajando 17.9 MB/s (24.8 GB en total) · CPU 8% · RAM 3.3 GB · salida 1.0 GB · prep: decon.npz, permissive_javascript.parquet, permissive_markdown.parquet, permissive_python.parquet, permissive_typescript.parquet · shards: 0
+1235.2s	48	    SQL/train-00000-of-00001.parquet (1/1): 0.26 GB in 46 s (5.7 MB/s), 2,504,412 files, 397,805 permissive
+1238.0s	49	  Stack-Edu sql: 397,805 permissive files
+1238.0s	50	  Stack-Edu shell: HuggingFaceTB/stack-edu/Shell/
+1317.5s	51	    Shell/train-00000-of-00001.parquet (1/1): 0.39 GB in 80 s (5.0 MB/s), 4,133,547 files, 1,394,774 permissive
+1327.2s	52	  Stack-Edu shell: 1,394,774 permissive files
+1327.2s	53	  decontamination: 7,048,101 13-grams from 16 benchmarks (1,240 dropped as templates)
+1327.2s	54	[val]
+1339.9s	55	  val fineweb-edu: 2,000,460 tokens, 1,903 documents from fineweb-edu-dedup/train-00233-of-00234.parquet
+1356.2s	56	  val dclm: 2,067,782 tokens, 1,782 documents from data/dclm-dedup/global-shard_10_of_10/part.999.parquet
+1371.8s	57	  val finephrase-faq: 507,252 tokens, 1,212 documents from faq/001_00099_9.parquet
+1377.1s	58	  val finephrase-tutorial: 515,062 tokens, 1,275 documents from tutorial/001_00099_9.parquet
+1382.3s	59	  val finephrase-math: 516,141 tokens, 1,709 documents from math/001_00099_9.parquet
+1389.3s	60	  val finephrase-table: 501,890 tokens, 1,978 documents from table/001_00099_9.parquet
+1394.0s	61	  val wiki-en: 1,006,412 tokens, 880 documents from 20231101.en/train-00040-of-00041.parquet
+1400.2s	62	  val stackexchange: 1,032,803 tokens, 1,279 documents from data/writers.stackexchange.com/train-00000-of-00001.parquet
+1405.2s	63	  val cosmopedia: 1,028,523 tokens, 1,459 documents from cosmopedia-v2/train-00103-of-00104.parquet
+1416.9s	64	  val fineweb2-hq: 2,045,458 tokens, 2,803 documents from spa_Latn/000_00503.parquet
+1424.1s	65	  val transweb: 1,045,499 tokens, 1,021 documents from es_chunk56.jsonl
+1428.9s	66	  val wiki-es: 1,040,021 tokens, 1,209 documents from 20231101.es/train-00012-of-00013.parquet
+1433.9s	67	  val un-parallel: 517,792 tokens, 433 documents from en-es/train-00016-of-00017.parquet
+1437.7s	68	  val europarl: 533,864 tokens, 448 documents from en-es/train-00001-of-00002.parquet
+1448.1s	69	  val python: 2,042,599 tokens, 2,231 documents from stack-edu-0084.json.gz
+1458.4s	70	  val javascript: 2,029,406 tokens, 2,639 documents from stack-edu-0064.json.gz
+1464.5s	71	  val typescript: 1,004,640 tokens, 1,514 documents from stack-edu-0094.json.gz
+1474.8s	72	  val notebooks-scripts: 1,042,095 tokens, 482 documents from jupyter-scripts-dedup-filtered/train-00007-of-00008.parquet
+1483.4s	73	  val notebooks-structured: 1,005,744 tokens, 446 documents from jupyter-structured-clean-dedup/train-00005-of-00006.parquet
+1488.4s	74	  val markdown: 1,000,513 tokens, 951 documents from stack-edu-0017.json.gz
+1496.4s	75	  val stackoverflow: 1,036,688 tokens, 1,292 documents from stackoverflow-posts-00058-of-00058.parquet
+1505.1s	76	  val html: 1,006,357 tokens, 564 documents from data/html/data-00307-of-00308.parquet
+1514.2s	77	  val css: 1,044,108 tokens, 1,257 documents from data/css/data-00048-of-00049.parquet
+1517.2s	78	⏱ 0h25 · bajando 9.2 MB/s (27.6 GB en total) · CPU 21% · RAM 4.4 GB · salida 1.1 GB · prep: decon.npz, permissive_javascript.parquet, permissive_markdown.parquet, permissive_python.parquet, permissive_shell.parquet, permissive_sql.parquet, permissive_typescript.parquet, prepare.json · shards: 0
+1538.4s	79	  val sql: 1,021,325 tokens, 819 documents from stack-edu-0088.json.gz
+1543.1s	80	  val shell: 1,003,688 tokens, 1,660 documents from stack-edu-0088.json.gz
+1551.7s	81	  val finemath-4plus: 2,003,588 tokens, 1,529 documents from finemath-4plus/train-00063-of-00064.parquet
+1557.3s	82	  val infiwebmath-4plus: 1,050,829 tokens, 821 documents from infiwebmath-4plus/train-00031-of-00032.parquet
+1817.2s	83	⏱ 0h30 · bajando 2.4 MB/s (28.3 GB en total) · CPU 29% · RAM 4.5 GB · salida 1.1 GB · prep: decon.npz, permissive_javascript.parquet, permissive_markdown.parquet, permissive_python.parquet, permissive_shell.parquet, permissive_sql.parquet, permissive_typescript.parquet, prepare.json · shards: 0
+1838.1s	84	  val openmathreasoning: 1,003,446 tokens, 666 documents from data/cot-00143-of-00144.parquet
+1840.7s	85	  val oasst: 126,571 tokens, 374 documents from data/validation-00000-of-00001-134b8fd0c89408b6.parquet
+1840.8s	86	[train] up to 56 shards or 10.7 h
+2117.2s	87	⏱ 0h35 · bajando 2.2 MB/s (29.0 GB en total) · CPU 33% · RAM 4.9 GB · salida 1.1 GB · prep: decon.npz, permissive_javascript.parquet, permissive_markdown.parquet, permissive_python.parquet, permissive_shell.parquet, permissive_sql.parquet, permissive_typescript.parquet, prepare.json · shards: 0
+2417.2s	88	⏱ 0h40 · bajando 1.6 MB/s (29.4 GB en total) · CPU 30% · RAM 4.9 GB · salida 1.1 GB · prep: decon.npz, permissive_javascript.parquet, permissive_markdown.parquet, permissive_python.parquet, permissive_shell.parquet, permissive_sql.parquet, permissive_typescript.parquet, prepare.json · shards: 0
+2717.2s	89	⏱ 0h45 · bajando 1.8 MB/s (30.0 GB en total) · CPU 29% · RAM 4.9 GB · salida 1.1 GB · prep: decon.npz, permissive_javascript.parquet, permissive_markdown.parquet, permissive_python.parquet, permissive_shell.parquet, permissive_sql.parquet, permissive_typescript.parquet, prepare.json · shards: 0
+3017.2s	90	⏱ 0h50 · bajando 2.4 MB/s (30.7 GB en total) · CPU 34% · RAM 5.3 GB · salida 1.1 GB · prep: decon.npz, permissive_javascript.parquet, permissive_markdown.parquet, permissive_python.parquet, permissive_shell.parquet, permissive_sql.parquet, permissive_typescript.parquet, prepare.json · shards: 0
+3317.2s	91	⏱ 0h55 · bajando 2.2 MB/s (31.4 GB en total) · CPU 36% · RAM 5.9 GB · salida 1.1 GB · prep: decon.npz, permissive_javascript.parquet, permissive_markdown.parquet, permissive_python.parquet, permissive_shell.parquet, permissive_sql.parquet, permissive_typescript.parquet, prepare.json · shards: 0
+3617.2s	92	⏱ 1h00 · bajando 2.0 MB/s (32.0 GB en total) · CPU 35% · RAM 6.1 GB · salida 1.1 GB · prep: decon.npz, permissive_javascript.parquet, permissive_markdown.parquet, permissive_python.parquet, permissive_shell.parquet, permissive_sql.parquet, permissive_typescript.parquet, prepare.json · shards: 0
+3917.2s	93	⏱ 1h05 · bajando 2.0 MB/s (32.6 GB en total) · CPU 36% · RAM 6.3 GB · salida 1.1 GB · prep: decon.npz, permissive_javascript.parquet, permissive_markdown.parquet, permissive_python.parquet, permissive_shell.parquet, permissive_sql.parquet, permissive_typescript.parquet, prepare.json · shards: 0
+4217.2s	94	⏱ 1h10 · bajando 1.4 MB/s (33.0 GB en total) · CPU 38% · RAM 6.4 GB · salida 1.1 GB · prep: decon.npz, permissive_javascript.parquet, permissive_markdown.parquet, permissive_python.parquet, permissive_shell.parquet, permissive_sql.parquet, permissive_typescript.parquet, prepare.json · shards: 0
+4460.4s	95	  shard 00000: 162,903 documents, 43.6 min (51K tokens/s)
+4517.2s	96	⏱ 1h15 · bajando 2.8 MB/s (33.8 GB en total) · CPU 33% · RAM 6.6 GB · salida 1.5 GB · prep: decon.npz, permissive_javascript.parquet, permissive_markdown.parquet, permissive_python.parquet, permissive_shell.parquet, permissive_sql.parquet, permissive_typescript.parquet, prepare.json · shards: 1
+4817.2s	97	⏱ 1h20 · bajando 3.2 MB/s (34.8 GB en total) · CPU 32% · RAM 6.5 GB · salida 1.5 GB · prep: decon.npz, permissive_javascript.parquet, permissive_markdown.parquet, permissive_python.parquet, permissive_shell.parquet, permissive_sql.parquet, permissive_typescript.parquet, prepare.json · shards: 1
+5117.2s	98	⏱ 1h25 · bajando 1.8 MB/s (35.3 GB en total) · CPU 36% · RAM 6.5 GB · salida 1.5 GB · prep: decon.npz, permissive_javascript.parquet, permissive_markdown.parquet, permissive_python.parquet, permissive_shell.parquet, permissive_sql.parquet, permissive_typescript.parquet, prepare.json · shards: 1
+5417.2s	99	⏱ 1h30 · bajando 2.1 MB/s (35.9 GB en total) · CPU 36% · RAM 6.5 GB · salida 1.5 GB · prep: decon.npz, permissive_javascript.parquet, permissive_markdown.parquet, permissive_python.parquet, permissive_shell.parquet, permissive_sql.parquet, permissive_typescript.parquet, prepare.json · shards: 1
+5717.2s	100	⏱ 1h35 · bajando 1.5 MB/s (36.4 GB en total) · CPU 37% · RAM 6.5 GB · salida 1.5 GB · prep: decon.npz, permissive_javascript.parquet, permissive_markdown.parquet, permissive_python.parquet, permissive_shell.parquet, permissive_sql.parquet, permissive_typescript.parquet, prepare.json · shards: 1
+5888.3s	101	  shard 00001: 163,127 documents, 23.8 min (94K tokens/s)
+6017.2s	102	⏱ 1h40 · bajando 1.8 MB/s (36.9 GB en total) · CPU 37% · RAM 6.5 GB · salida 1.8 GB · prep: decon.npz, permissive_javascript.parquet, permissive_markdown.parquet, permissive_python.parquet, permissive_shell.parquet, permissive_sql.parquet, permissive_typescript.parquet, prepare.json · shards: 2
+6317.2s	103	⏱ 1h45 · bajando 1.8 MB/s (37.5 GB en total) · CPU 35% · RAM 6.6 GB · salida 1.8 GB · prep: decon.npz, permissive_javascript.parquet, permissive_markdown.parquet, permissive_python.parquet, permissive_shell.parquet, permissive_sql.parquet, permissive_typescript.parquet, prepare.json · shards: 2
+6617.2s	104	⏱ 1h50 · bajando 1.8 MB/s (38.0 GB en total) · CPU 36% · RAM 6.6 GB · salida 1.8 GB · prep: decon.npz, permissive_javascript.parquet, permissive_markdown.parquet, permissive_python.parquet, permissive_shell.parquet, permissive_sql.parquet, permissive_typescript.parquet, prepare.json · shards: 2
+6917.2s	105	⏱ 1h55 · bajando 1.8 MB/s (38.6 GB en total) · CPU 37% · RAM 6.6 GB · salida 1.8 GB · prep: decon.npz, permissive_javascript.parquet, permissive_markdown.parquet, permissive_python.parquet, permissive_shell.parquet, permissive_sql.parquet, permissive_typescript.parquet, prepare.json · shards: 2
+7215.6s	106	  shard 00002: 158,822 documents, 22.1 min (101K tokens/s)
+7217.2s	107	⏱ 2h00 · bajando 2.3 MB/s (39.3 GB en total) · CPU 34% · RAM 6.8 GB · salida 2.0 GB · prep: decon.npz, permissive_javascript.parquet, permissive_markdown.parquet, permissive_python.parquet, permissive_shell.parquet, permissive_sql.parquet, permissive_typescript.parquet, prepare.json · shards: 3
+7517.3s	108	⏱ 2h05 · bajando 1.4 MB/s (39.7 GB en total) · CPU 37% · RAM 6.5 GB · salida 2.0 GB · prep: decon.npz, permissive_javascript.parquet, permissive_markdown.parquet, permissive_python.parquet, permissive_shell.parquet, permissive_sql.parquet, permissive_typescript.parquet, prepare.json · shards: 3
+7817.3s	109	⏱ 2h10 · bajando 1.6 MB/s (40.2 GB en total) · CPU 37% · RAM 6.5 GB · salida 2.0 GB · prep: decon.npz, permissive_javascript.parquet, permissive_markdown.parquet, permissive_python.parquet, permissive_shell.parquet, permissive_sql.parquet, permissive_typescript.parquet, prepare.json · shards: 3
+8117.3s	110	⏱ 2h15 · bajando 1.9 MB/s (40.8 GB en total) · CPU 35% · RAM 6.6 GB · salida 2.0 GB · prep: decon.npz, permissive_javascript.parquet, permissive_markdown.parquet, permissive_python.parquet, permissive_shell.parquet, permissive_sql.parquet, permissive_typescript.parquet, prepare.json · shards: 3
+8417.3s	111	⏱ 2h20 · bajando 1.8 MB/s (41.3 GB en total) · CPU 35% · RAM 6.6 GB · salida 2.0 GB · prep: decon.npz, permissive_javascript.parquet, permissive_markdown.parquet, permissive_python.parquet, permissive_shell.parquet, permissive_sql.parquet, permissive_typescript.parquet, prepare.json · shards: 3
+8584.6s	112	  shard 00003: 161,233 documents, 22.8 min (98K tokens/s)
+8717.3s	113	⏱ 2h25 · bajando 1.7 MB/s (41.8 GB en total) · CPU 37% · RAM 6.6 GB · salida 2.3 GB · prep: decon.npz, permissive_javascript.parquet, permissive_markdown.parquet, permissive_python.parquet, permissive_shell.parquet, permissive_sql.parquet, permissive_typescript.parquet, prepare.json · shards: 4
+9017.3s	114	⏱ 2h30 · bajando 1.5 MB/s (42.3 GB en total) · CPU 37% · RAM 6.6 GB · salida 2.3 GB · prep: decon.npz, permissive_javascript.parquet, permissive_markdown.parquet, permissive_python.parquet, permissive_shell.parquet, permissive_sql.parquet, permissive_typescript.parquet, prepare.json · shards: 4
+9317.3s	115	⏱ 2h35 · bajando 2.1 MB/s (42.9 GB en total) · CPU 34% · RAM 6.6 GB · salida 2.3 GB · prep: decon.npz, permissive_javascript.parquet, permissive_markdown.parquet, permissive_python.parquet, permissive_shell.parquet, permissive_sql.parquet, permissive_typescript.parquet, prepare.json · shards: 4
+9617.3s	116	⏱ 2h40 · bajando 1.8 MB/s (43.5 GB en total) · CPU 36% · RAM 6.6 GB · salida 2.3 GB · prep: decon.npz, permissive_javascript.parquet, permissive_markdown.parquet, permissive_python.parquet, permissive_shell.parquet, permissive_sql.parquet, permissive_typescript.parquet, prepare.json · shards: 4
+9917.3s	117	⏱ 2h45 · bajando 1.4 MB/s (43.9 GB en total) · CPU 37% · RAM 6.6 GB · salida 2.3 GB · prep: decon.npz, permissive_javascript.parquet, permissive_markdown.parquet, permissive_python.parquet, permissive_shell.parquet, permissive_sql.parquet, permissive_typescript.parquet, prepare.json · shards: 4
+9973.9s	118	  shard 00004: 156,911 documents, 23.2 min (97K tokens/s)
+10217.3s	119	⏱ 2h50 · bajando 1.8 MB/s (44.4 GB en total) · CPU 36% · RAM 6.7 GB · salida 2.6 GB · prep: decon.npz, permissive_javascript.parquet, permissive_markdown.parquet, permissive_python.parquet, permissive_shell.parquet, permissive_sql.parquet, permissive_typescript.parquet, prepare.json · shards: 5
+10517.3s	120	⏱ 2h55 · bajando 1.7 MB/s (44.9 GB en total) · CPU 35% · RAM 6.6 GB · salida 2.6 GB · prep: decon.npz, permissive_javascript.parquet, permissive_markdown.parquet, permissive_python.parquet, permissive_shell.parquet, permissive_sql.parquet, permissive_typescript.parquet, prepare.json · shards: 5
+10817.3s	121	⏱ 3h00 · bajando 1.5 MB/s (45.4 GB en total) · CPU 37% · RAM 6.7 GB · salida 2.6 GB · prep: decon.npz, permissive_javascript.parquet, permissive_markdown.parquet, permissive_python.parquet, permissive_shell.parquet, permissive_sql.parquet, permissive_typescript.parquet, prepare.json · shards: 5
+11117.3s	122	⏱ 3h05 · bajando 1.8 MB/s (45.9 GB en total) · CPU 36% · RAM 6.7 GB · salida 2.6 GB · prep: decon.npz, permissive_javascript.parquet, permissive_markdown.parquet, permissive_python.parquet, permissive_shell.parquet, permissive_sql.parquet, permissive_typescript.parquet, prepare.json · shards: 5
+11381.1s	123	  shard 00005: 160,743 documents, 23.4 min (95K tokens/s)
+11386.6s	124	Traceback (most recent call last):
+11386.6s	125	  File "/kaggle/working/ludwig-lm/scripts/build_shards.py", line 128, in <module>
+11386.6s	126	    sys.exit(main())
+11386.6s	127	             ~~~~^^
+11386.6s	128	  File "/kaggle/working/ludwig-lm/scripts/build_shards.py", line 122, in main
+11386.6s	129	    rep = stage_train(recipe, hub, coder, out, prev, a.shards, a.max_hours)
+11386.6s	130	  File "/kaggle/working/ludwig-lm/ludwig_lm/build.py", line 690, in stage_train
+11386.6s	131	    tag = tags[d.label]
+11386.6s	132	          ~~~~^^^^^^^^^
+11386.6s	133	KeyError: 'northjersey.com'
+11389.0s	134	/usr/local/lib/python3.13/dist-packages/IPython/core/interactiveshell.py:3561: UserWarning: To exit: use 'exit', 'quit', or Ctrl-D.
+11389.0s	135	  warn("To exit: use 'exit', 'quit', or Ctrl-D.", stacklevel=1)
+11389.0s	136
+11389.0s	137	/usr/local/lib/python3.13/dist-packages/IPython/core/interactiveshell.py:3561: UserWarning: To exit: use 'exit', 'quit', or Ctrl-D.
+11389.0s	138	  warn("To exit: use 'exit', 'quit', or Ctrl-D.", stacklevel=1)
+11389.7s	139	Traceback (most recent call last):
+11389.7s	140	  File "<string>", line 1, in <module>
+11389.7s	141	    import sys;import papermill as pm;pm.execute_notebook("__notebook__.ipynb","__notebook__.ipynb",progress_bar=False,log_output=True,stdout_file=sys.stdout,stderr_file=sys.stderr,allow_errors=False,timeout=43200)
+11389.7s	142	                                      ~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+11389.7s	143	  File "/usr/local/lib/python3.13/dist-packages/papermill/execute.py", line 131, in execute_notebook
+11389.7s	144	    raise_for_execution_errors(nb, output_path)
+11389.7s	145	    ~~~~~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^
+11389.7s	146	  File "/usr/local/lib/python3.13/dist-packages/papermill/execute.py", line 251, in raise_for_execution_errors
+11389.7s	147	    raise error
+11389.7s	148	papermill.exceptions.PapermillExecutionError:
+11389.7s	149	---------------------------------------------------------------------------
+11389.7s	150	Exception encountered at "In [5]":
+11389.7s	151	An exception has occurred, use %tb to see the full traceback.
+11389.7s	152
+11389.7s	153	SystemExit: build_shards.py terminó con código 1
+11389.7s	154
+11389.7s	155
+11393.4s	156	/usr/local/lib/python3.13/dist-packages/mistune.py:435: SyntaxWarning: invalid escape sequence '\|'
+11393.4s	157	  cells[i][c] = re.sub('\\\\\|', '|', cell)
+11393.6s	158	/usr/local/lib/python3.13/dist-packages/nbconvert/filters/filter_links.py:36: SyntaxWarning: invalid escape sequence '\_'
+11393.6s	159	  text = re.sub(r'_', '\_', text) # Escape underscores in display text
+11394.7s	160	[NbConvertApp] Converting notebook __notebook__.ipynb to notebook
+11394.8s	161	[NbConvertApp] Writing 35550 bytes to __notebook__.ipynb
+11398.3s	162	[NbConvertApp] Converting notebook __notebook__.ipynb to html
+11399.1s	163	[NbConvertApp] Writing 336157 bytes to __results__.html
