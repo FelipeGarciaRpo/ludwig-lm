@@ -705,3 +705,33 @@ Todo lo que se corre, se mide o se decide, en orden. Cada entrada dice qué se h
   - Con la salida de esta sesión (los 6 shards y su estado), el dataset `ludwig2-tronco-v3-1`.
   - La sesión siguiente con el commit nuevo.
   - En paralelo, la G0-0 y la G0-1.
+
+## 2026-11-17 · T1: 20 shards, Stack Overflow colado en StackExchange, y se reconstruye
+
+- **Qué:** la sesión 1 de la T1 con `454673c`, que empezó de cero, construyó 20 shards. Antes del primer turno del tronco se revisaron su reporte y sus muestras, como pide el notebook.
+- **Dónde:** Kaggle, CPU. Duró 10.2 h, a 30.6 min por shard en promedio, contando `prepare` y la validación.
+- **Archivos:**
+  - `results/t1/build_367d680a/report_00020.json` y `muestras.txt`.
+  - Llegaron copiados a mano, con CRLF y sin salto final. Se restauraron como los escribe el constructor: el JSON con su salto final y las muestras sin él.
+- **Resultado:**
+  - **La mezcla es exacta:** cada una de las 29 fuentes quedó a 0.001 puntos o menos de su peso.
+  - **Los formatos salen bien en todas las fuentes:**
+    - la plantilla de chat con `<think>` en las trazas de matemática y en OpenAssistant;
+    - FIM en ~11% del código;
+    - las etiquetas MeCo;
+    - el texto paralelo frase por frase;
+    - los notebooks con sus marcas.
+  - **El problema:** las 3 muestras de `stackexchange` son de Stack Overflow.
+    - `skip_sites` compara `stackoverflow.com` distinguiendo mayúsculas, y el repo escribe `data/Stackoverflow.com/`.
+    - Ese sitio es el 69% de los bytes (335 de 758 archivos) y, en orden alfabético, va tercero.
+    - El 1.5% de StackExchange del tronco habría sido casi todo Stack Overflow durante toda la v1, y además duplicado con la fuente de Stack Overflow (1.0%).
+- **Arreglo en la receta (`configs/data_v3.json`):**
+  - `contains` elige por archivo los sitios de la red salvo Stack Overflow y su meta: 422 archivos, 6.06 GB, 342 sitios. El archivo de validación sigue siendo el mismo.
+  - `skip_sites` suma `Stackoverflow.com`, como segundo filtro por URL.
+- **Por qué se reconstruye:**
+  - La receta cambia, así que cambia el `build_id` y el build no puede seguir. Ningún turno del tronco usó esos shards.
+  - Los 20 shards viejos sirven solo para la G0-0 y la G0-1, que prueban el relevo y la memoria a 16K, no los datos. Después se borran, para no adjuntarlos al tronco por error.
+- **Preguntas abiertas para el chat de diseño:**
+  - La descontaminación saca 12,743 documentos de Python (4.3%) y 15,076 de OpenMathReasoning (29% de los que no salen por largos). ¿Es lo esperable, o hay falsos positivos en código?
+  - OpenMathReasoning descarta 708,197 trazas por largas (más de 2K), contra 36,356 que entran.
+- **Siguiente:** la sesión 1 de cero, con el commit nuevo, `OTRO_COMMIT = False` y sin datasets de entrada. Su salida va a un dataset con otro nombre.
