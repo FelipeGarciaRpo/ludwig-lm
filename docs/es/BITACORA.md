@@ -798,3 +798,20 @@ Todo lo que se corre, se mide o se decide, en orden. Cada entrada dice qué se h
   - que el Kaggle simulado de `scripts/test_relay_cpu.py` desempaque como el real;
   - una prueba en Kaggle que siga desde un respaldo montado, porque la G0-0 no lo hace.
 - **Siguiente:** la G0-1 con `ludwig2-respaldo-a` adjunto, el arreglo del respaldo, y la T1 con el token nuevo.
+
+## 2026-11-17 · G0-1 ✅: 16K cabe, y el `.metadata` sobrevive en el respaldo
+
+- **Qué:** la G0-1 (`MODO = "g0-16k"`): 50 pasos del modelo real a 16K de contexto, con `configs/tronco_v1.json` y sin guardar. Es la condición 5 de la G0.
+- **Dónde:** Kaggle, 2×T4, 26 min, con el notebook de `62c4210` sobre el código `75cd3a0`.
+- **Archivo:** `results/g0/g0_1_salida_kaggle.txt`, con el usuario de Kaggle enmascarado.
+- **Resultado: ✅, sin falta de memoria.**
+  - Pico de 13.40 GiB reservada, bajo los 13.5 de la G0, con 0.1 GiB de margen.
+  - 1,227 tokens/s. La T0.2 v2 dio 1,228 tokens/s a 16K, con 14.33 GiB reservada. La alarma de menos de 2,500 tokens/s es esperable a 16K.
+  - La validación bajó de 4.1131 a 2.5028 bits por byte en 50 pasos (1.6M tokens), sin saltos de FP16.
+- **Para mirar en el primer turno del tronco:** la carga máx/media de los expertos subió de 4.89 a 10.00 en el paso 15, y bajó a 3.5 hacia los pasos 45–49. Con 40 expertos y 4 por token, 10 es el techo: en alguna capa, todos los tokens eligieron al mismo experto. Parece el transitorio del arranque, con el sesgo de SMEBU corrigiendo. La alarma del diseño salta solo si la carga pasa de 3 durante 500 pasos seguidos.
+- **El respaldo (línea 12 del log):** el `.metadata` de DCP sobrevivió al desempacado de Kaggle, en `checkpoint/step_000030/`. Así que el arreglo del relevo es el simple: que `copies()` acepte la carpeta desempacada y que el turno la lea donde está, sin copiarla a `/tmp`. No hace falta subir una copia con otro nombre.
+- **Estado de la G0:** G0-0 ✅ y G0-1 ✅. Faltan los dos primeros turnos del tronco (G0-2 y G0-3).
+- **Antes del primer turno:**
+  - el arreglo del respaldo, con un commit nuevo para el tronco. La T1 sigue con `75cd3a0`, el mismo en sus tres sesiones;
+  - los shards de la T1 nueva;
+  - no adjuntar los shards viejos (build `367d680a`). El notebook elige el manifiesto con más shards, así que si se adjuntan junto con un build nuevo más corto, el turno entrenaría con los viejos.
