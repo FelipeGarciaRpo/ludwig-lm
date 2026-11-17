@@ -746,3 +746,27 @@ Todo lo que se corre, se mide o se decide, en orden. Cada entrada dice qué se h
   - Los dos notebooks traen `COMMIT = 75cd3a0…` en vez de `main`.
   - `RESPALDO` sigue con `DUENO`, porque el usuario de Kaggle no entra al repo (regla 6). Es código de celda: el commit del tronco sigue siendo `75cd3a0`.
 - **Siguiente:** la G0-0 con los nombres reales, y la T1 con el token nuevo en el secreto.
+
+## 2026-11-17 · G0-0: el repo de prueba tenía restos, y la celda se arregla para poder repetirla
+
+- **Qué:** la G0-0 (`MODO = "prueba-relevo"`) con los nombres reales de Hugging Face, sobre el código `75cd3a0`.
+- **Dónde:** Kaggle, 2×T4, 2.3 min.
+- **Archivo:** `results/g0/g0_0_con_restos_salida_kaggle.txt`, con el usuario de Kaggle enmascarado.
+- **Resultado: ❌, pero no por el relevo.**
+  - El repo de prueba ya tenía el paso 20 con la etiqueta `prueba-relevo`, de una corrida anterior cuyo log no llegó. La sesión A siguió desde ahí y, como tiene pedido parar en el 20, se detuvo sin dar un paso: no subió ni respaldó nada. La prueba pide 3 subidas y un respaldo de A.
+  - Todo lo que corrió funcionó:
+    - el candado, tomado y soltado dos veces;
+    - la descarga del paso 20 desde Hugging Face, en 1–2 s;
+    - la reanudación de B, exacta en el estado y en el primer lote;
+    - 10 pasos a ~10K tokens/s;
+    - la subida del paso 30 (0.13 GiB en 3 s), el respaldo en `ludwig2-respaldo-a` (5 s), el aplastado y la entrega.
+  - Las líneas de `train.py` salen dos veces en el log. No son dos procesos: `train.py` solo imprime desde el rank 0, así que es el visor de Kaggle el que muestra dos veces la salida del subproceso.
+- **Dos fallas de la celda, arregladas en `make_notebooks.py`.** Solo cambia la celda: el código del relevo es el mismo y el commit sigue siendo `75cd3a0`.
+  - **No se podía repetir.** Usaba siempre la etiqueta `prueba-relevo`, así que cada corrida seguía desde lo que dejó la anterior, en Hugging Face y en los respaldos. Ahora cada una usa la suya, `prueba-relevo-<fecha y hora>`, y no ve las anteriores. Se comprobó en el PC con el relevo real (`LocalStore`) sobre un repo con los pasos 20 y 30 viejos: A empieza de cero, y el índice termina con el 20 y el 30 nuevos.
+  - **La subida del paso 10 era cuestión de suerte.** La sesión miraba el disco cada 10 s, y el modelo diminuto va del paso 10 al 20 en ~3 s. Si no miraba justo en ese hueco, solo subía el 20, y la prueba fallaba con 2 subidas de 3. Ahora mira cada 0.5 s, como `scripts/test_relay_cpu.py`.
+  - Además, la celda imprime cada condición con ✅ o ❌, y lo que Kaggle muestra montado de cada respaldo (si `checkpoint.tar` llega como un `.tar`).
+  - La celda nueva se probó en el PC con un relevo simulado: da ✅ en una corrida limpia y ❌ en una como esta, con sus tres razones.
+- **Preguntas abiertas para el chat de diseño:**
+  - Revisar estos cambios de la celda.
+  - La G0-0 nunca sigue desde un respaldo de Kaggle. B sigue desde Hugging Face, porque el respaldo de A es una versión nueva del dataset, y una sesión solo ve las versiones que estaban montadas al empezar. Seguir desde Kaggle solo se prueba en CPU, con un Kaggle simulado.
+- **Siguiente:** repetir la G0-0 con el notebook regenerado, y después la G0-1.

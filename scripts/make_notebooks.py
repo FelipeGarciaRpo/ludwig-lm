@@ -711,24 +711,35 @@ print(f"/tmp: {libre:.0f} GiB libres" + ("" if libre >= 30 else
 !nvidia-smi --query-gpu=name,memory.total --format=csv,noheader'''),
     md("""## G0-0 · `prueba-relevo`
 
-El relevo completo con el modelo diminuto (vocabulario de 64K, unos segundos por paso), contra `HF_REPO_PRUEBA` y los respaldos reales (con otra etiqueta, que el tronco ignora).
+El relevo completo con el modelo diminuto (vocabulario de 64K, unos segundos por paso), contra `HF_REPO_PRUEBA` y los respaldos reales. Cada corrida usa su propia etiqueta (`prueba-relevo-<fecha y hora>`): el tronco la ignora, y la prueba se puede repetir sin limpiar lo que dejó la anterior.
 
-1. La sesión A entrena 30 pasos: guarda en el 10 (lo sube mientras entrena) y se detiene en el 20 como si se acabara el tiempo. Sube, respalda, aplasta y suelta.
+1. La sesión A empieza de cero y entrena 30 pasos: guarda en el 10 (lo sube mientras entrena) y se detiene en el 20 como si se acabara el tiempo. Sube, respalda, aplasta y suelta.
 2. Se prueba el candado: una sesión lo toma, otra recibe *ocupado*, y lo suelta.
-3. La sesión B sigue desde Hugging Face hasta el paso 30. Su reanudación debe ser exacta en el estado y en el primer lote."""),
+3. La sesión B sigue desde Hugging Face hasta el paso 30. Su reanudación debe ser exacta en el estado y en el primer lote.
+
+Al final imprime cada condición con ✅ o ❌, y lo que Kaggle muestra montado de cada respaldo."""),
     code(r'''if MODO == "prueba-relevo":
+    ETIQUETA = time.strftime("prueba-relevo-%Y%m%d-%H%M%S", time.gmtime())   # nueva en cada corrida
+    print("etiqueta:", ETIQUETA)
+    for slug in RESPALDO:                    # el relevo busca checkpoint.json y checkpoint.tar en cada respaldo
+        nombre = slug.split("/")[-1]
+        raiz = glob.glob(f"/kaggle/input/**/{nombre}", recursive=True)
+        archivos = sorted(f for r in raiz for f in glob.glob(f"{r}/**", recursive=True) if os.path.isfile(f))
+        print(f"respaldo {nombre} montado:", "no está adjunto" if not raiz else ", ".join(
+            f"{os.path.relpath(f, raiz[0])} ({os.path.getsize(f) / 2**20:.0f} MiB)" for f in archivos[:6]) or "vacío")
     c = json.load(open("configs/tiny_afmoe.json")); c.update(vocab_size=65536, pad_token_id=1, bos_token_id=0)
     json.dump(c, open("/tmp/tiny_64k.json", "w"))
     LOG = "/kaggle/working/results/relevo-prueba.jsonl"; os.makedirs(os.path.dirname(LOG), exist_ok=True)
     base = dict(config="/tmp/tiny_64k.json", tokenizer="tokenizer/tokenizer.json", shards=MANIFIESTO,
                 shard_roots="/kaggle/input", seq=256, micro=4, tokens_per_step=2048, steps=30, warmup=5,
-                eval_every=10, eval_windows=2, log_every=5, save_final=True, tag="prueba-relevo", out=LOG)
+                eval_every=10, eval_windows=2, log_every=5, save_final=True, tag=ETIQUETA, out=LOG)
     tienda = HFStore(HF_REPO_PRUEBA, os.environ.get("HF_TOKEN"))
-    respaldo = KaggleBackup(RESPALDO, tag="prueba-relevo")
+    respaldo = KaggleBackup(RESPALDO, tag=ETIQUETA)
     def sesion(extra):
         a = dict(base, **extra)
-        return Session(tienda, respaldo, CUENTA, "prueba-relevo", f"/tmp/relevo-{len(extra)}",
-                       lambda r, d: train_command(a, r, d), LOG, lease_s=1800, renew_s=600, poll_s=10).run()
+        # poll_s 0.5: el modelo diminuto va del paso 10 al 20 en ~3 s, y cada 10 s se perdía la subida del 10
+        return Session(tienda, respaldo, CUENTA, ETIQUETA, f"/tmp/relevo-{len(extra)}",
+                       lambda r, d: train_command(a, r, d), LOG, lease_s=1800, renew_s=600, poll_s=0.5).run()
     A = sesion({"save_at": [10], "pause_at_step": 20})
     l1, l2 = Lock(tienda, "prueba 1", "s1"), Lock(tienda, "prueba 2", "s2")
     h = l1.acquire()
@@ -741,13 +752,26 @@ El relevo completo con el modelo diminuto (vocabulario de 64K, unos segundos por
     filas = [json.loads(x) for x in open(LOG)]
     res = [r for r in filas if r["type"] == "resume"][-1:]
     lote = [r for r in filas if r["type"] == "resume_check"][-1:]
-    subidas = [e for e in A["events"] + B["events"] if e["kind"] == "upload"]
-    ok = (len(subidas) >= 3 and any(e["kind"] == "backup" for e in A["events"]) and ocupado
-          and res and res[0]["state_exact"] and lote and lote[0]["batch_exact"] and B["resumed_from"]["step"] == 20)
+    subidas = {e["step"] for e in A["events"] + B["events"] if e["kind"] == "upload"}
     for e in A["events"] + B["events"]:
         print(" ", e["kind"], {k: v for k, v in e.items() if k not in ("kind", "time", "by", "session")})
+    pruebas = {
+        "A empezó de cero": A["resumed_from"]["where"] is None,
+        "subió los pasos 10 (mientras entrenaba), 20 y 30": {10, 20, 30} <= subidas,
+        "A dejó su checkpoint en un respaldo de Kaggle": any(e["kind"] == "backup" for e in A["events"]),
+        "con el candado tomado, otra sesión recibe «ocupado»": ocupado,
+        "B siguió desde Hugging Face en el paso 20": B["resumed_from"] == {"where": "hf", "step": 20},
+        "reanudación exacta: el estado": bool(res and res[0]["state_exact"]),
+        "reanudación exacta: el primer lote": bool(lote and lote[0]["batch_exact"]),
+        "A y B aplastaron el historial y soltaron el candado":
+            all(k in [e["kind"] for e in S["events"]] for S in (A, B) for k in ("squash", "release")),
+    }
+    print()
+    for k, v in pruebas.items():
+        print(" ", "✅" if v else "❌", k)
+    ok = all(pruebas.values())
     print("\nG0-0:", "✅ el relevo funciona: subida, candado, respaldo, aplastado y reanudación exacta" if ok
-          else "❌ revisar los eventos de arriba")'''),
+          else "❌ revisar las condiciones y los eventos de arriba")'''),
     md("""## G0-1 · `g0-16k`
 
 50 pasos del modelo real a 16K de contexto (un lote de 16,384 tokens por GPU), con los shards reales, sin guardar. Pasa si termina sin falta de memoria."""),
