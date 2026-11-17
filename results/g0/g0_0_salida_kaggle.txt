@@ -1,0 +1,140 @@
+# G0-0 (MODO = "prueba-relevo"), en Kaggle 2×T4 con el commit 75cd3a0 y la celda de 186de96 (una etiqueta propia por corrida). Log copiado del visor de Kaggle, sin editar salvo el usuario de Kaggle, enmascarado como <usuario>.
+# ✅ las 8 condiciones. La línea 15 muestra que Kaggle desempacó el checkpoint.tar de ludwig2-respaldo-a en checkpoint/step_000030/; esa lista no incluye archivos ocultos.
+Time	#	Log Message
+8.9s	1	0.00s - Debugger warning: It seems that frozen modules are being used, which may
+8.9s	2	0.00s - make the debugger miss breakpoints. Please pass -Xfrozen_modules=off
+8.9s	3	0.00s - to python to disable frozen modules.
+8.9s	4	0.00s - Note: Debugging will proceed. Set PYDEVD_DISABLE_FILE_VALIDATION=1 to disable this validation.
+9.6s	5	0.00s - Debugger warning: It seems that frozen modules are being used, which may
+9.6s	6	0.00s - make the debugger miss breakpoints. Please pass -Xfrozen_modules=off
+9.6s	7	0.00s - to python to disable frozen modules.
+9.6s	8	0.00s - Note: Debugging will proceed. Set PYDEVD_DISABLE_FILE_VALIDATION=1 to disable this validation.
+12.7s	9	commit 75cd3a08b5e3195908c7aff769b4a0254f2b20e6
+43.2s	10	shards: 20 en datasets/<usuario>/ludwig2-tronco-v3-2/t1/manifest.json
+43.2s	11	/tmp: 967 GiB libres
+43.2s	12	Tesla T4, 15360 MiB
+43.2s	13	Tesla T4, 15360 MiB
+43.3s	14	etiqueta: prueba-relevo-20261117-203405
+44.2s	15	respaldo ludwig2-respaldo-a montado: checkpoint.json (0 MiB), checkpoint/step_000030/__0_0.distcp (68 MiB), checkpoint/step_000030/__1_0.distcp (68 MiB), checkpoint/step_000030/meta.json (0 MiB), checkpoint/step_000030/rank0.pt (0 MiB), checkpoint/step_000030/rank1.pt (0 MiB)
+44.9s	16	respaldo ludwig2-respaldo-b montado: ludwig.txt (0 MiB)
+47.8s	17	[relevo] lock until=1794949450
+49.5s	18	[relevo] resume_from where=None step=-1
+51.2s	19
+51.2s	20	*****************************************
+51.2s	21	Setting OMP_NUM_THREADS environment variable for each process to be 1 in default, to avoid your system being overloaded, please further tune the variable for optimal performance in your application as needed.
+51.2s	22	*****************************************
+51.4s	23
+51.4s	24	*****************************************
+51.4s	25	Setting OMP_NUM_THREADS environment variable for each process to be 1 in default, to avoid your system being overloaded, please further tune the variable for optimal performance in your application as needed.
+51.4s	26	*****************************************
+51.4s	27
+51.4s	28
+51.4s	29	*****************************************
+51.4s	30	Setting OMP_NUM_THREADS environment variable for each process to be 1 in default, to avoid your system being overloaded, please further tune the variable for optimal performance in your application as needed.
+51.4s	31	*****************************************
+75.3s	32	[model] AFMoE 0.010B total, 0.009B active | moe=grouped_mm residual=fp32 reduce=fp16 momentum=cpu | 2 × Tesla T4
+75.3s	33	[data] build 367d680aef5a0689: 20 shards, 2.68B tokens (from token 0), meta=mask, val en, es, python, js, math | vocab 65536 | eos 0 | 2048 tokens per step = 2 GPUs × 4 × 256 × 1 micro-steps
+75.5s	34	[model] AFMoE 0.010B total, 0.009B active | moe=grouped_mm residual=fp32 reduce=fp16 momentum=cpu | 2 × Tesla T4
+75.5s	35	[data] build 367d680aef5a0689: 20 shards, 2.68B tokens (from token 0), meta=mask, val en, es, python, js, math | vocab 65536 | eos 0 | 2048 tokens per step = 2 GPUs × 4 × 256 × 1 micro-steps
+78.7s	36	[eval] step 0: val bpb 3.7281  en 3.8242  es 3.1380  python 4.6001  js 3.4990  math 3.8790  ce 11.1037  router entropy 2.074  qk gain 1.00  dead experts None  (3 s)
+78.9s	37	[eval] step 0: val bpb 3.7281  en 3.8242  es 3.1380  python 4.6001  js 3.4990  math 3.8790  ce 11.1037  router entropy 2.074  qk gain 1.00  dead experts None  (3 s)
+82.5s	38	[train] step     0  ce 11.0995  lr×0.200  gnorm 1.659  scale 32768  load max/mean 1.88  545 tok/s  peak 1.53 GiB
+82.7s	39	[train] step     0  ce 11.0995  lr×0.200  gnorm 1.659  scale 32768  load max/mean 1.88  545 tok/s  peak 1.53 GiB
+83.6s	40	[train] step     5  ce 11.0231  lr×1.000  gnorm 1.367  scale 32768  load max/mean 1.64  9,498 tok/s  peak 1.67 GiB
+83.8s	41	[train] step     5  ce 11.0231  lr×1.000  gnorm 1.367  scale 32768  load max/mean 1.64  9,498 tok/s  peak 1.67 GiB
+85.4s	42	[save] step 10 (requested) -> /tmp/relevo-2/ckpt/step_000010  0.13 GiB in 1 s
+85.5s	43	[eval] step 10: val bpb 3.6428  en 3.7425  es 3.0499  python 4.5014  js 3.4435  math 3.7717  ce 10.8495  router entropy 2.072  qk gain 1.01  dead experts 0  (0 s)
+85.6s	44	[save] step 10 (requested) -> /tmp/relevo-2/ckpt/step_000010  0.13 GiB in 1 s
+85.6s	45	[eval] step 10: val bpb 3.6428  en 3.7425  es 3.0499  python 4.5014  js 3.4435  math 3.7717  ce 10.8495  router entropy 2.072  qk gain 1.01  dead experts 0  (0 s)
+85.8s	46	[train] step    10  ce 10.7780  lr×1.000  gnorm 1.967  scale 32768  load max/mean 2.30  8,872 tok/s  peak 1.67 GiB
+86.0s	47	[train] step    10  ce 10.7780  lr×1.000  gnorm 1.967  scale 32768  load max/mean 2.30  8,872 tok/s  peak 1.67 GiB
+87.0s	48	[train] step    15  ce 10.6317  lr×1.000  gnorm 1.051  scale 32768  load max/mean 1.57  8,616 tok/s  peak 1.67 GiB
+87.2s	49	[train] step    15  ce 10.6317  lr×1.000  gnorm 1.051  scale 32768  load max/mean 1.57  8,616 tok/s  peak 1.67 GiB
+88.8s	50	[save] step 20 (pause) -> /tmp/relevo-2/ckpt/step_000020  0.13 GiB in 1 s
+88.8s	51	[end] paused: step 20, 0.0M tokens, 0.00 h, 7019 tok/s (last hour), peak 1.67 GiB reserved, 0 FP16 skips, val bpb 3.64279
+89.0s	52	[save] step 20 (pause) -> /tmp/relevo-2/ckpt/step_000020  0.13 GiB in 1 s
+89.0s	53	[end] paused: step 20, 0.0M tokens, 0.00 h, 7019 tok/s (last hour), peak 1.67 GiB reserved, 0 FP16 skips, val bpb 3.64279
+138.3s	54	[relevo] upload step=10 GiB=0.13 seconds=52.3 kept=[30, 10]
+143.3s	55	[relevo] upload step=20 GiB=0.13 seconds=4.5 kept=[10, 20]
+143.3s	56	[relevo] free what=step_000010 GiB=0.13
+158.5s	57	[relevo] backup dataset=<usuario>/ludwig2-respaldo-a step=20 seconds=15.1
+159.2s	58	[relevo] squash
+160.5s	59	[relevo] release
+165.0s	60	[relevo] lock until=1794949567
+165.6s	61	[relevo] resume_from where=hf step=20
+173.3s	62	[relevo] download step=20 seconds=7.7
+175.6s	63
+175.6s	64	*****************************************
+175.6s	65	Setting OMP_NUM_THREADS environment variable for each process to be 1 in default, to avoid your system being overloaded, please further tune the variable for optimal performance in your application as needed.
+175.6s	66	*****************************************
+175.8s	67
+175.8s	68	*****************************************
+175.8s	69	Setting OMP_NUM_THREADS environment variable for each process to be 1 in default, to avoid your system being overloaded, please further tune the variable for optimal performance in your application as needed.
+175.8s	70	*****************************************
+175.8s	71
+175.8s	72
+175.8s	73	*****************************************
+175.8s	74	Setting OMP_NUM_THREADS environment variable for each process to be 1 in default, to avoid your system being overloaded, please further tune the variable for optimal performance in your application as needed.
+175.8s	75	*****************************************
+185.7s	76	[resume] /tmp/relevo-0/from_hf/checkpoints/step_000020 at step 20: state bit-exact = True (1 s)
+185.7s	77	[model] AFMoE 0.010B total, 0.009B active | moe=grouped_mm residual=fp32 reduce=fp16 momentum=cpu | 2 × Tesla T4
+185.7s	78	[data] build 367d680aef5a0689: 20 shards, 2.68B tokens (from token 40,960), meta=mask, val en, es, python, js, math | vocab 65536 | eos 0 | 2048 tokens per step = 2 GPUs × 4 × 256 × 1 micro-steps
+185.9s	79	[resume] /tmp/relevo-0/from_hf/checkpoints/step_000020 at step 20: state bit-exact = True (1 s)
+185.9s	80	[model] AFMoE 0.010B total, 0.009B active | moe=grouped_mm residual=fp32 reduce=fp16 momentum=cpu | 2 × Tesla T4
+185.9s	81	[data] build 367d680aef5a0689: 20 shards, 2.68B tokens (from token 40,960), meta=mask, val en, es, python, js, math | vocab 65536 | eos 0 | 2048 tokens per step = 2 GPUs × 4 × 256 × 1 micro-steps
+186.3s	82	[eval] step 20: val bpb 3.4863  en 3.5906  es 2.9313  python 4.2991  js 3.3081  math 3.5792  ce 10.3836  router entropy 2.069  qk gain 1.01  dead experts None  (0 s)
+186.5s	83	[eval] step 20: val bpb 3.4863  en 3.5906  es 2.9313  python 4.2991  js 3.3081  math 3.5792  ce 10.3836  router entropy 2.069  qk gain 1.01  dead experts None  (0 s)
+187.1s	84	[resume] first batch identical to the saved hash = True
+187.3s	85	[resume] first batch identical to the saved hash = True
+187.6s	86	[train] step    20  ce 10.3681  lr×1.000  gnorm 1.041  scale 32768  load max/mean 3.13  1,576 tok/s  peak 1.57 GiB
+187.8s	87	[train] step    20  ce 10.3681  lr×1.000  gnorm 1.041  scale 32768  load max/mean 3.13  1,576 tok/s  peak 1.57 GiB
+188.7s	88	[train] step    25  ce 9.8710  lr×1.000  gnorm 1.226  scale 32768  load max/mean 3.65  8,991 tok/s  peak 1.57 GiB
+188.9s	89	[train] step    25  ce 9.8710  lr×1.000  gnorm 1.226  scale 32768  load max/mean 3.65  8,991 tok/s  peak 1.57 GiB
+189.6s	90	[train] step    29  ce 9.9691  lr×1.000  gnorm 0.892  scale 32768  load max/mean 3.58  9,586 tok/s  peak 1.57 GiB
+189.7s	91	[eval] step 30: val bpb 3.3221  en 3.4163  es 2.8032  python 4.0861  js 3.1810  math 3.3803  ce 9.8945  router entropy 2.063  qk gain 1.02  dead experts 0  (0 s)
+189.8s	92	[train] step    29  ce 9.9691  lr×1.000  gnorm 0.892  scale 32768  load max/mean 3.58  9,586 tok/s  peak 1.57 GiB
+189.8s	93	[eval] step 30: val bpb 3.3221  en 3.4163  es 2.8032  python 4.0861  js 3.1810  math 3.3803  ce 9.8945  router entropy 2.063  qk gain 1.02  dead experts 0  (0 s)
+190.5s	94	[save] step 30 (final) -> /tmp/relevo-0/ckpt/step_000030  0.13 GiB in 1 s
+190.5s	95	[end] done: step 30, 0.1M tokens, 0.00 h, 9096 tok/s (last hour), peak 1.57 GiB reserved, 0 FP16 skips, val bpb 3.32212
+190.7s	96	[save] step 30 (final) -> /tmp/relevo-0/ckpt/step_000030  0.13 GiB in 1 s
+190.7s	97	[end] done: step 30, 0.1M tokens, 0.00 h, 9096 tok/s (last hour), peak 1.57 GiB reserved, 0 FP16 skips, val bpb 3.32212
+190.7s	98	[relevo] free what=start GiB=0.13
+198.6s	99	[relevo] upload step=30 GiB=0.13 seconds=7.8 kept=[20, 30]
+214.8s	100	[relevo] backup dataset=<usuario>/ludwig2-respaldo-a step=30 seconds=15.5
+215.5s	101	[relevo] squash
+216.5s	102	[relevo] release
+216.5s	103	  lock {'until': 1794949450}
+216.5s	104	  resume_from {'where': None, 'step': -1}
+216.5s	105	  upload {'step': 10, 'GiB': 0.13, 'seconds': 52.3, 'kept': [30, 10]}
+216.5s	106	  upload {'step': 20, 'GiB': 0.13, 'seconds': 4.5, 'kept': [10, 20]}
+216.5s	107	  free {'what': 'step_000010', 'GiB': 0.13}
+216.5s	108	  backup {'dataset': '<usuario>/ludwig2-respaldo-a', 'step': 20, 'seconds': 15.1}
+216.5s	109	  squash {}
+216.5s	110	  release {}
+216.5s	111	  lock {'until': 1794949567}
+216.5s	112	  resume_from {'where': 'hf', 'step': 20}
+216.5s	113	  download {'step': 20, 'seconds': 7.7}
+216.5s	114	  free {'what': 'start', 'GiB': 0.13}
+216.5s	115	  upload {'step': 30, 'GiB': 0.13, 'seconds': 7.8, 'kept': [20, 30]}
+216.5s	116	  backup {'dataset': '<usuario>/ludwig2-respaldo-a', 'step': 30, 'seconds': 15.5}
+216.5s	117	  squash {}
+216.5s	118	  release {}
+216.5s	119
+216.5s	120	  ✅ A empezó de cero
+216.5s	121	  ✅ subió los pasos 10 (mientras entrenaba), 20 y 30
+216.5s	122	  ✅ A dejó su checkpoint en un respaldo de Kaggle
+216.5s	123	  ✅ con el candado tomado, otra sesión recibe «ocupado»
+216.5s	124	  ✅ B siguió desde Hugging Face en el paso 20
+216.5s	125	  ✅ reanudación exacta: el estado
+216.5s	126	  ✅ reanudación exacta: el primer lote
+216.5s	127	  ✅ A y B aplastaron el historial y soltaron el candado
+216.5s	128
+216.5s	129	G0-0: ✅ el relevo funciona: subida, candado, respaldo, aplastado y reanudación exacta
+220.2s	130	/usr/local/lib/python3.13/dist-packages/mistune.py:435: SyntaxWarning: invalid escape sequence '\|'
+220.2s	131	  cells[i][c] = re.sub('\\\\\|', '|', cell)
+220.4s	132	/usr/local/lib/python3.13/dist-packages/nbconvert/filters/filter_links.py:36: SyntaxWarning: invalid escape sequence '\_'
+220.4s	133	  text = re.sub(r'_', '\_', text) # Escape underscores in display text
+221.2s	134	[NbConvertApp] Converting notebook __notebook__.ipynb to notebook
+221.3s	135	[NbConvertApp] Writing 307430 bytes to __notebook__.ipynb
+224.1s	136	[NbConvertApp] Converting notebook __notebook__.ipynb to html
+224.8s	137	[NbConvertApp] Writing 567675 bytes to __results__.html

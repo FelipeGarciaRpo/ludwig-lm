@@ -708,6 +708,18 @@ print("shards:", f"{len(json.load(open(MANIFIESTO))['shards'])} en {MANIFIESTO.s
 libre = shutil.disk_usage("/tmp").free / 2**30
 print(f"/tmp: {libre:.0f} GiB libres" + ("" if libre >= 30 else
       " ⚠️ un turno necesita ~23 GiB (dos checkpoints de 11.3 GiB a la vez): avisa antes de entrenar"))
+for slug in RESPALDO:                    # lo que Kaggle montó de cada respaldo, también los ocultos (.metadata)
+    try:
+        nombre, vistos, hay = slug.split("/")[-1], [], False
+        for d, _, fs in os.walk("/kaggle/input"):
+            partes = d.split("/")
+            if nombre in partes:
+                hay, dentro = True, "/".join(partes[partes.index(nombre) + 1:])
+                vistos += [(os.path.join(dentro, f), os.path.getsize(os.path.join(d, f))) for f in fs]
+        print(f"respaldo {nombre}:", "no está adjunto" if not hay else ", ".join(
+            f"{p} ({s / 2**20:.0f} MiB)" for p, s in sorted(vistos)[:8]) or "vacío")
+    except Exception as e:  # solo informa: nunca detiene el turno
+        print(f"respaldo {slug.split('/')[-1]}: no se pudo listar ({type(e).__name__})")
 !nvidia-smi --query-gpu=name,memory.total --format=csv,noheader'''),
     md("""## G0-0 · `prueba-relevo`
 
@@ -717,16 +729,10 @@ El relevo completo con el modelo diminuto (vocabulario de 64K, unos segundos por
 2. Se prueba el candado: una sesión lo toma, otra recibe *ocupado*, y lo suelta.
 3. La sesión B sigue desde Hugging Face hasta el paso 30. Su reanudación debe ser exacta en el estado y en el primer lote.
 
-Al final imprime cada condición con ✅ o ❌, y lo que Kaggle muestra montado de cada respaldo."""),
+Al final imprime cada condición con ✅ o ❌. Lo que Kaggle montó de cada respaldo sale en la celda de preparación."""),
     code(r'''if MODO == "prueba-relevo":
     ETIQUETA = time.strftime("prueba-relevo-%Y%m%d-%H%M%S", time.gmtime())   # nueva en cada corrida
     print("etiqueta:", ETIQUETA)
-    for slug in RESPALDO:                    # el relevo busca checkpoint.json y checkpoint.tar en cada respaldo
-        nombre = slug.split("/")[-1]
-        raiz = glob.glob(f"/kaggle/input/**/{nombre}", recursive=True)
-        archivos = sorted(f for r in raiz for f in glob.glob(f"{r}/**", recursive=True) if os.path.isfile(f))
-        print(f"respaldo {nombre} montado:", "no está adjunto" if not raiz else ", ".join(
-            f"{os.path.relpath(f, raiz[0])} ({os.path.getsize(f) / 2**20:.0f} MiB)" for f in archivos[:6]) or "vacío")
     c = json.load(open("configs/tiny_afmoe.json")); c.update(vocab_size=65536, pad_token_id=1, bos_token_id=0)
     json.dump(c, open("/tmp/tiny_64k.json", "w"))
     LOG = "/kaggle/working/results/relevo-prueba.jsonl"; os.makedirs(os.path.dirname(LOG), exist_ok=True)

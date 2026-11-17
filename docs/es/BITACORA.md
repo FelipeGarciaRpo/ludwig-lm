@@ -770,3 +770,31 @@ Todo lo que se corre, se mide o se decide, en orden. Cada entrada dice qué se h
   - Revisar estos cambios de la celda.
   - La G0-0 nunca sigue desde un respaldo de Kaggle. B sigue desde Hugging Face, porque el respaldo de A es una versión nueva del dataset, y una sesión solo ve las versiones que estaban montadas al empezar. Seguir desde Kaggle solo se prueba en CPU, con un Kaggle simulado.
 - **Siguiente:** repetir la G0-0 con el notebook regenerado, y después la G0-1.
+
+## 2026-11-17 · G0-0 ✅, y Kaggle desempaca el `checkpoint.tar` de los respaldos
+
+- **Qué:** la G0-0 con la celda de `186de96`, sobre el código `75cd3a0`.
+- **Dónde:** Kaggle, 2×T4, 3.7 min.
+- **Archivo:** `results/g0/g0_0_salida_kaggle.txt`, con el usuario de Kaggle enmascarado.
+- **Resultado: ✅, las 8 condiciones.**
+  - A empezó de cero. Subió el paso 10 mientras entrenaba y el 20 al pausar, respaldó el 20 en `ludwig2-respaldo-a`, aplastó y soltó.
+  - Con el candado tomado, una segunda sesión recibió *ocupado*.
+  - B siguió desde Hugging Face en el paso 20, exacta en el estado y en el primer lote. Subió el 30, lo respaldó, aplastó y soltó.
+  - El índice de Hugging Face rotó como en la prueba del PC con restos: el 10 nuevo sacó al 20 viejo, y el 20 nuevo al 30 viejo.
+  - Tiempos con 0.13 GiB: subidas de 4.5–7.8 s, salvo la del paso 10 (52.3 s, sin causa clara); respaldos de 15 s; descarga de 7.7 s. La velocidad con ~11 GB se verá en el primer turno del tronco.
+  - Los pasos 20–29 de B y sus evaluaciones dan los mismos números que en la corrida con restos, que siguió desde el paso 20 de otra corrida: el modelo diminuto da lo mismo en dos sesiones de Kaggle, a la precisión del log.
+- **Lo que mostró el respaldo montado (línea 15 del log):**
+  - Kaggle desempacó `checkpoint.tar`. El dataset tiene `checkpoint.json` y una carpeta `checkpoint/step_000030/` con el checkpoint, y ya no tiene el `.tar`.
+  - `KaggleBackup.copies()` busca `checkpoint.tar` junto a `checkpoint.json`, así que nunca encuentra un respaldo:
+    - un turno nunca sigue desde Kaggle. Si la subida final a Hugging Face falla, el siguiente sigue desde la subida anterior, de hasta 3 h antes;
+    - con `SIN_CANDADO = True`, el turno no encuentra nada, empieza de cero, y su respaldo reemplaza al de `ludwig2-respaldo-a`;
+    - `target()` elige siempre `ludwig2-respaldo-a`, así que los respaldos no se turnan.
+  - La prueba del relevo en CPU no lo veía: su Kaggle simulado guarda el `.tar` tal cual.
+  - Falta saber si `.metadata`, el archivo oculto que necesita `dcp.load`, sobrevivió al desempacado. La lista de esta corrida no muestra archivos ocultos.
+- **Cambio en `make_notebooks.py`:** la lista de lo montado en cada respaldo pasa a la celda de preparación, y ahora incluye los archivos ocultos. Sale en todos los modos, así que la G0-1 dirá si está `.metadata`, si se le adjunta `ludwig2-respaldo-a`. Es solo una impresión: si falla, no detiene el turno.
+- **Error del relevo, para el chat de diseño.** Hay que arreglarlo antes del primer turno del tronco, porque después el commit queda fijo. Opciones:
+  - que `copies()` acepte también la carpeta desempacada, y que el turno la lea donde está, sin copiarla a `/tmp`;
+  - si `.metadata` no sobrevive, subir también una copia con otro nombre y rehacer la carpeta en `/tmp` con enlaces;
+  - que el Kaggle simulado de `scripts/test_relay_cpu.py` desempaque como el real;
+  - una prueba en Kaggle que siga desde un respaldo montado, porque la G0-0 no lo hace.
+- **Siguiente:** la G0-1 con `ludwig2-respaldo-a` adjunto, el arreglo del respaldo, y la T1 con el token nuevo.
