@@ -735,3 +735,14 @@ Todo lo que se corre, se mide o se decide, en orden. Cada entrada dice qué se h
   - La descontaminación saca 12,743 documentos de Python (4.3%) y 15,076 de OpenMathReasoning (29% de los que no salen por largos). ¿Es lo esperable, o hay falsos positivos en código?
   - OpenMathReasoning descarta 708,197 trazas por largas (más de 2K), contra 36,356 que entran.
 - **Siguiente:** la sesión 1 de cero, con el commit nuevo, `OTRO_COMMIT = False` y sin datasets de entrada. Su salida va a un dataset con otro nombre.
+
+## 2026-11-17 · Los notebooks traen los nombres reales de Hugging Face y el commit vigente
+
+- **Qué:**
+  - La G0-0 falló con un 404 en `ludwig-lm/ludwig2-relevo-prueba`, el nombre de ejemplo del notebook. Al importarlo de nuevo, la primera celda había vuelto a sus valores por defecto.
+  - Antes, el `plan` con `75cd3a0` confirmó el arreglo de StackExchange (422 archivos, 6.1 GB). Sus únicos ❌ fueron los datasets con términos (The Stack, StarCoderData y Flores+), con un 401: el secreto de Kaggle tenía el token viejo, ya borrado.
+- **Cambio en `make_notebooks.py`:**
+  - El relevo trae por defecto `HF_REPO = ludwig-v2-lm/ludwig-v2-lm-1` y `HF_REPO_PRUEBA = ludwig-v2-lm/ludwig-v2-lm-1-relevo-prueba`.
+  - Los dos notebooks traen `COMMIT = 75cd3a0…` en vez de `main`.
+  - `RESPALDO` sigue con `DUENO`, porque el usuario de Kaggle no entra al repo (regla 6). Es código de celda: el commit del tronco sigue siendo `75cd3a0`.
+- **Siguiente:** la G0-0 con los nombres reales, y la T1 con el token nuevo en el secreto.

@@ -572,7 +572,7 @@ Qué hace con cada documento: el formato de su fuente, descontaminación contra 
 - Si `plan` marca ❌, se corrige en `configs/data_v3.json`, no en el código. Por ejemplo, un nombre de columna o de carpeta. Después se vuelve a correr `plan`.
 - Cada sesión deja en la salida lo que necesita la siguiente: el estado, la validación y la descontaminación. Si una sesión muere, se pierde a lo más un shard."""),
     code(r'''FASE = "plan"            # plan · construir · muestras
-COMMIT = "main"          # el commit de main con el patch de la T1: el MISMO en todas las sesiones
+COMMIT = "75cd3a08b5e3195908c7aff769b4a0254f2b20e6"  # el MISMO en todas las sesiones de la T1 (bitácora: el commit vigente)
 REPO_URL = "https://github.com/FelipeGarciaRpo/ludwig-lm"
 SHARDS = 56              # por sesión: 56 × 256 MiB caben en los 20 GB de salida de Kaggle
 HORAS = 11.0             # tope de la sesión, contando desde aquí
@@ -674,10 +674,10 @@ Un turno: toma el candado en Hugging Face, sigue desde el checkpoint más nuevo 
 | `g0-16k` | **G0-1:** 50 pasos del modelo real a 16K de contexto, sin guardar (condición 5 de la G0) | ~30–60 min |"""),
     code(r'''MODO = "tronco"          # tronco · prueba-relevo · g0-16k
 CUENTA = "cuenta 1"      # tu etiqueta en el relevo: nunca el usuario de Kaggle ni el correo
-COMMIT = "main"          # el commit del tronco: el MISMO en todos los turnos
+COMMIT = "75cd3a08b5e3195908c7aff769b4a0254f2b20e6"  # el commit del tronco: el MISMO en todos los turnos
 REPO_URL = "https://github.com/FelipeGarciaRpo/ludwig-lm"
-HF_REPO = "ludwig-lm/ludwig2-relevo"                # privado, de la organización
-HF_REPO_PRUEBA = "ludwig-lm/ludwig2-relevo-prueba"  # privado: solo para prueba-relevo
+HF_REPO = "ludwig-v2-lm/ludwig-v2-lm-1"                       # privado, de la organización
+HF_REPO_PRUEBA = "ludwig-v2-lm/ludwig-v2-lm-1-relevo-prueba"  # privado: solo para prueba-relevo
 RESPALDO = ["DUENO/ludwig2-respaldo-a", "DUENO/ludwig2-respaldo-b"]   # los dos datasets privados de Pipe
 SIN_CANDADO = False      # True solo si Hugging Face está caído y se coordinó por WhatsApp: sigue desde Kaggle
 import time
