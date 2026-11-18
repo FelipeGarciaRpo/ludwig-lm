@@ -889,3 +889,14 @@ Todo lo que se corre, se mide o se decide, en orden. Cada entrada dice qué se h
 - **Conclusión:** el build sirve para el tronco.
 - **Cambio en `make_notebooks.py`:** la G0-0 y `prueba-respaldo` escriben en los respaldos reales, y cada versión de un dataset de respaldo guarda un solo checkpoint. Una vez que empiece el tronco, una de esas pruebas reemplazaría su respaldo. El notebook ahora advierte que son solo para antes del primer turno.
 - **Siguiente:** la `prueba-respaldo`, y después el primer turno del tronco (G0-2) con `ludwig2-shards-1`.
+
+## 2026-11-18 · G0-0 ✅ con el commit del tronco, y la prueba del respaldo sin su dataset
+
+- **Qué:** la G0-0 otra vez, ahora con `3b9c114` (el relevo que lee los respaldos desempacados) y los shards del build nuevo (`ludwig2-shards-1`). Después, un primer intento de `prueba-respaldo`.
+- **Dónde:** Kaggle, 2×T4. La G0-0 tardó 2 min.
+- **Archivo:** `results/g0/g0_0_3b9c114_salida_kaggle.txt`, con el usuario de Kaggle enmascarado.
+- **Resultado de la G0-0: ✅, las 8 condiciones,** sobre el commit con el que va a correr el tronco.
+  - Subidas de 0.13 GiB en 4.1–5.8 s y respaldos en 7–8 s. A y B respaldaron en `ludwig2-respaldo-a`, porque una sesión no ve las versiones que crea ella misma.
+  - Al empezar, `copies()` ya veía en ese dataset el paso 30 de la G0-0 anterior, desempacado y con su `.metadata`. Era de otra etiqueta, así que no contaba.
+- **`prueba-respaldo`, primer intento:** no llegó a entrenar. El notebook no tenía adjunto `ludwig2-respaldo-a`, que es donde quedó el respaldo de la G0-0, y la celda se detuvo con su aviso, como debe. El log no se guardó.
+- **Siguiente:** repetir `prueba-respaldo` con los dos respaldos adjuntos. Después, el primer turno del tronco.
