@@ -1,0 +1,114 @@
+{
+ "decon": {
+  "gsm8k": {
+   "files": 1,
+   "items": 1319,
+   "texts": 2638,
+   "ngrams": 214782
+  },
+  "math": {
+   "files": 7,
+   "items": 5000,
+   "texts": 10000,
+   "ngrams": 1244238
+  },
+  "math500": {
+   "files": 1,
+   "items": 500,
+   "texts": 1000,
+   "ngrams": 126889
+  },
+  "humaneval": {
+   "files": 1,
+   "items": 164,
+   "texts": 492,
+   "ngrams": 56850
+  },
+  "mbpp": {
+   "files": 3,
+   "items": 600,
+   "texts": 3000,
+   "ngrams": 66777
+  },
+  "multipl-e": {
+   "files": 6,
+   "items": 1647,
+   "texts": 3294,
+   "ngrams": 286659
+  },
+  "mmlu": {
+   "files": 3,
+   "items": 15858,
+   "texts": 79290,
+   "ngrams": 901067
+  },
+  "arc": {
+   "files": 4,
+   "items": 4417,
+   "texts": 22080,
+   "ngrams": 57455
+  },
+  "hellaswag": {
+   "files": 2,
+   "items": 20045,
+   "texts": 100225,
+   "ngrams": 2397312
+  },
+  "piqa": {
+   "files": 2,
+   "items": 4922,
+   "texts": 14766,
+   "ngrams": 128844
+  },
+  "winogrande": {
+   "files": 2,
+   "items": 3034,
+   "texts": 9102,
+   "ngrams": 32309
+  },
+  "mgsm-es": {
+   "files": 2,
+   "items": 258,
+   "texts": 258,
+   "ngrams": 13458
+  },
+  "belebele-es": {
+   "files": 1,
+   "items": 900,
+   "texts": 5400,
+   "ngrams": 104476
+  },
+  "global-mmlu-es": {
+   "files": 2,
+   "items": 14327,
+   "texts": 71633,
+   "ngrams": 974467
+  },
+  "hellaswag-es": {
+   "files": 1,
+   "items": 9374,
+   "texts": 46870,
+   "ngrams": 1277598
+  },
+  "flores": {
+   "files": 4,
+   "items": 4018,
+   "texts": 4018,
+   "ngrams": 72812
+  },
+  "_total": {
+   "ngrams": 7048101,
+   "dropped_as_templates": 1240,
+   "max_items": 10
+  }
+ },
+ "permissive_files": {
+  "python": 4563384,
+  "javascript": 2596127,
+  "typescript": 1703720,
+  "markdown": 7176540,
+  "sql": 397805,
+  "shell": 1394774
+ },
+ "seconds": 979
+}

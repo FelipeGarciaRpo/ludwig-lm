@@ -671,8 +671,8 @@ Un turno: toma el candado en Hugging Face, sigue desde el checkpoint más nuevo 
 | `MODO` | Qué hace | Tarda |
 |---|---|---|
 | `tronco` | Un turno del tronco | ~11.5 h |
-| `prueba-relevo` | **G0-0:** el relevo completo con un modelo diminuto, contra `HF_REPO_PRUEBA`: candado, subida, aplastado, respaldo y reanudación exacta | ~15 min |
-| `prueba-respaldo` | Sigue desde el respaldo que dejó la última `prueba-relevo`, sin Hugging Face (como `SIN_CANDADO`): lo lee donde Kaggle lo montó y respalda en el otro dataset | ~5 min |
+| `prueba-relevo` | **G0-0:** el relevo completo con un modelo diminuto, contra `HF_REPO_PRUEBA`: candado, subida, aplastado, respaldo y reanudación exacta. Solo antes del primer turno del tronco | ~15 min |
+| `prueba-respaldo` | Sigue desde el respaldo que dejó la última `prueba-relevo`, sin Hugging Face (como `SIN_CANDADO`): lo lee donde Kaggle lo montó y respalda en el otro dataset. Solo antes del primer turno del tronco | ~5 min |
 | `g0-16k` | **G0-1:** 50 pasos del modelo real a 16K de contexto, sin guardar (condición 5 de la G0) | ~30–60 min |"""),
     code(r'''MODO = "tronco"          # tronco · prueba-relevo · prueba-respaldo · g0-16k
 CUENTA = "cuenta 1"      # tu etiqueta en el relevo: nunca el usuario de Kaggle ni el correo
@@ -726,6 +726,8 @@ for slug in RESPALDO:                    # lo que Kaggle montó de cada respaldo
     md("""## G0-0 · `prueba-relevo`
 
 El relevo completo con el modelo diminuto (vocabulario de 64K, unos segundos por paso), contra `HF_REPO_PRUEBA` y los respaldos reales. Cada corrida usa su propia etiqueta (`prueba-relevo-<fecha y hora>`): el tronco la ignora, y la prueba se puede repetir sin limpiar lo que dejó la anterior.
+
+**Solo antes del primer turno del tronco.** Cada versión de un dataset de respaldo guarda un solo checkpoint, así que una vez que empiece el tronco, esta prueba reemplazaría su respaldo.
 
 1. La sesión A empieza de cero y entrena 30 pasos: guarda en el 10 (lo sube mientras entrena) y se detiene en el 20 como si se acabara el tiempo. Sube, respalda, aplasta y suelta.
 2. Se prueba el candado: una sesión lo toma, otra recibe *ocupado*, y lo suelta.
@@ -783,6 +785,8 @@ Al final imprime cada condición con ✅ o ❌. Lo que Kaggle montó de cada res
     md("""## Prueba del respaldo · `prueba-respaldo`
 
 Un turno que sigue desde Kaggle, como con `SIN_CANDADO = True`: sin Hugging Face y sin candado. Toma el respaldo más nuevo de una `prueba-relevo`, lo lee donde Kaggle lo desempacó (sin copiarlo), entrena 10 pasos con el modelo diminuto y deja su checkpoint en el otro dataset de respaldo.
+
+**Solo antes del primer turno del tronco,** por lo mismo que la G0-0: escribe en los respaldos reales, y cada versión guarda un solo checkpoint.
 
 **Entradas:** los dos respaldos y los shards con los que se entrenó ese respaldo. La celda imprime cuáles son: el lector se niega a seguir con shards de otro build.
 

@@ -864,3 +864,28 @@ Todo lo que se corre, se mide o se decide, en orden. Cada entrada dice qué se h
   - la celda de `prueba-respaldo` con el `Session` real, un `/kaggle/input` falso con el respaldo desempacado (paso 30) y un `train.py` simulado: ✅ en sus 6 condiciones, y respalda en el dataset B.
 - **Para el chat de diseño:** revisar el arreglo, la prueba nueva y el freno de `SIN_CANDADO`.
 - **Siguiente:** la `prueba-respaldo` en Kaggle. El respaldo de la última G0-0 (paso 30) se entrenó con el build viejo, así que lleva como entradas solo `ludwig2-tronco-v3-2` y los dos respaldos. Después se pueden borrar los datasets viejos.
+
+## 2026-11-18 · T1: las muestras del build nuevo, y StackExchange ya no es Stack Overflow
+
+- **Qué:** la revisión de lo que dejó la sesión 1 de la reconstrucción, antes del primer turno del tronco, como pide el notebook.
+- **Dónde:** el PC.
+- **Archivos:** `results/t1/build_386755d6/`, con `manifest.json`, `report_00028.json`, `prepare.json` y `muestras.txt`.
+  - Llegaron copiados a mano, con CRLF y sin salto final. A `prepare.json` le faltaba su primera línea (`{`).
+  - Se restauraron como los escribe el constructor. Cada JSON coincide byte a byte con lo que el constructor escribe para su contenido, así que llegaron completos. Las muestras no se pueden comprobar así.
+- **Resultado:**
+  - Build `386755d60af32507`, con el constructor de `75cd3a0` y el tokenizador `0b7da8fdb062`.
+  - 28 shards de 134,217,728 tokens, cada uno con su sha256, y la validación de las 29 fuentes (31.8M tokens).
+  - Cada fuente quedó en su peso exacto.
+  - La descontaminación son los mismos 7,048,101 13-gramas de 16 benchmarks. `prepare` tardó 16 min.
+  - **StackExchange:** sus 3 muestras son de `rpg.stackexchange.com`, con la etiqueta MeCo del sitio, la pregunta y sus respuestas. Ya no es Stack Overflow.
+    - Que las tres sean del mismo sitio es lo esperable: el constructor baraja los archivos de la fuente, cada archivo es de un solo sitio, y un archivo da para más de un shard.
+  - Los formatos salen bien:
+    - la plantilla de chat con `<think>` en OpenMathReasoning y en OASST, cerrada con `<|im_end|>`;
+    - FIM en orden prefijo-sufijo-medio;
+    - las etiquetas MeCo;
+    - Europarl y la ONU frase por frase, en las dos direcciones;
+    - los notebooks con sus marcas.
+- **Corrección:** el constructor sí termina `muestras.txt` con un salto de línea, porque cada muestra termina en `\n`. La entrada del 2026-11-17 dijo lo contrario. Se agregó ese salto al `muestras.txt` de `build_367d680a`.
+- **Conclusión:** el build sirve para el tronco.
+- **Cambio en `make_notebooks.py`:** la G0-0 y `prueba-respaldo` escriben en los respaldos reales, y cada versión de un dataset de respaldo guarda un solo checkpoint. Una vez que empiece el tronco, una de esas pruebas reemplazaría su respaldo. El notebook ahora advierte que son solo para antes del primer turno.
+- **Siguiente:** la `prueba-respaldo`, y después el primer turno del tronco (G0-2) con `ludwig2-shards-1`.
