@@ -815,3 +815,28 @@ Todo lo que se corre, se mide o se decide, en orden. Cada entrada dice qué se h
   - el arreglo del respaldo, con un commit nuevo para el tronco. La T1 sigue con `75cd3a0`, el mismo en sus tres sesiones;
   - los shards de la T1 nueva;
   - no adjuntar los shards viejos (build `367d680a`). El notebook elige el manifiesto con más shards, así que si se adjuntan junto con un build nuevo más corto, el turno entrenaría con los viejos.
+
+## 2026-11-18 · T1, reconstrucción: la sesión 1 hizo 28 shards
+
+- **Qué:** la sesión 1 de la T1 reconstruida (`FASE = "construir"`, de cero), con el arreglo de StackExchange de `75cd3a0`.
+- **Dónde:** Kaggle, CPU. Duró 10.39 h, a 22.25 min por shard contando `prepare` y la validación. Paró por el tope de horas, no por `SHARDS = 56`.
+- **Archivo:** `results/t1/sesion1_reconstruccion_resumen_salida_kaggle.txt`, el final del log con la tabla por fuente. El resto del log, el reporte, las muestras y el manifiesto llegan aparte.
+- **Resultado:**
+  - 28 shards (3.76B tokens) y 8.7 GB de salida.
+  - Las 29 fuentes quedaron en su peso exacto, a dos decimales.
+  - Cuadra con el build viejo de 20 shards multiplicado por 1.4:
+    - los documentos, la descontaminación y el FIM (~11% del código) crecen ×1.4;
+    - los repetidos crecen ×1.9–2.25, lo esperable cuando cada documento nuevo se compara con todos los ya vistos;
+    - OpenMathReasoning sigue descartando ~19 trazas largas por cada una que entra (971,437 contra 50,098). Ya está anotado como pregunta abierta.
+  - **StackExchange:** los documentos que se excluyen por estar en la validación (`writers.stackexchange.com`) suben de 119 a 1,290. En el build viejo, el 69% de los bytes era Stack Overflow; ahora el constructor lee los 342 sitios de la red, en orden barajado. Cuadra con el arreglo, pero la prueba son las muestras.
+- **La cuenta de sesiones:** a 28 shards por sesión, los 168 del tronco son unas 6 sesiones, no 3 de 56. No apura, porque el tronco gasta ~1 shard por turno.
+  - Se corrigen DISENO, los README y el notebook.
+  - P18 en `DECISIONS.md` (3 sesiones de 56) queda para el chat de diseño.
+- **Cambio en `make_notebooks.py`:**
+  - El notebook de la T1 dice ~28 shards por sesión.
+  - Los datasets nuevos se llaman `ludwig2-shards-1`, `-2`, …, para no confundirlos con los del build viejo (`ludwig2-tronco-v3-*`).
+  - El notebook del tronco pide todos los `ludwig2-shards-*` y ninguno viejo.
+- **Siguiente:**
+  - el dataset `ludwig2-shards-1` con la salida de esta sesión;
+  - las muestras y el reporte, para revisarlos antes del primer turno;
+  - la sesión 2 de la T1, con el mismo `COMMIT` y `ludwig2-shards-1` como entrada.

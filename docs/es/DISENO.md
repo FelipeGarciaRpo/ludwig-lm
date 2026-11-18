@@ -257,7 +257,7 @@ La T0.1 (`scripts/smoke_format.py`) arma un modelo diminuto con exactamente la e
    - Para la v1 son ~50 GB. Los archivos quedan privados, porque tienen texto y código de terceros. Se publican la receta, los manifiestos y los hashes.
    - EOS al final de cada documento y ventanas de largo fijo sin botar colas, como en el lector actual.
    - ✅ **Hecho** (P18–P24): `scripts/build_shards.py`, con la receta en `configs/data_v3.json`, y el lector en `ludwig_lm/shards.py`.
-     - Shards de 2^27 tokens (256 MiB): el tronco de la v1 son 168, en 3 sesiones de 56 (`notebooks/t1_shards_cpu.ipynb`).
+     - Shards de 2^27 tokens (256 MiB): el tronco de la v1 son 168 (`notebooks/t1_shards_cpu.ipynb`). La primera sesión hizo 28 en 10.4 h, así que son unas 6 sesiones de ~11 h, no 3 de 56 (`results/t1/sesion1_reconstruccion_resumen_salida_kaggle.txt`).
      - Construidos en una sesión o en varias, salen idénticos byte a byte (`scripts/test_shards_cpu.py`).
 2. **Duplicados:** FineWeb-Edu y DCLM entran en sus versiones sin duplicados, porque según el informe de Zyda-2 las originales traen ~80% de duplicados internos. Entre FineWeb-Edu y DCLM se quitan además las URL repetidas, con un hash de 64 bits.
 3. **Un documento, una sola forma:** el original en inglés, su reescritura en FinePhrase y su traducción en TransWeb-Edu no entran juntos. Se cruzan por el id o la URL de Common Crawl, que las dos conservan. La excepción es el 0.5% de texto paralelo.
@@ -661,7 +661,7 @@ Se agregan a medida que existan: `tokenizer/`, `data/` (recetas, lector, descont
 | T0.1 | ✅ **Prueba de formato** (`notebooks/t0_1_formato_mtp_tokenizador.ipynb`): con parche, todo pasa (2.5). Falta correrla con el tokenizador real de 64K | CPU | ~0.5 | Hecho el 11 nov |
 | T0.2 | ✅ **Velocidad y memoria** (T0.2 v2, `notebooks/t0_2v2_afmoe_2xT4.ipynb`): piezas de velocidad, micro-lote, 2K/4K/16K, guardado y carga, balanceo | 2×T4 | ~1 | Hecho el 12 nov |
 | T0.3 + T2 | ✅ **LR y estabilidad en FP16** (`notebooks/t0_3_t2_lr_2xT4.ipynb`): dos rondas, todas estables. El tronco va a ×1, la receta del Ludwig 1 (P25) | 2×T4 | ~3 × 9.5 + 4 × 11 | Hecho el 15 nov |
-| T1 | **Datos:** fuentes cerradas (4.2, mezcla v3); pre-tokenizado con descontaminación y manifiestos. El código está listo y probado (P18–P24); faltan el `plan` contra el Hub y las 3 sesiones de construcción (`notebooks/t1_shards_cpu.ipynb`) | CPU | ~10 min + 3 × 6–11 | Los 168 shards del tronco, con sus manifiestos |
+| T1 | **Datos:** fuentes cerradas (4.2, mezcla v3); pre-tokenizado con descontaminación y manifiestos. El código está listo y probado (P18–P24). La sesión 1 hizo 28 shards en 10.4 h; faltan unas 5 sesiones, que pueden correr mientras corre el tronco (`notebooks/t1_shards_cpu.ipynb`) | CPU | ~10 min + ~6 × 11 | Los 168 shards del tronco, con sus manifiestos |
 | G0 | **Compuerta G0** (5.7, P27): G0-0 (ensayo del relevo), G0-1 (16K), y los dos primeros turnos del tronco, que cuentan si pasan | 2×T4 | ~1 + los dos primeros turnos | Pasan las 5 condiciones |
 | T3 | **Tronco** hasta 22.5B | Relevo | ~1,550–2,450 | — |
 | T4 | **Rama de la v1** (2.5B, con 16K y MTP) | Relevo | ~225–355 | Base lista |

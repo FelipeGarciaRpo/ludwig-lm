@@ -247,7 +247,7 @@ python scripts/test_relay_cpu.py
 | Notebook | Accelerator | Time | What you get |
 |---|---|---|---|
 | [`tronco_relevo_2xT4.ipynb`](notebooks/tronco_relevo_2xT4.ipynb) | GPU T4 x2 | ~11.5 h per turn | A turn of the trunk; also the G0's relay dry run (~15 min) and its 16K test |
-| [`t1_shards_cpu.ipynb`](notebooks/t1_shards_cpu.ipynb) | None (CPU) | ~10 min (plan), then 3 sessions of ~6–11 h | The trunk's 168 shards (22.5B tokens), 56 per session, to keep as private Kaggle datasets |
+| [`t1_shards_cpu.ipynb`](notebooks/t1_shards_cpu.ipynb) | None (CPU) | ~10 min (plan), then about 6 sessions of ~11 h | The trunk's 168 shards (22.5B tokens), ~28 per session, to keep as private Kaggle datasets |
 | [`t0_3_t2_lr_2xT4.ipynb`](notebooks/t0_3_t2_lr_2xT4.ipynb) | GPU T4 x2 | ~9.5 h per run | `results/t0_3_t2/<run>.jsonl` and `.png`, and the checkpoint before the decay |
 | [`t0_2v2_afmoe_2xT4.ipynb`](notebooks/t0_2v2_afmoe_2xT4.ipynb) | GPU T4 x2 | ~1–1.25 h | `results/t0_2v2.jsonl` (done: [`results/t0_2v2_intento2/`](results/t0_2v2_intento2/)) |
 | [`t0_1_formato_mtp_tokenizador.ipynb`](notebooks/t0_1_formato_mtp_tokenizador.ipynb) | None (CPU) | ~15–25 min | Format A and tokenizer checks, kept as a record: the tokenizer check is now `scripts/smoke_tokenizer.py` (T0.1b) |
@@ -289,7 +289,7 @@ ludwig-lm/
 - [x] **Tokenizer** 64K BPE, fixed ([`tokenizer/`](tokenizer/)): 4.16 bytes per token on the trunk mix
 - [x] **T0.1b** The final tokenizer in llama.cpp: identical tokenization, every special id detected
 - [x] **Data mix v3** Sources and splits closed, code included ([`results/datos_tronco_v3/`](results/datos_tronco_v3/))
-- [ ] **T1** Data: the builder and the shard reader are ready and tested ([`scripts/build_shards.py`](scripts/build_shards.py)); the build itself takes 3 Kaggle CPU sessions ([notebook](notebooks/t1_shards_cpu.ipynb))
+- [ ] **T1** Data: the builder and the shard reader are ready and tested ([`scripts/build_shards.py`](scripts/build_shards.py)); the build takes about 6 Kaggle CPU sessions, and the first one has made 28 of the 168 shards ([notebook](notebooks/t1_shards_cpu.ipynb))
 - [x] **Relay** Checkpoints on Hugging Face with a lock, a backup on Kaggle, tested on three turns ([notebook](notebooks/tronco_relevo_2xT4.ipynb))
 - [ ] **G0** Gate: the relay's dry run, 50 steps at 16K, and the trunk's first two turns (≥6 h sustained, uploads, a resume on another account)
 - [ ] **T3** Trunk to 22.5B tokens

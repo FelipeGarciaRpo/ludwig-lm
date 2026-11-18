@@ -559,14 +559,15 @@ Qué hace con cada documento: el formato de su fuente, descontaminación contra 
 
 **Kaggle:** sin acelerador (CPU), Internet *On*, y en *Add-ons → Secrets* un `HF_TOKEN` de la cuenta que aceptó los términos de `bigcode/the-stack-dedup`, `bigcode/starcoderdata` y `openlanguagedata/flores_plus`. *Save Version → Save & Run All*.
 
-**Las sesiones** (el tronco de la v1 son 168 shards = 22.5B tokens):
+**Las sesiones** (el tronco de la v1 son 168 shards = 22.5B tokens). La primera del build `75cd3a0` hizo 28 shards en 10.4 h (22 min por shard) y paró por el tope de horas, no por `SHARDS`; a ese ritmo son unas 6 sesiones de `construir`:
 
 | Sesión | `FASE` | Datos de entrada | Tarda | Sale |
 |---|---|---|---|---|
 | 0 | `plan` | ninguno | ~10 min | `plan.json`: cada fuente y cada benchmark contra el Hub |
-| 1 | `construir` | ninguno | ~6–11 h | descontaminación, listas de Stack-Edu, validación y los shards 0–55 |
-| 2 | `construir` | la salida de la sesión 1 (como dataset) | ~6–11 h | shards 56–111 |
-| 3 | `construir` | la de la sesión 2 | ~6–11 h | shards 112–167 |
+| 1 | `construir` | ninguno | ~11 h | descontaminación, listas de Stack-Edu, validación y ~28 shards |
+| 2, 3, … | `construir` | la salida de la sesión anterior (como dataset) | ~11 h | ~28 shards más cada una |
+
+El tronco gasta ~1 shard por turno, así que la T1 va muy por delante: sus sesiones (CPU) pueden correr mientras corre el tronco (GPU).
 
 - **El commit queda fijo** en `COMMIT` para todas las sesiones. El constructor se niega a seguir con otro código, porque cambiaría los shards.
 - Si `plan` marca ❌, se corrige en `configs/data_v3.json`, no en el código. Por ejemplo, un nombre de columna o de carpeta. Después se vuelve a correr `plan`.
@@ -640,7 +641,7 @@ elif FASE == "muestras":
     md("""## Qué hacer con el resultado
 
 1. **Después de cada sesión de `construir`:**
-   - En la salida del notebook: *New Dataset*, privado, con nombre `ludwig2-tronco-v3-1` (después `-2` y `-3`).
+   - En la salida del notebook: *New Dataset*, privado, con nombre `ludwig2-shards-1` (después `-2`, `-3`, …). Nunca los nombres del build viejo (`ludwig2-tronco-v3-*`), que se reemplazó.
    - Comparte el dataset con las cuentas del relevo (*Share → can view*).
    - La siguiente sesión lo agrega como entrada (*Add Input*).
 2. **Al repo,** en `results/t1/` y con su fila en `results/README.md`:
@@ -665,7 +666,7 @@ Un turno: toma el candado en Hugging Face, sigue desde el checkpoint más nuevo 
 2. En Kaggle, *Add-ons → Secrets*: `HF_TOKEN` (ese token), y `KAGGLE_USERNAME` y `KAGGLE_KEY` (el token de la API de tu cuenta, *Settings → API*). Cada uno usa el suyo.
 3. Pipe te agrega como colaborador (*can edit*) en los dos datasets de respaldo y como lector en los tres de shards.
 
-**En cada turno:** acelerador *GPU T4 x2*, Internet *On*, y como entradas los tres datasets de shards (`ludwig2-tronco-v3-1`…`-3`) y los dos de respaldo. Pon tu `CUENTA` ("cuenta 4", nunca el usuario) y *Save Version → Save & Run All*. Avisa por WhatsApp al empezar y al terminar.
+**En cada turno:** acelerador *GPU T4 x2*, Internet *On*, y como entradas todos los datasets de shards (`ludwig2-shards-1`, `-2`, …) y los dos de respaldo. Nunca los del build viejo (`ludwig2-tronco-v3-*`): el notebook elige el manifiesto con más shards, y podría quedarse con el viejo. Pon tu `CUENTA` ("cuenta 4", nunca el usuario) y *Save Version → Save & Run All*. Avisa por WhatsApp al empezar y al terminar.
 
 | `MODO` | Qué hace | Tarda |
 |---|---|---|

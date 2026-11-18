@@ -247,7 +247,7 @@ python scripts/test_relay_cpu.py
 | Notebook | Acelerador | Tiempo | Qué sale |
 |---|---|---|---|
 | [`tronco_relevo_2xT4.ipynb`](notebooks/tronco_relevo_2xT4.ipynb) | GPU T4 x2 | ~11.5 h por turno | Un turno del tronco; también el ensayo del relevo de la G0 (~15 min) y su prueba de 16K |
-| [`t1_shards_cpu.ipynb`](notebooks/t1_shards_cpu.ipynb) | None (CPU) | ~10 min (plan), después 3 sesiones de ~6–11 h | Los 168 shards del tronco (22.5B tokens), 56 por sesión, para guardar como datasets privados de Kaggle |
+| [`t1_shards_cpu.ipynb`](notebooks/t1_shards_cpu.ipynb) | None (CPU) | ~10 min (plan), después unas 6 sesiones de ~11 h | Los 168 shards del tronco (22.5B tokens), ~28 por sesión, para guardar como datasets privados de Kaggle |
 | [`t0_3_t2_lr_2xT4.ipynb`](notebooks/t0_3_t2_lr_2xT4.ipynb) | GPU T4 x2 | ~9.5 h por corrida | `results/t0_3_t2/<corrida>.jsonl` y `.png`, y el checkpoint de antes del enfriamiento |
 | [`t0_2v2_afmoe_2xT4.ipynb`](notebooks/t0_2v2_afmoe_2xT4.ipynb) | GPU T4 x2 | ~1–1.25 h | `results/t0_2v2.jsonl` (hecha: [`results/t0_2v2_intento2/`](results/t0_2v2_intento2/)) |
 | [`t0_1_formato_mtp_tokenizador.ipynb`](notebooks/t0_1_formato_mtp_tokenizador.ipynb) | None (CPU) | ~15–25 min | Pruebas del formato A y del tokenizador, guardadas como registro: la del tokenizador ahora es `scripts/smoke_tokenizer.py` (T0.1b) |
@@ -289,7 +289,7 @@ ludwig-lm/
 - [x] **Tokenizador** BPE de 64K, fijado ([`tokenizer/`](tokenizer/)): 4.16 bytes por token en la mezcla del tronco
 - [x] **T0.1b** El tokenizador final en llama.cpp: tokenización idéntica y todos los ids especiales detectados
 - [x] **Mezcla v3** Fuentes y repartos cerrados, código incluido ([`results/datos_tronco_v3/`](results/datos_tronco_v3/))
-- [ ] **T1** Datos: el constructor y el lector de shards están listos y probados ([`scripts/build_shards.py`](scripts/build_shards.py)); la construcción son 3 sesiones de CPU de Kaggle ([notebook](notebooks/t1_shards_cpu.ipynb))
+- [ ] **T1** Datos: el constructor y el lector de shards están listos y probados ([`scripts/build_shards.py`](scripts/build_shards.py)); la construcción son unas 6 sesiones de CPU de Kaggle, y la primera ya hizo 28 de los 168 shards ([notebook](notebooks/t1_shards_cpu.ipynb))
 - [x] **Relevo** Checkpoints en Hugging Face con candado y respaldo en Kaggle, probado en tres turnos ([notebook](notebooks/tronco_relevo_2xT4.ipynb))
 - [ ] **G0** Compuerta: el ensayo del relevo, 50 pasos a 16K y los dos primeros turnos del tronco (≥6 h sostenidas, subidas, una reanudación en otra cuenta)
 - [ ] **T3** Tronco hasta 22.5B tokens

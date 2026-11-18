@@ -1,0 +1,35 @@
+# T1, sesión 1 de la reconstrucción (FASE = "construir", de cero, con el arreglo de StackExchange), en Kaggle CPU. El final del log (líneas 293–324), copiado del visor de Kaggle, sin editar.
+# 28 shards en 10.39 h, cada fuente en su peso exacto. El resto del log, el reporte, las muestras y el manifiesto llegan aparte.
+Time	#	Log Message
+38842.5s	293	28 shards en esta sesión, 28 en total, 10.39 h (22.25 min por shard)
+38842.5s	294	fuente                  % real  receta      docs repetidos  contam.    val  largos    FIM
+38842.5s	295	fineweb-edu              14.00   14.00   542,186       924    4,054      0       0      0
+38842.5s	296	dclm                     11.00   11.00   348,200       178    2,072      0       0      0
+38842.5s	297	finephrase-faq            1.50    1.50   132,743       530      441      0       0      0
+38842.5s	298	finephrase-tutorial       1.50    1.50   136,095       504      417      0       0      0
+38842.5s	299	finephrase-math           1.50    1.50   186,665       683    1,687      0       0      0
+38842.5s	300	finephrase-table          1.50    1.50   222,197       774      459      0       0      0
+38842.5s	301	wiki-en                   1.50    1.50    46,199         0      905      0       0      0
+38842.5s	302	stackexchange             1.50    1.50    84,742         0    2,160  1,290       0      0
+38842.5s	303	cosmopedia                2.00    2.00   106,993         0      783      0       0      0
+38842.5s	304	fineweb2-hq              13.00   13.00   666,650         0    2,342      0       0      0
+38842.5s	305	transweb                  8.50    8.50   317,562         0    1,222      0       0      0
+38842.5s	306	wiki-es                   2.00    2.00   134,307         0      285      0       0      0
+38842.5s	307	un-parallel               0.35    0.35    11,887         0      145      0       0      0
+38842.5s	308	europarl                  0.15    0.15     6,700         0       20    448       0      0
+38842.5s	309	python                   11.20   11.20   399,191         0   17,751      0       0 44,818
+38842.5s	310	javascript                7.30    7.30   313,661         0    7,535  2,639       0 34,949
+38842.5s	311	typescript                3.90    3.90   202,783         0    2,924      0       0 22,389
+38842.5s	312	notebooks-scripts         0.55    0.55    10,530         0      994    482       0  1,178
+38842.5s	313	notebooks-structured      0.55    0.55     9,987         0    1,277      0       0      0
+38842.5s	314	markdown                  1.00    1.00    40,917         0      491      0       0      0
+38842.5s	315	stackoverflow             1.00    1.00    63,711         0      993      0       0      0
+38842.5s	316	html                      0.70    0.70    16,632         0      255      0       0  1,865
+38842.5s	317	css                       0.70    0.70    27,174         0    2,320      0       0  3,082
+38842.5s	318	sql                       0.55    0.55    17,220         0      378    819       0  1,871
+38842.5s	319	shell                     0.55    0.55    32,036         0      158      0       0  3,582
+38842.5s	320	finemath-4plus            5.50    5.50   159,307     1,394   14,511      6       0      0
+38842.5s	321	infiwebmath-4plus         4.50    4.50   135,695     1,417   12,255     18       0      0
+38842.5s	322	openmathreasoning         1.90    1.90    50,098         0   20,635      0 971,437      0
+38842.5s	323	oasst                     0.10    0.10    13,187         0      121    748      24      0
+38842.6s	324	8.7G	/kaggle/working/t1
