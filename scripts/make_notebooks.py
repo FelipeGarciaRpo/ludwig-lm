@@ -666,6 +666,8 @@ Un turno: toma el candado en Hugging Face, sigue desde el checkpoint más nuevo 
 2. En Kaggle, *Add-ons → Secrets*: `HF_TOKEN` (ese token), y `KAGGLE_USERNAME` y `KAGGLE_KEY` (el token de la API de tu cuenta, *Settings → API*). Cada uno usa el suyo.
 3. Pipe te agrega como colaborador (*can edit*) en los dos datasets de respaldo y como lector en los tres de shards.
 
+**Cada turno en un notebook nuevo,** importado del repo, con sus entradas recién agregadas. Cada respaldo crea una versión nueva de su dataset y borra las viejas (`kaggle datasets version -d`, para no llenar el espacio de Kaggle con checkpoints de 11 GB). Un notebook que ya tenía adjunta una versión vieja la ve como *no longer available*, y sin la última versión de los dos respaldos el turno no sabe cuál toca.
+
 **En cada turno:** acelerador *GPU T4 x2*, Internet *On*, y como entradas todos los datasets de shards (`ludwig2-shards-1`, `-2`, …) y los dos de respaldo. Nunca los del build viejo (`ludwig2-tronco-v3-*`): el notebook elige el manifiesto con más shards, y podría quedarse con el viejo. Pon tu `CUENTA` ("cuenta 4", nunca el usuario) y *Save Version → Save & Run All*. Avisa por WhatsApp al empezar y al terminar.
 
 | `MODO` | Qué hace | Tarda |
@@ -787,6 +789,8 @@ Al final imprime cada condición con ✅ o ❌. Lo que Kaggle montó de cada res
 Un turno que sigue desde Kaggle, como con `SIN_CANDADO = True`: sin Hugging Face y sin candado. Toma el respaldo más nuevo de una `prueba-relevo`, lo lee donde Kaggle lo desempacó (sin copiarlo), entrena 10 pasos con el modelo diminuto y deja su checkpoint en el otro dataset de respaldo.
 
 **Solo antes del primer turno del tronco,** por lo mismo que la G0-0: escribe en los respaldos reales, y cada versión guarda un solo checkpoint.
+
+**En un notebook nuevo,** no en el de la `prueba-relevo`: esa prueba crea versiones nuevas de los respaldos y borra las que el notebook tenía adjuntas.
 
 **Entradas:** los dos respaldos y los shards con los que se entrenó ese respaldo. La celda imprime cuáles son: el lector se niega a seguir con shards de otro build.
 

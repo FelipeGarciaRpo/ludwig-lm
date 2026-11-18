@@ -900,3 +900,12 @@ Todo lo que se corre, se mide o se decide, en orden. Cada entrada dice qué se h
   - Al empezar, `copies()` ya veía en ese dataset el paso 30 de la G0-0 anterior, desempacado y con su `.metadata`. Era de otra etiqueta, así que no contaba.
 - **`prueba-respaldo`, primer intento:** no llegó a entrenar. El notebook no tenía adjunto `ludwig2-respaldo-a`, que es donde quedó el respaldo de la G0-0, y la celda se detuvo con su aviso, como debe. El log no se guardó.
 - **Siguiente:** repetir `prueba-respaldo` con los dos respaldos adjuntos. Después, el primer turno del tronco.
+
+## 2026-11-18 · Los respaldos borran sus versiones viejas: cada turno en un notebook nuevo
+
+- **Qué:** Pipe repitió la `prueba-relevo` con un dataset de respaldo nuevo, `ludwig2-respaldo-a2`, y pasó. Al editar el mismo notebook para la `prueba-respaldo`, Kaggle dijo que `ludwig2-respaldo-a2` ya no estaba disponible.
+  - Antes, otro intento de `prueba-respaldo` se había detenido con su aviso: `RESPALDO` apuntaba a `ludwig2-respaldo-a2`, que solo tenía el `.txt` del principio, y no a `ludwig2-respaldo-a`, donde estaba el respaldo de la G0-0.
+- **Por qué:** cada respaldo sube una versión nueva del dataset con `kaggle datasets version -d`, y `-d` borra las versiones viejas. Así el espacio de Kaggle no se llena con checkpoints de 11 GB. El notebook tenía adjunta la versión del `.txt`, que la prueba borró.
+- **Consecuencia para el tronco:** cada turno va en un notebook nuevo, con las entradas recién agregadas. Si un turno no ve la última versión de los dos respaldos, no puede seguir desde Kaggle, y `target()` elige mal dónde respaldar.
+- **Cambio en `make_notebooks.py`:** las instrucciones del turno y de `prueba-respaldo` lo dicen.
+- **Siguiente:** `prueba-respaldo` en un notebook nuevo, con `ludwig2-shards-1`, `ludwig2-respaldo-a2` y `ludwig2-respaldo-b`. Esos dos son los respaldos del tronco desde ahora.
