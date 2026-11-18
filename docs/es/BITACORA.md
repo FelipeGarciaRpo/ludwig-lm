@@ -840,3 +840,27 @@ Todo lo que se corre, se mide o se decide, en orden. Cada entrada dice qué se h
   - el dataset `ludwig2-shards-1` con la salida de esta sesión;
   - las muestras y el reporte, para revisarlos antes del primer turno;
   - la sesión 2 de la T1, con el mismo `COMMIT` y `ludwig2-shards-1` como entrada.
+
+## 2026-11-18 · El relevo lee los respaldos como los deja Kaggle
+
+- **Qué:** el arreglo del error de los respaldos que encontró la G0-0 (entradas del 2026-11-17). Pipe lo aprobó. Commit `3b9c114`.
+- **Cambio en `ludwig_lm/relay.py`:**
+  - `KaggleBackup.copies()` reconoce lo que deja Kaggle: `checkpoint.json` en la raíz del dataset y la carpeta `checkpoint/step_XXXXXX/`. La cuenta solo si su `meta.json` es del mismo paso y está el `.metadata` de DCP. Una copia que todavía traiga `checkpoint.tar` también cuenta.
+  - Un turno que sigue desde Kaggle lee esa carpeta donde está montada, sin copiar ~11 GB a `/tmp` (evento `in_place`). `train.py` solo la lee.
+  - Un turno solo borra su punto de partida si es una copia dentro de su carpeta de trabajo.
+- **Cambio en `scripts/test_relay_cpu.py`:** el Kaggle simulado hace lo que hace el real: desempaca, no deja el `.tar` y deja todo de solo lectura, como `/kaggle/input`.
+  - La prueba revisa la copia desempacada y la empacada, y que no cuente una copia sin `.metadata`.
+  - La sesión 2 sigue desde el respaldo leyéndolo donde está, y los pasos 0–11 siguen idénticos bit a bit a la corrida sin cortes.
+  - Con el `relay.py` anterior, la parte del respaldo falla en 3 condiciones: no encuentra ninguna copia.
+- **Cambio en `make_notebooks.py`:**
+  - Un modo nuevo, `prueba-respaldo`. Sigue desde el respaldo de la última `prueba-relevo` sin Hugging Face ni candado, como un turno con `SIN_CANDADO`. Entrena 10 pasos del modelo diminuto y respalda en el otro dataset. Es lo único que prueba en Kaggle real que un turno puede seguir desde un respaldo.
+  - Con `SIN_CANDADO = True`, si no hay ningún respaldo del tronco montado, el turno se niega a entrenar desde cero.
+  - El `COMMIT` del tronco pasa a `3b9c114` y es el de todos sus turnos. La T1 sigue con `75cd3a0`, el mismo en todas sus sesiones.
+- **Pruebas en el PC:**
+  - pyflakes;
+  - la prueba lógica de `bench_afmoe.py`, con el checkpoint exacto;
+  - `test_relay_cpu.py`: PASS, 27 condiciones;
+  - `test_train_cpu.py`: PASS, 36 condiciones;
+  - la celda de `prueba-respaldo` con el `Session` real, un `/kaggle/input` falso con el respaldo desempacado (paso 30) y un `train.py` simulado: ✅ en sus 6 condiciones, y respalda en el dataset B.
+- **Para el chat de diseño:** revisar el arreglo, la prueba nueva y el freno de `SIN_CANDADO`.
+- **Siguiente:** la `prueba-respaldo` en Kaggle. El respaldo de la última G0-0 (paso 30) se entrenó con el build viejo, así que lleva como entradas solo `ludwig2-tronco-v3-2` y los dos respaldos. Después se pueden borrar los datasets viejos.

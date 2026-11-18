@@ -676,7 +676,7 @@ Un turno: toma el candado en Hugging Face, sigue desde el checkpoint más nuevo 
 | `g0-16k` | **G0-1:** 50 pasos del modelo real a 16K de contexto, sin guardar (condición 5 de la G0) | ~30–60 min |"""),
     code(r'''MODO = "tronco"          # tronco · prueba-relevo · prueba-respaldo · g0-16k
 CUENTA = "cuenta 1"      # tu etiqueta en el relevo: nunca el usuario de Kaggle ni el correo
-COMMIT = "75cd3a08b5e3195908c7aff769b4a0254f2b20e6"  # el commit del tronco: el MISMO en todos los turnos
+COMMIT = "3b9c114587b278cf6b4b16b679cb1c925f22c8f1"  # el commit del tronco: el MISMO en todos los turnos
 REPO_URL = "https://github.com/FelipeGarciaRpo/ludwig-lm"
 HF_REPO = "ludwig-v2-lm/ludwig-v2-lm-1"                       # privado, de la organización
 HF_REPO_PRUEBA = "ludwig-v2-lm/ludwig-v2-lm-1-relevo-prueba"  # privado: solo para prueba-relevo
