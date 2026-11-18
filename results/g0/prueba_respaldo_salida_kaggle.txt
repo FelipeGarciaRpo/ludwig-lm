@@ -1,0 +1,20 @@
+# prueba-respaldo (MODO = "prueba-respaldo"), en Kaggle 2×T4 con el commit 3b9c114, desde el respaldo de la prueba-relevo en ludwig2-respaldo-a2 (paso 30, build 386755d6), con RESPALDO apuntando a los datasets de Pipe. El final del log (líneas 60–76), copiado del visor de Kaggle, sin editar.
+# ✅ las 6 condiciones: siguió desde Kaggle leyendo el respaldo donde está montado, con el estado y el primer lote exactos, entrenó hasta el paso 40 y respaldó en el otro dataset.
+Time	#	Log Message
+140.9s	60
+140.9s	61	  ✅ siguió desde Kaggle en el paso 30
+140.9s	62	  ✅ leyó el respaldo donde Kaggle lo montó, sin copiarlo
+140.9s	63	  ✅ reanudación exacta: el estado
+140.9s	64	  ✅ reanudación exacta: el primer lote
+140.9s	65	  ✅ entrenó hasta el paso 40
+140.9s	66	  ✅ respaldó en el otro dataset
+140.9s	67
+140.9s	68	Respaldo: ✅ un turno puede seguir desde Kaggle
+144.3s	69	/usr/local/lib/python3.13/dist-packages/mistune.py:435: SyntaxWarning: invalid escape sequence '\|'
+144.3s	70	  cells[i][c] = re.sub('\\\\\|', '|', cell)
+144.5s	71	/usr/local/lib/python3.13/dist-packages/nbconvert/filters/filter_links.py:36: SyntaxWarning: invalid escape sequence '\_'
+144.5s	72	  text = re.sub(r'_', '\_', text) # Escape underscores in display text
+145.3s	73	[NbConvertApp] Converting notebook __notebook__.ipynb to notebook
+145.4s	74	[NbConvertApp] Writing 32143 bytes to __notebook__.ipynb
+148.2s	75	[NbConvertApp] Converting notebook __notebook__.ipynb to html
+148.8s	76	[NbConvertApp] Writing 364046 bytes to __results__.html

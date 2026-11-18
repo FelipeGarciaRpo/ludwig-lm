@@ -922,3 +922,22 @@ Todo lo que se corre, se mide o se decide, en orden. Cada entrada dice qué se h
 - **Cambio en `make_notebooks.py`:** la celda de preparación se detiene si no hay GPU, y también si `RESPALDO` todavía dice `DUENO` en los modos que respaldan (`tronco`, `prueba-relevo`, `prueba-respaldo`). En un turno del tronco, cualquiera de los dos errores habría costado el turno o su respaldo.
 - **Para el chat de diseño:** `backup_failed` guarda los primeros 200 caracteres del error, que con `kaggle` son barras de progreso. Convendría guardar el final, pero cambiarlo mueve el commit del tronco. Queda como pregunta.
 - **Siguiente:** repetir la `prueba-respaldo` con GPU y el usuario de Pipe en `RESPALDO`. Después, el primer turno del tronco.
+
+## 2026-11-18 · `prueba-respaldo` ✅: un turno puede seguir desde Kaggle, y arranca el tronco
+
+- **Qué:** la `prueba-respaldo` repetida con GPU y con `RESPALDO` apuntando a los datasets de Pipe (`ludwig2-respaldo-a2` y `ludwig2-respaldo-b`), sobre `3b9c114`.
+- **Dónde:** Kaggle, 2×T4, ~2.5 min.
+- **Archivo:** `results/g0/prueba_respaldo_salida_kaggle.txt`, el final del log (líneas 60–76).
+- **Resultado: ✅, las 6 condiciones.**
+  - Siguió desde el respaldo de Kaggle en el paso 30, leyéndolo donde está montado, sin copiarlo.
+  - El estado y el primer lote fueron exactos.
+  - Entrenó hasta el paso 40 y respaldó en el otro dataset, `ludwig2-respaldo-b`.
+  - Queda probado en Kaggle real el arreglo de `3b9c114`, y que los respaldos se turnan.
+- **Estado de la G0:** pasaron la G0-0 (sobre `3b9c114`), la G0-1 y la prueba del respaldo. Faltan los dos primeros turnos del tronco, la G0-2 y la G0-3.
+- **Cómo arranca el tronco:**
+  - con el código `3b9c114`, el mismo en todos los turnos;
+  - con los shards de `ludwig2-shards-1` (build `386755d60af32507`);
+  - con los respaldos `ludwig2-respaldo-a2` y `ludwig2-respaldo-b`;
+  - cada turno en un notebook nuevo, con las entradas recién agregadas;
+  - desde ahora no se corren `prueba-relevo` ni `prueba-respaldo`, porque escribirían sobre los respaldos del tronco.
+- **Siguiente:** el primer turno del tronco (G0-2), en la cuenta de Pipe. El segundo (G0-3), en la cuenta de un amigo, para probar la reanudación entre cuentas.
