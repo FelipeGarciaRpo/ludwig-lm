@@ -7,11 +7,15 @@ relay of three sessions on the tiny model. No network: Hugging Face is a LocalSt
 1. Lock: free → taken; a second session is refused while the lease lives; once it expires another
    session takes it, and the first one's next commit fails (the fence); releasing frees it.
 2. Store: a commit on an old head fails; squashing keeps only the newest tree and frees the rest.
-3. Backup: two datasets take turns (the empty one first, then the older); a backup extracts to the same files.
+3. Backup: two datasets take turns (the empty one first, then the older). The fake Kaggle does what Kaggle
+   does: it unpacks checkpoint.tar into checkpoint/step_XXXXXX/ and leaves it read-only, and the copy found
+   is that directory, .metadata included. A copy still packed extracts to the same files, and an unpacked
+   copy without .metadata does not count.
 4. Relay on the tiny model (2 processes on CPU, T1 shards of scripts/test_shards_cpu.py's small Hub):
    R  12 steps without stopping (the reference);
    1  "cuenta 1": from scratch, saves at step 3 (uploaded while it trains) and stops at 6 like a time limit;
-   2  "cuenta 2": resumes from the backup on disk (it ties with Hugging Face), saves at 9, ends at 12;
+   2  "cuenta 2": resumes from the backup on disk (it ties with Hugging Face), reading it where it is
+      unpacked, saves at 9, ends at 12;
    3  "cuenta 3": without the backup, downloads step 12 from the store and finds the run finished.
    Steps 6–11 must equal R's bit for bit, each resume must be exact, the store keeps the newest two
    checkpoints, and after the squash it holds nothing else.
@@ -23,6 +27,7 @@ import os
 import shutil
 import subprocess
 import sys
+import tarfile
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -93,25 +98,38 @@ def test_store():
     check(h2 == h3, "the head keeps its content after squashing")
 
 
-def fake_kaggle(root: Path):
+def _rmtree(path: Path):
+    """shutil.rmtree, also for the read-only files and folders the fake Kaggle leaves."""
+    if path.exists():
+        for p in [path, *path.rglob("*")]:
+            os.chmod(p, 0o777 if p.is_dir() else 0o666)
+        shutil.rmtree(path)
+
+
+def fake_kaggle(root: Path, unpack: bool = True):
+    """``kaggle datasets version`` as Kaggle does it (G0-0, 2026-11-17): the dataset gets checkpoint.json and the
+    tar unpacked into checkpoint/, with no .tar left, read-only like /kaggle/input. unpack=False keeps the tar."""
     def run(cmd, capture_output=True, text=True):
         stage = Path(cmd[cmd.index("-p") + 1])
         slug = json.loads((stage / "dataset-metadata.json").read_text())["id"]
         owner, name = slug.split("/")
         dest = root / "datasets" / owner / name
-        shutil.rmtree(dest, ignore_errors=True)
+        _rmtree(dest)
         dest.mkdir(parents=True)
-        for f in ("checkpoint.tar", "checkpoint.json"):
-            shutil.copy(stage / f, dest / f)
+        shutil.copy(stage / "checkpoint.json", dest / "checkpoint.json")
+        if unpack:
+            with tarfile.open(stage / "checkpoint.tar") as t:
+                t.extractall(dest / "checkpoint", filter="data")
+            for p in dest.rglob("*"):
+                os.chmod(p, 0o555 if p.is_dir() else 0o444)
+        else:
+            shutil.copy(stage / "checkpoint.tar", dest / "checkpoint.tar")
         return subprocess.CompletedProcess(cmd, 0, "", "")
     return run
 
 
 def test_backup():
     print("backup", flush=True)
-    root = WORK / "kaggle_unit"
-    shutil.rmtree(root, ignore_errors=True)
-    bk = KaggleBackup(["dueno/respaldo-a", "dueno/respaldo-b"], roots=[root], tag="t", run=fake_kaggle(root))
     ck = WORK / "unit_ckpt"
     for step in (5, 8, 11):
         d = ck / f"step_{step:06d}"
@@ -119,13 +137,39 @@ def test_backup():
         (d / ".metadata").write_bytes(b"m" * 10)
         (d / "__0_0.distcp").write_bytes(bytes(range(256)) * 4)
         (d / "meta.json").write_text(json.dumps({"step": step, "tag": "t", "tokens": step * 10}))
-        bk.upload(d, bk.target(), f"step {step}", WORK / "stage")
-    have = bk.copies()
-    check({s: v[0] for s, v in have.items()} == {"dueno/respaldo-a": 11, "dueno/respaldo-b": 8},
-          "two datasets take turns: empty first, then the one with the older checkpoint")
-    out = bk.extract(have["dueno/respaldo-a"][1], WORK / "extracted")
-    same = all((out / f.name).read_bytes() == f.read_bytes() for f in (ck / "step_000011").iterdir())
-    check(same and (out / ".metadata").exists(), "a backup extracts to the same files, .metadata included")
+
+    def same(a: Path, b: Path) -> bool:
+        return sorted(p.name for p in a.iterdir()) == sorted(p.name for p in b.iterdir()) and all(
+            (a / p.name).read_bytes() == p.read_bytes() for p in b.iterdir())
+
+    slugs = ["dueno/respaldo-a", "dueno/respaldo-b"]
+    for unpack in (True, False):
+        how = "unpacked" if unpack else "packed"
+        root = WORK / f"kaggle_unit_{how}"
+        _rmtree(root)
+        bk = KaggleBackup(slugs, roots=[root], tag="t", run=fake_kaggle(root, unpack))
+        for step in (5, 8, 11):
+            bk.upload(ck / f"step_{step:06d}", bk.target(), f"step {step}", WORK / "stage")
+        have = bk.copies()
+        check({s: v[0] for s, v in have.items()} == {"dueno/respaldo-a": 11, "dueno/respaldo-b": 8},
+              f"{how}: two datasets take turns, empty first, then the one with the older checkpoint")
+        path = have.get("dueno/respaldo-a", (None, None))[1]
+        if path is None:
+            check(False, f"{how}: the copy in dataset A is found")
+        elif unpack:
+            check(path.is_dir() and path.name == "step_000011" and same(path, ck / "step_000011"),
+                  "unpacked as Kaggle does: the copy found is the checkpoint's directory, .metadata included")
+        else:
+            out = bk.extract(path, WORK / "extracted")
+            check(path.name == "checkpoint.tar" and same(out, ck / "step_000011"),
+                  "still packed: the tar extracts to the same files, .metadata included")
+    gone = WORK / "kaggle_unit_unpacked" / "datasets" / "dueno" / "respaldo-a" / "checkpoint" / "step_000011" / ".metadata"
+    os.chmod(gone.parent, 0o777)
+    os.chmod(gone, 0o666)
+    gone.unlink()
+    bk = KaggleBackup(slugs, roots=[WORK / "kaggle_unit_unpacked"], tag="t")
+    check({s: v[0] for s, v in bk.copies().items()} == {"dueno/respaldo-b": 8},
+          "an unpacked copy without DCP's .metadata does not count (it could not be loaded)")
 
 
 def make_shards():
@@ -175,7 +219,7 @@ def test_relay():
 
     store = LocalStore(WORK / "store")
     kroot = WORK / "kaggle"
-    shutil.rmtree(kroot, ignore_errors=True)
+    _rmtree(kroot)
     backup = KaggleBackup(["dueno/ludwig2-respaldo-a", "dueno/ludwig2-respaldo-b"], roots=[kroot], tag="tronco",
                           run=fake_kaggle(kroot))
     os.chdir(ROOT)
@@ -196,11 +240,13 @@ def test_relay():
     check([c["step"] for c in idx] == [3, 6], "the store's index lists steps 3 and 6")
     s2 = session("cuenta 2", {"save_at": [9]})
     check(s2["resumed_from"] == {"where": "kaggle", "step": 6}, "session 2 resumes from the backup on disk (a tie with the store)")
+    check(any(e["kind"] == "in_place" for e in s2["events"]),
+          "session 2 reads the backup where it is unpacked (read-only), without copying it")
     w2 = WORK / _slug("cuenta 2")
     freed = [e["what"] for e in s2["events"] if e["kind"] == "free"]
     check(not (w2 / "from_kaggle").exists() and [p.name for p in (w2 / "ckpt").glob("step_*")] == ["step_000012"]
-          and "start" in freed and "step_000009" in freed,
-          "session 2 frees the disk: the checkpoint it started from and step 9 are gone before the backup, step 12 stays")
+          and "start" not in freed and "step_000009" in freed,
+          "session 2 frees the disk: step 9 is gone before the backup, step 12 stays, and it copied nothing to start from")
     tr = {r["step"]: r for r in rows(log, "tronco", "step")}
     check(all(k in tr and tr[k]["ce"] == R[k]["ce"] and tr[k]["batch_sha"] == R[k]["batch_sha"] for k in range(12)),
           "steps 0–11 across two accounts equal the uninterrupted run bit for bit")
@@ -226,7 +272,7 @@ def test_relay():
 
 
 def main():
-    shutil.rmtree(WORK, ignore_errors=True)
+    _rmtree(WORK)
     WORK.mkdir(parents=True)
     test_lock()
     test_store()

@@ -16,6 +16,8 @@ the storage of the checkpoints rotated out (deleting a file does not, while hist
 
 **Kaggle is the backup:** two private datasets take turns (A, B). At the end of each session its last
 checkpoint goes to the one that holds the older checkpoint, so a failed upload still leaves one complete.
+Kaggle unpacks the uploaded ``checkpoint.tar`` into ``checkpoint/step_XXXXXX/`` (G0-0, 2026-11-17), and a
+session reads that directory where Kaggle mounts it, without copying it.
 
 A session resumes from the newest complete checkpoint among Hugging Face and both backups. Nothing here
 depends on the model: the session runs ``scripts/train.py`` as a subprocess and moves its directories.
@@ -215,9 +217,10 @@ class KaggleBackup:
     """Two private Kaggle datasets that take turns. Each session reads them as attached inputs (Kaggle mounts
     them under /kaggle/input) and writes one with the ``kaggle`` command line (the account's own token).
 
-    A backup is ``checkpoint.tar`` (the checkpoint's directory, uncompressed: DCP's ``.metadata`` and the
-    rest exactly as written) plus ``checkpoint.json`` (its meta.json), so the step is known without
-    extracting 11 GB."""
+    A backup is uploaded as ``checkpoint.tar`` (the checkpoint's directory, uncompressed: DCP's ``.metadata``
+    and the rest exactly as written) plus ``checkpoint.json`` (its meta.json), so the step is known without
+    reading 11 GB. Kaggle unpacks the tar: the mounted dataset holds ``checkpoint.json`` and
+    ``checkpoint/step_XXXXXX/``, hidden ``.metadata`` included, and no ``.tar``."""
 
     def __init__(self, slugs: list[str], roots=("/kaggle/input",), tag: str = "tronco", run=subprocess.run):
         if len(slugs) != 2:
@@ -225,17 +228,30 @@ class KaggleBackup:
         self.slugs, self.roots, self.tag, self.run = slugs, [Path(r) for r in roots], tag, run
 
     def copies(self) -> dict[str, tuple[int, Path]]:
-        """The newest checkpoint of this run in each attached backup: {slug: (step, directory)}."""
+        """The newest checkpoint of this run in each attached backup: {slug: (step, path)}. The path is the
+        directory Kaggle unpacked, or ``checkpoint.tar`` if a copy is still packed."""
         out = {}
         for slug in self.slugs:
             name = slug.split("/")[-1]
             for r in self.roots:
                 for m in list(r.glob(f"**/{name}/checkpoint.json")) + list(r.glob(f"**/{name}/**/checkpoint.json")):
                     meta = json.loads(m.read_text())
-                    if meta.get("tag") == self.tag and meta["step"] > out.get(slug, (-1, None))[0] \
-                            and (m.parent / "checkpoint.tar").exists():
-                        out[slug] = (meta["step"], m.parent / "checkpoint.tar")
+                    if meta.get("tag") != self.tag or meta["step"] <= out.get(slug, (-1, None))[0]:
+                        continue
+                    tar = m.parent / "checkpoint.tar"
+                    found = self.unpacked(m.parent, meta["step"]) or (tar if tar.exists() else None)
+                    if found is not None:
+                        out[slug] = (meta["step"], found)
         return out
+
+    @staticmethod
+    def unpacked(root: Path, step: int) -> Path | None:
+        """The checkpoint directory Kaggle unpacked next to ``checkpoint.json``, if it is complete: its meta.json
+        is for ``step`` and DCP's ``.metadata`` is there (without it the checkpoint cannot be loaded)."""
+        for d in complete(root / "checkpoint"):
+            if (d / ".metadata").exists() and json.loads((d / "meta.json").read_text()).get("step") == step:
+                return d
+        return None
 
     @staticmethod
     def extract(tar_path: Path, dest: Path) -> Path:
@@ -323,6 +339,9 @@ class Session:
         if where is None:
             return None
         if where == "kaggle":
+            if Path(ref).is_dir():                  # unpacked by Kaggle: train.py only reads it, where it is mounted
+                self.event("in_place", step=step)
+                return Path(ref)
             t = time.time()
             path = self.backup.extract(Path(ref), self.work / "from_kaggle")
             self.event("extract", step=step, seconds=round(time.time() - t, 1))
@@ -382,7 +401,8 @@ class Session:
         self.uploaded = max(self.uploaded, step)           # never upload again what this turn starts from
         self.event("resume_from", where=where, step=step)
         start = self.fetch(where, step, ref)
-        start_dir = self.work / ("from_kaggle" if where == "kaggle" else "from_hf") if start else None
+        local = self.work / ("from_kaggle" if where == "kaggle" else "from_hf")
+        start_dir = local if start is not None and local in start.parents else None   # a copy this turn may delete
         cmd = self.train_cmd(str(start) if start else None, str(save_dir))
         proc = subprocess.Popen(cmd, start_new_session=True)
         lost = None

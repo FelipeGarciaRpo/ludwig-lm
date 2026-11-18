@@ -672,8 +672,9 @@ Un turno: toma el candado en Hugging Face, sigue desde el checkpoint más nuevo 
 |---|---|---|
 | `tronco` | Un turno del tronco | ~11.5 h |
 | `prueba-relevo` | **G0-0:** el relevo completo con un modelo diminuto, contra `HF_REPO_PRUEBA`: candado, subida, aplastado, respaldo y reanudación exacta | ~15 min |
+| `prueba-respaldo` | Sigue desde el respaldo que dejó la última `prueba-relevo`, sin Hugging Face (como `SIN_CANDADO`): lo lee donde Kaggle lo montó y respalda en el otro dataset | ~5 min |
 | `g0-16k` | **G0-1:** 50 pasos del modelo real a 16K de contexto, sin guardar (condición 5 de la G0) | ~30–60 min |"""),
-    code(r'''MODO = "tronco"          # tronco · prueba-relevo · g0-16k
+    code(r'''MODO = "tronco"          # tronco · prueba-relevo · prueba-respaldo · g0-16k
 CUENTA = "cuenta 1"      # tu etiqueta en el relevo: nunca el usuario de Kaggle ni el correo
 COMMIT = "75cd3a08b5e3195908c7aff769b4a0254f2b20e6"  # el commit del tronco: el MISMO en todos los turnos
 REPO_URL = "https://github.com/FelipeGarciaRpo/ludwig-lm"
@@ -779,6 +780,53 @@ Al final imprime cada condición con ✅ o ❌. Lo que Kaggle montó de cada res
     ok = all(pruebas.values())
     print("\nG0-0:", "✅ el relevo funciona: subida, candado, respaldo, aplastado y reanudación exacta" if ok
           else "❌ revisar las condiciones y los eventos de arriba")'''),
+    md("""## Prueba del respaldo · `prueba-respaldo`
+
+Un turno que sigue desde Kaggle, como con `SIN_CANDADO = True`: sin Hugging Face y sin candado. Toma el respaldo más nuevo de una `prueba-relevo`, lo lee donde Kaggle lo desempacó (sin copiarlo), entrena 10 pasos con el modelo diminuto y deja su checkpoint en el otro dataset de respaldo.
+
+**Entradas:** los dos respaldos y los shards con los que se entrenó ese respaldo. La celda imprime cuáles son: el lector se niega a seguir con shards de otro build.
+
+Pasa si sigue desde Kaggle en el paso del respaldo, sin copiarlo, con el estado y el primer lote exactos, y si respalda en el otro dataset."""),
+    code(r'''if MODO == "prueba-respaldo":
+    vistos = []
+    for slug in RESPALDO:
+        nombre = slug.split("/")[-1]
+        for m in glob.glob(f"/kaggle/input/**/{nombre}/checkpoint.json", recursive=True):
+            meta = json.load(open(m))
+            if str(meta.get("tag", "")).startswith("prueba-relevo"):
+                vistos.append((meta["step"], meta.get("saved_at", 0), slug, meta))
+    if not vistos:
+        raise SystemExit("⛔ ningún respaldo de una prueba-relevo montado: adjunta ludwig2-respaldo-a y ludwig2-respaldo-b")
+    _, _, slug, meta = max(vistos, key=lambda v: v[:2])
+    print(f"respaldo: {slug.split('/')[-1]}, paso {meta['step']}, etiqueta {meta['tag']}")
+    print(f"  se entrenó con {meta['args']['shards']}")
+    print(f"  shards adjuntos: {MANIFIESTO}")
+    c = json.load(open("configs/tiny_afmoe.json")); c.update(vocab_size=65536, pad_token_id=1, bos_token_id=0)
+    json.dump(c, open("/tmp/tiny_64k.json", "w"))
+    LOG = "/kaggle/working/results/respaldo-prueba.jsonl"; os.makedirs(os.path.dirname(LOG), exist_ok=True)
+    a = dict(config="/tmp/tiny_64k.json", tokenizer="tokenizer/tokenizer.json", shards=MANIFIESTO,
+             shard_roots="/kaggle/input", seq=256, micro=4, tokens_per_step=2048, steps=meta["step"] + 10, warmup=5,
+             eval_every=10, eval_windows=2, log_every=5, save_final=True, tag=meta["tag"], out=LOG)
+    S = Session(None, KaggleBackup(RESPALDO, tag=meta["tag"]), CUENTA, meta["tag"], "/tmp/respaldo-prueba",
+                lambda r, d: train_command(a, r, d), LOG, no_lock=True, poll_s=0.5).run()
+    filas = [json.loads(x) for x in open(LOG)] if os.path.exists(LOG) else []
+    res = [r for r in filas if r["type"] == "resume"][-1:]
+    lote = [r for r in filas if r["type"] == "resume_check"][-1:]
+    for e in S["events"]:
+        print(" ", e["kind"], {k: v for k, v in e.items() if k not in ("kind", "time", "by", "session")})
+    pruebas = {
+        f"siguió desde Kaggle en el paso {meta['step']}": S["resumed_from"] == {"where": "kaggle", "step": meta["step"]},
+        "leyó el respaldo donde Kaggle lo montó, sin copiarlo": any(e["kind"] == "in_place" for e in S["events"]),
+        "reanudación exacta: el estado": bool(res and res[0]["state_exact"]),
+        "reanudación exacta: el primer lote": bool(lote and lote[0]["batch_exact"]),
+        f"entrenó hasta el paso {meta['step'] + 10}": S["train_exit"] == 0 and S["last_local"] == f"step_{meta['step'] + 10:06d}",
+        "respaldó en el otro dataset": any(e["kind"] == "backup" and e["dataset"] != slug for e in S["events"]),
+    }
+    print()
+    for k, v in pruebas.items():
+        print(" ", "✅" if v else "❌", k)
+    print("\nRespaldo:", "✅ un turno puede seguir desde Kaggle" if all(pruebas.values())
+          else "❌ revisar las condiciones y los eventos de arriba")'''),
     md("""## G0-1 · `g0-16k`
 
 50 pasos del modelo real a 16K de contexto (un lote de 16,384 tokens por GPU), con los shards reales, sin guardar. Pasa si termina sin falta de memoria."""),
@@ -814,6 +862,9 @@ En `/tmp` nunca hay más de dos checkpoints a la vez (~23 GiB). El de partida se
             print("candado: libre" + (f" (el último turno fue de {quien['holder']})" if quien else ""))
     s = Session(tienda, KaggleBackup(RESPALDO, tag=TRONCO["tag"]), CUENTA, TRONCO["tag"], "/tmp/relevo",
                 lambda r, d: train_command(a, r, d), LOG, no_lock=SIN_CANDADO)
+    if SIN_CANDADO and s.newest()[0] is None:   # sin Hugging Face, solo un respaldo dice dónde va el tronco
+        raise SystemExit("⛔ SIN_CANDADO y ningún respaldo del tronco montado: no se entrena desde cero. "
+                         "Adjunta ludwig2-respaldo-a y ludwig2-respaldo-b.")
     try:
         RESUMEN = s.run()
     except Busy as e:
