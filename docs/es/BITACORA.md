@@ -909,3 +909,16 @@ Todo lo que se corre, se mide o se decide, en orden. Cada entrada dice qué se h
 - **Consecuencia para el tronco:** cada turno va en un notebook nuevo, con las entradas recién agregadas. Si un turno no ve la última versión de los dos respaldos, no puede seguir desde Kaggle, y `target()` elige mal dónde respaldar.
 - **Cambio en `make_notebooks.py`:** las instrucciones del turno y de `prueba-respaldo` lo dicen.
 - **Siguiente:** `prueba-respaldo` en un notebook nuevo, con `ludwig2-shards-1`, `ludwig2-respaldo-a2` y `ludwig2-respaldo-b`. Esos dos son los respaldos del tronco desde ahora.
+
+## 2026-11-18 · `prueba-respaldo`: el arreglo funciona en Kaggle; la corrida fue sin GPU y con `DUENO`
+
+- **Qué:** antes, Pipe repitió la `prueba-relevo` con `ludwig2-respaldo-a2`, y salió todo ✅ (ese log no llegó). Después corrió la `prueba-respaldo` con `3b9c114`, desde el respaldo que esa prueba dejó en `ludwig2-respaldo-a2`: paso 30, shards del build nuevo.
+- **Dónde:** Kaggle, pero sin acelerador. `nvidia-smi` no estaba, y `train.py` corrió en CPU: 2 procesos, ~35 tokens/s, 12 min.
+- **Archivo:** `results/g0/prueba_respaldo_cpu_salida_kaggle.txt`, con el usuario de Kaggle enmascarado.
+- **Resultado: 4 ✅ y 2 ❌. Los dos ❌ vienen de cómo se lanzó la prueba.**
+  - ✅ **El arreglo funciona en Kaggle real.** Encontró el respaldo desempacado y siguió desde él en el paso 30, leyéndolo donde está montado (`in_place`), sin copiarlo. El primer lote fue idéntico al guardado, y entrenó hasta el paso 40.
+  - ❌ **Estado exacto.** La huella del estado son sumas en float64 de cada tensor, hechas en el dispositivo del tensor. Al cargar se calcularon en CPU y al guardar en GPU, y la misma suma redondea distinto en cada una. El modelo se cargó bien: la validación en el paso 30 da 3.3214 bits por byte, igual que en GPU.
+  - ❌ **El respaldo.** Eligió bien el otro dataset (`ludwig2-respaldo-b`), pero `RESPALDO` decía `DUENO/ludwig2-respaldo-b`, el ejemplo del notebook, y la subida falló. El evento guarda solo el principio del error, que son las barras de progreso de `kaggle`, así que la causa no se ve en el log.
+- **Cambio en `make_notebooks.py`:** la celda de preparación se detiene si no hay GPU, y también si `RESPALDO` todavía dice `DUENO` en los modos que respaldan (`tronco`, `prueba-relevo`, `prueba-respaldo`). En un turno del tronco, cualquiera de los dos errores habría costado el turno o su respaldo.
+- **Para el chat de diseño:** `backup_failed` guarda los primeros 200 caracteres del error, que con `kaggle` son barras de progreso. Convendría guardar el final, pero cambiarlo mueve el commit del tronco. Queda como pregunta.
+- **Siguiente:** repetir la `prueba-respaldo` con GPU y el usuario de Pipe en `RESPALDO`. Después, el primer turno del tronco.

@@ -1,0 +1,80 @@
+# prueba-respaldo (MODO = "prueba-respaldo"), en Kaggle SIN acelerador (train.py en CPU), con el commit 3b9c114, desde el respaldo de la prueba-relevo en ludwig2-respaldo-a2 (paso 30, build 386755d6). Log copiado del visor de Kaggle, sin editar salvo el usuario de Kaggle, enmascarado como <usuario>; el final llegó cortado.
+# 4 ✅ y 2 ❌: el estado no es bit-exacto porque su huella se calculó en CPU contra una de GPU, y el respaldo falló porque RESPALDO decía DUENO/ludwig2-respaldo-b. Siguió desde Kaggle leyendo el respaldo donde está montado.
+Time	#	Log Message
+7.9s	1	0.00s - Debugger warning: It seems that frozen modules are being used, which may
+7.9s	2	0.00s - make the debugger miss breakpoints. Please pass -Xfrozen_modules=off
+7.9s	3	0.00s - to python to disable frozen modules.
+7.9s	4	0.00s - Note: Debugging will proceed. Set PYDEVD_DISABLE_FILE_VALIDATION=1 to disable this validation.
+8.7s	5	0.00s - Debugger warning: It seems that frozen modules are being used, which may
+8.7s	6	0.00s - make the debugger miss breakpoints. Please pass -Xfrozen_modules=off
+8.7s	7	0.00s - to python to disable frozen modules.
+8.7s	8	0.00s - Note: Debugging will proceed. Set PYDEVD_DISABLE_FILE_VALIDATION=1 to disable this validation.
+11.3s	9	commit 3b9c114587b278cf6b4b16b679cb1c925f22c8f1
+38.3s	10	shards: 28 en datasets/<usuario>/ludwig2-shards-1/t1/manifest.json
+38.3s	11	/tmp: 2514 GiB libres
+38.4s	12	respaldo ludwig2-respaldo-a2: checkpoint.json (0 MiB), checkpoint/step_000030/.metadata (0 MiB), checkpoint/step_000030/__0_0.distcp (68 MiB), checkpoint/step_000030/__1_0.distcp (68 MiB), checkpoint/step_000030/meta.json (0 MiB), checkpoint/step_000030/rank0.pt (0 MiB), checkpoint/step_000030/rank1.pt (0 MiB)
+38.4s	13	respaldo ludwig2-respaldo-b: ludwig.txt (0 MiB)
+38.4s	14	/bin/bash: line 1: nvidia-smi: command not found
+40.1s	15	respaldo: ludwig2-respaldo-a2, paso 30, etiqueta prueba-relevo-20261118-214102
+40.1s	16	  se entrenó con /kaggle/input/datasets/<usuario>/ludwig2-shards-1/t1/manifest.json
+40.1s	17	  shards adjuntos: /kaggle/input/datasets/<usuario>/ludwig2-shards-1/t1/manifest.json
+40.9s	18	[relevo] resume_from where=kaggle step=30
+40.9s	19	[relevo] in_place step=30
+42.6s	20
+42.6s	21	*****************************************
+42.6s	22	Setting OMP_NUM_THREADS environment variable for each process to be 1 in default, to avoid your system being overloaded, please further tune the variable for optimal performance in your application as needed.
+42.6s	23	*****************************************
+42.8s	24
+42.8s	25	*****************************************
+42.8s	26	Setting OMP_NUM_THREADS environment variable for each process to be 1 in default, to avoid your system being overloaded, please further tune the variable for optimal performance in your application as needed.
+42.8s	27	*****************************************
+42.8s	28
+42.8s	29
+42.8s	30	*****************************************
+42.8s	31	Setting OMP_NUM_THREADS environment variable for each process to be 1 in default, to avoid your system being overloaded, please further tune the variable for optimal performance in your application as needed.
+42.8s	32	*****************************************
+68.6s	33	[resume] /kaggle/input/datasets/<usuario>/ludwig2-respaldo-a2/checkpoint/step_000030 at step 30: state bit-exact = False (5 s)
+68.6s	34	[model] AFMoE 0.010B total, 0.009B active | moe=grouped_mm residual=fp32 reduce=fp16 momentum=cpu | 2 × cpu
+68.6s	35	[data] build 386755d60af32507: 28 shards, 3.76B tokens (from token 61,440), meta=mask, val en, es, python, js, math | vocab 65536 | eos 0 | 2048 tokens per step = 2 GPUs × 4 × 256 × 1 micro-steps
+68.8s	36	[resume] /kaggle/input/datasets/<usuario>/ludwig2-respaldo-a2/checkpoint/step_000030 at step 30: state bit-exact = False (5 s)
+68.8s	37	[model] AFMoE 0.010B total, 0.009B active | moe=grouped_mm residual=fp32 reduce=fp16 momentum=cpu | 2 × cpu
+68.8s	38	[data] build 386755d60af32507: 28 shards, 3.76B tokens (from token 61,440), meta=mask, val en, es, python, js, math | vocab 65536 | eos 0 | 2048 tokens per step = 2 GPUs × 4 × 256 × 1 micro-steps
+82.6s	39	[eval] step 30: val bpb 3.3214  en 3.4158  es 2.8026  python 4.0852  js 3.1805  math 3.3792  ce 9.8923  router entropy 2.064  qk gain 1.02  dead experts None  (14 s)
+82.9s	40	[eval] step 30: val bpb 3.3214  en 3.4158  es 2.8026  python 4.0852  js 3.1805  math 3.3792  ce 9.8923  router entropy 2.064  qk gain 1.02  dead experts None  (14 s)
+87.0s	41	[resume] first batch identical to the saved hash = True
+87.2s	42	[resume] first batch identical to the saved hash = True
+141.0s	43	[train] step    30  ce 9.8245  lr×1.000  gnorm 0.891  scale 32768  load max/mean 3.61  35 tok/s  peak 0.00 GiB
+141.2s	44	[train] step    30  ce 9.8245  lr×1.000  gnorm 0.891  scale 32768  load max/mean 3.61  35 tok/s  peak 0.00 GiB
+425.9s	45	[train] step    35  ce 9.7414  lr×1.000  gnorm 0.952  scale 32768  load max/mean 2.61  37 tok/s  peak 0.00 GiB
+426.1s	46	[train] step    35  ce 9.7414  lr×1.000  gnorm 0.952  scale 32768  load max/mean 2.61  37 tok/s  peak 0.00 GiB
+720.5s	47	[train] step    39  ce 9.4335  lr×1.000  gnorm 3.084  scale 32768  load max/mean 3.88  30 tok/s  peak 0.00 GiB
+720.7s	48	[train] step    39  ce 9.4335  lr×1.000  gnorm 3.084  scale 32768  load max/mean 3.88  30 tok/s  peak 0.00 GiB
+734.6s	49	[eval] step 40: val bpb 3.1834  en 3.2669  es 2.6883  python 3.9125  js 3.0783  math 3.2124  ce 9.4812  router entropy 2.062  qk gain 1.02  dead experts 0  (14 s)
+734.8s	50	[eval] step 40: val bpb 3.1834  en 3.2669  es 2.6883  python 3.9125  js 3.0783  math 3.2124  ce 9.4812  router entropy 2.062  qk gain 1.02  dead experts 0  (14 s)
+735.5s	51	[save] step 40 (final) -> /tmp/respaldo-prueba/ckpt/step_000040  0.13 GiB in 1 s
+735.5s	52	[end] done: step 40, 0.1M tokens, 0.19 h, 32 tok/s (last hour), peak 0.0 GiB reserved, 0 FP16 skips, val bpb 3.18336
+735.7s	53	[save] step 40 (final) -> /tmp/respaldo-prueba/ckpt/step_000040  0.13 GiB in 1 s
+735.7s	54	[end] done: step 40, 0.1M tokens, 0.19 h, 32 tok/s (last hour), peak 0.0 GiB reserved, 0 FP16 skips, val bpb 3.18336
+745.3s	55	[relevo] backup_failed error=RuntimeError: kaggle datasets version DUENO/ludwig2-respaldo-b: 36M [00:02<00:01, 43.5MB/s]
+745.3s	56	 55%|█████▌    | 75.3M/136M [00:02<00:01, 46.8MB/s]
+745.3s	57	 58%|█████▊    | 79.8M/136M [00:02<00:01, 46.7MB/s]
+745.3s	58	 62%|██████▏   | 8
+745.3s	59	  resume_from {'where': 'kaggle', 'step': 30}
+745.3s	60	  in_place {'step': 30}
+745.3s	61	  backup_failed {'error': 'RuntimeError: kaggle datasets version DUENO/ludwig2-respaldo-b: 36M [00:02<00:01, 43.5MB/s]\n 55%|█████▌    | 75.3M/136M [00:02<00:01, 46.8MB/s]\n 58%|█████▊    | 79.8M/136M [00:02<00:01, 46.7MB/s]\n 62%|██████▏   | 8'}
+745.3s	62
+745.3s	63	  ✅ siguió desde Kaggle en el paso 30
+745.3s	64	  ✅ leyó el respaldo donde Kaggle lo montó, sin copiarlo
+745.3s	65	  ❌ reanudación exacta: el estado
+745.3s	66	  ✅ reanudación exacta: el primer lote
+745.3s	67	  ✅ entrenó hasta el paso 40
+745.3s	68	  ❌ respaldó en el otro dataset
+745.3s	69
+745.3s	70	Respaldo: ❌ revisar las condiciones y los eventos de arriba
+749.4s	71	/usr/local/lib/python3.13/dist-packages/mistune.py:435: SyntaxWarning: invalid escape sequence '\|'
+749.4s	72	  cells[i][c] = re.sub('\\\\\|', '|', cell)
+749.6s	73	/usr/local/lib/python3.13/dist-packages/nbconvert/filters/filter_links.py:36: SyntaxWarning: invalid escape sequence '\_'
+749.6s	74	  text = re.sub(r'_', '\_', text) # Escape underscores in display text
+750.5s	75	[NbConvertApp] Converting notebook __notebook__.ipynb to notebook
+750.6s	76	[NbConvertApp] Writing 31984 bytes to __notebook__.ipynb
+753.9s	77	[NbConvertApp] Converting notebook __notebook__.ipynb to htm

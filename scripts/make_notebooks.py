@@ -724,6 +724,11 @@ for slug in RESPALDO:                    # lo que Kaggle montó de cada respaldo
             f"{p} ({s / 2**20:.0f} MiB)" for p, s in sorted(vistos)[:8]) or "vacío")
     except Exception as e:  # solo informa: nunca detiene el turno
         print(f"respaldo {slug.split('/')[-1]}: no se pudo listar ({type(e).__name__})")
+import torch
+if not torch.cuda.is_available():         # en CPU, train.py corre ~100 veces más lento y el turno se pierde
+    raise SystemExit("⛔ sin GPU: en Settings → Accelerator elige GPU T4 x2 y vuelve a correr")
+if MODO in ("tronco", "prueba-relevo", "prueba-respaldo") and any(s.split("/")[0] == "DUENO" for s in RESPALDO):
+    raise SystemExit("⛔ RESPALDO todavía dice DUENO: pon el usuario de Kaggle de Pipe en los dos datasets")
 !nvidia-smi --query-gpu=name,memory.total --format=csv,noheader'''),
     md("""## G0-0 · `prueba-relevo`
 
