@@ -941,3 +941,31 @@ Todo lo que se corre, se mide o se decide, en orden. Cada entrada dice qué se h
   - cada turno en un notebook nuevo, con las entradas recién agregadas;
   - desde ahora no se corren `prueba-relevo` ni `prueba-respaldo`, porque escribirían sobre los respaldos del tronco.
 - **Siguiente:** el primer turno del tronco (G0-2), en la cuenta de Pipe. El segundo (G0-3), en la cuenta de un amigo, para probar la reanudación entre cuentas.
+
+## 2026-11-19 · Tronco, turno 1 (G0-2): 549 pasos y las condiciones de la G0; el candado no se soltó
+
+- **Qué:** el primer turno del tronco, desde cero, en la cuenta 1. Es la G0-2.
+- **Dónde:** Kaggle, 2×T4, del 2026-11-18 a las 23:04 al 2026-11-19 a las 10:10 UTC (11.1 h de sesión).
+- **Archivo:** `results/tronco/turno01_cuenta-1_salida_kaggle.txt`, con el usuario de Kaggle enmascarado. Faltan el `.jsonl` y el `.relevo.json` del turno (regla 10).
+- **Resultado:**
+  - Pasos 0–549 (143.9M tokens) en 10.97 h de entrenamiento.
+  - 3,656 tokens/s en la última hora y un pico de 12.91 GiB reservada.
+  - Ningún salto de FP16: la escala se quedó en 32,768 todo el turno.
+  - La entropía cruzada bajó de 11.33 a 5.00. El LR sube hasta el paso 2,000, así que el turno terminó en ×0.27 del pico.
+  - La carga de los expertos quedó entre 1.3 y 1.9 veces la media, sin el pico que tuvo la G0-1.
+  - 4 subidas de 11.29 GiB (pasos 151, 303, 455 y 549), de 74 a 115 s cada una.
+  - El respaldo en `ludwig2-respaldo-a2` tardó 265 s. El cierre entero tomó ~7 min de los 45 que reserva el turno.
+  - **Condiciones de la G0 en este turno: 1–4 ✅.** La reanudación en otra cuenta le toca al turno 2.
+- **El candado no se soltó:**
+  - Justo después del aplastado, la entrega falló con `Conflict: … moved from 0ad1034e`. El checkpoint 549 quedó completo en Hugging Face y en el respaldo; solo el candado siguió tomado.
+  - **Causa probable:** `super_squash_history` no devuelve el commit nuevo, así que el relevo lee la cabeza con `repo_info` justo después. Con dos checkpoints de 11 GB en el repo, esa lectura habría llegado desactualizada, y la entrega con ese padre se rechazó. En las G0-0, con el repo de prueba chico, no pasó.
+  - El candado vence solo a las 2 h de su última renovación (la subida del paso 549): el 2026-11-19 a las 12:05 UTC. Un turno que se lance antes se niega a entrenar, como debe.
+- **Cambio en `make_notebooks.py`:**
+  - Si la entrega falla, la celda del turno espera 30 s, vuelve a leer la cabeza y suelta el candado, pero solo si sigue siendo de su sesión. Lo intenta hasta 6 veces.
+  - Usa el `Lock` del relevo tal cual, así que el `COMMIT` del tronco no cambia.
+  - Se probó con el `LocalStore`: suelta el candado propio, no toca uno ajeno y sobrevive a un intento fallido.
+- **Para el chat de diseño:** el arreglo de fondo está en `relay.py`: reintentar la entrega con la cabeza nueva. Pero eso cambia el `COMMIT` del tronco, así que primero se decide en `DECISIONS.md`.
+- **Siguiente:**
+  - el `.jsonl` y el `.relevo.json` del turno;
+  - el turno 2 (G0-3) en la cuenta de un amigo, después de las 12:05 UTC;
+  - la sesión 2 de la T1.

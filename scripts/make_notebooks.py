@@ -883,6 +883,22 @@ En `/tmp` nunca hay más de dos checkpoints a la vez (~23 GiB). El de partida se
     except Busy as e:
         raise SystemExit(f"⛔ el relevo está ocupado: {e}. No entrenes: avisa por WhatsApp.")
     json.dump(RESUMEN, open(LOG.replace(".jsonl", ".relevo.json"), "w"), indent=1)
+    if not SIN_CANDADO and any(e["kind"] == "release_failed" for e in RESUMEN["events"]):
+        # Turno 1: la entrega falló justo después del aplastado (Hugging Face aún mostraba la cabeza vieja).
+        # Se reintenta con la cabeza nueva, y solo si el candado sigue siendo de esta sesión.
+        candado = Lock(tienda, CUENTA, RESUMEN["session"])
+        for intento in range(1, 7):
+            time.sleep(30)
+            try:
+                cabeza = tienda.head()
+                if (candado.holder(cabeza) or {}).get("session") != RESUMEN["session"]:
+                    print("candado: ya no es de este turno, no se toca")
+                    break
+                candado.release(cabeza)
+                print(f"candado: soltado al reintentar (intento {intento})")
+                break
+            except Exception as e:  # noqa: BLE001 - si no se puede, vence solo a las 2 h de su última renovación
+                print(f"candado: el intento {intento} falló ({type(e).__name__}: {str(e)[:120]})")
     filas = [json.loads(x) for x in open(LOG)]
     fin = ([r for r in filas if r["type"] == "end"] or [{}])[-1]
     res = [r for r in filas if r["type"] == "resume"][-1:]
