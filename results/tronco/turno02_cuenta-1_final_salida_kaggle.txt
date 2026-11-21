@@ -1,0 +1,23 @@
+# Tronco, turno 2 (MODO = "tronco", cuenta 1), en Kaggle 2×T4 con el commit 3b9c114. El final del log (líneas 116–135 del visor), copiado del visor de Kaggle, sin editar salvo el usuario de Kaggle, enmascarado como <usuario>.
+# La entrega del candado falló justo después del aplastado, como en el turno 1, y la celda la reintentó y lo soltó al primer intento. Las condiciones de la G0 del turno, como las imprime el notebook.
+Time	#	Log Message
+39686.3s	116	[relevo] upload step=1083 GiB=11.29 seconds=77.0 kept=[999, 1083]
+39892.6s	117	[relevo] backup dataset=<usuario>/ludwig2-respaldo-b step=1083 seconds=206.1
+39892.9s	118	[relevo] squash
+39893.4s	119	[relevo] release_failed error=Conflict: ludwig-v2-lm/ludwig-v2-lm-1 moved from 07285bfb
+39923.8s	120	candado: soltado al reintentar (intento 1)
+39923.8s	121
+39923.8s	122	paused: paso 1083, 0.284B tokens, 10.784 h en esta sesión
+39923.8s	123	Condiciones de la G0 en este turno:
+39923.8s	124	  1. ≥6 h sin NaN, escala estable: ✅ (0 saltos de FP16, escala final 65536.0)
+39923.8s	125	  2. ≥2,600 tokens/s en la última hora: ✅ (3642)
+39923.8s	126	  3. ≤13.5 GiB reservada: ✅ (12.9)
+39923.8s	127	  4. ≥2 subidas: ✅ (4); reanudación en otra cuenta: ✅ (desde {'where': 'kaggle', 'step': 549})
+39930.8s	128	/usr/local/lib/python3.13/dist-packages/mistune.py:435: SyntaxWarning: invalid escape sequence '\|'
+39930.8s	129	  cells[i][c] = re.sub('\\\\\|', '|', cell)
+39931.1s	130	/usr/local/lib/python3.13/dist-packages/nbconvert/filters/filter_links.py:36: SyntaxWarning: invalid escape sequence '\_'
+39931.1s	131	  text = re.sub(r'_', '\_', text) # Escape underscores in display text
+39932.2s	132	[NbConvertApp] Converting notebook __notebook__.ipynb to notebook
+39932.3s	133	[NbConvertApp] Writing 515386 bytes to __notebook__.ipynb
+39934.9s	134	[NbConvertApp] Converting notebook __notebook__.ipynb to html
+39935.9s	135	[NbConvertApp] Writing 755974 bytes to __results__.html

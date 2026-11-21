@@ -1,0 +1,110 @@
+{
+ "session": "731cf358449a44288c3990b15afb0dfb",
+ "by": "cuenta 1",
+ "train_exit": 0,
+ "lock_lost": null,
+ "resumed_from": {
+  "where": "kaggle",
+  "step": 549
+ },
+ "uploaded_step": 1083,
+ "last_local": "step_001083",
+ "events": [
+  {
+   "kind": "lock",
+   "time": 1795224265.0,
+   "by": "cuenta 1",
+   "session": "731cf358",
+   "until": 1795231465
+  },
+  {
+   "kind": "resume_from",
+   "time": 1795224269.4,
+   "by": "cuenta 1",
+   "session": "731cf358",
+   "where": "kaggle",
+   "step": 549
+  },
+  {
+   "kind": "in_place",
+   "time": 1795224269.4,
+   "by": "cuenta 1",
+   "session": "731cf358",
+   "step": 549
+  },
+  {
+   "kind": "upload",
+   "time": 1795236105.5,
+   "by": "cuenta 1",
+   "session": "731cf358",
+   "step": 699,
+   "GiB": 11.29,
+   "seconds": 132.4,
+   "kept": [
+    549,
+    699
+   ]
+  },
+  {
+   "kind": "upload",
+   "time": 1795246905.3,
+   "by": "cuenta 1",
+   "session": "731cf358",
+   "step": 849,
+   "GiB": 11.29,
+   "seconds": 116.7,
+   "kept": [
+    699,
+    849
+   ]
+  },
+  {
+   "kind": "upload",
+   "time": 1795257763.0,
+   "by": "cuenta 1",
+   "session": "731cf358",
+   "step": 999,
+   "GiB": 11.29,
+   "seconds": 114.7,
+   "kept": [
+    849,
+    999
+   ]
+  },
+  {
+   "kind": "upload",
+   "time": 1795263901.8,
+   "by": "cuenta 1",
+   "session": "731cf358",
+   "step": 1083,
+   "GiB": 11.29,
+   "seconds": 77.0,
+   "kept": [
+    999,
+    1083
+   ]
+  },
+  {
+   "kind": "backup",
+   "time": 1795264108.1,
+   "by": "cuenta 1",
+   "session": "731cf358",
+   "dataset": "<usuario>/ludwig2-respaldo-b",
+   "step": 1083,
+   "seconds": 206.1
+  },
+  {
+   "kind": "squash",
+   "time": 1795264108.5,
+   "by": "cuenta 1",
+   "session": "731cf358"
+  },
+  {
+   "kind": "release_failed",
+   "time": 1795264109.0,
+   "by": "cuenta 1",
+   "session": "731cf358",
+   "error": "Conflict: ludwig-v2-lm/ludwig-v2-lm-1 moved from 07285bfb"
+  }
+ ]
+}

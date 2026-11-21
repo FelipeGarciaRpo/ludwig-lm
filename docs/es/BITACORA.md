@@ -969,3 +969,26 @@ Todo lo que se corre, se mide o se decide, en orden. Cada entrada dice qué se h
   - el `.jsonl` y el `.relevo.json` del turno;
   - el turno 2 (G0-3) en la cuenta de un amigo, después de las 12:05 UTC;
   - la sesión 2 de la T1.
+
+## 2026-11-21 · Tronco, turno 2: del paso 549 al 1083, y el candado se soltó al reintentar
+
+- **Qué:** el segundo turno del tronco, otra vez en la cuenta 1. Además llegaron los `.jsonl` y `.relevo.json` de los turnos 1 y 2.
+- **Dónde:** Kaggle, 2×T4, 10.78 h de entrenamiento.
+- **Archivos:** en `results/tronco/`:
+  - `turno01_cuenta-1.jsonl` y `.relevo.json`;
+  - `turno02_cuenta-1.jsonl`, `.relevo.json` y `_final_salida_kaggle.txt` (el final del log).
+
+  Llegaron con CRLF y se restauraron; cada fila se reconstruye byte a byte, así que llegaron completos. El usuario de Kaggle, en el respaldo de los `.relevo.json`, quedó enmascarado.
+- **Resultado:**
+  - **Siguió desde el respaldo de Kaggle** (`ludwig2-respaldo-a2`, paso 549), leyéndolo donde está montado: estado exacto y primer lote idéntico. Es la primera reanudación del tronco, y salió desde Kaggle porque Hugging Face y el respaldo empataban en el paso 549.
+  - Cargar el checkpoint tomó 688.5 s, o sea 11.3 GB a ~17 MB/s. El montaje de Kaggle es lento para archivos grandes.
+  - Pasos 549–1083 (140M tokens), a 3,642 tokens/s en la última hora, con un pico de 12.90 GiB.
+  - Ningún salto de FP16. La escala de pérdida subió de 32,768 a 65,536 en el paso 1000, tras un tramo largo sin desbordes.
+  - **Un pico de pérdida en el paso 731:** entropía cruzada de 5.94, contra una media de 4.62 (unas 4.9 desviaciones). El freno del diseño se saltó ese paso sin actualizar, y en el 732 ya estaba en 4.39.
+  - **Validación:** 1.7153 bits por byte en el paso 549 y 1.1534 en el 1000 (inglés 1.44, español 1.34, Python 0.96, JS 0.82, matemática 1.15). Ningún experto muerto, y la entropía del router baja de 3.65 a 3.36.
+  - 4 subidas, y el respaldo en `ludwig2-respaldo-b`: los dos respaldos se turnan.
+  - La entrega del candado volvió a fallar después del aplastado. La celda la reintentó a los 30 s y lo soltó al primer intento, así que el arreglo del notebook funciona.
+- **Para el chat de diseño:**
+  - Cuando Hugging Face y el respaldo empatan, que es siempre, el relevo lee de Kaggle. Este turno tardó 11.5 min en cargar. Preferir Hugging Face en el empate se puede hacer en el notebook, sin tocar el `COMMIT`, pero falta medir una descarga de 11 GB.
+  - El ✅ de "reanudación en otra cuenta" de la celda solo mira que la reanudación sea exacta, no que la cuenta sea otra. Este turno fue de la misma cuenta, así que la G0 sigue esperando un turno de otra cuenta.
+- **Siguiente:** el turno 3, que ya arrancó; un turno en la cuenta de un amigo; la sesión 2 de la T1.
