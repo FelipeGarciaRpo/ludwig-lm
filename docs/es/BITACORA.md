@@ -1117,3 +1117,29 @@ Todo lo que se corre, se mide o se decide, en orden. Cada entrada dice qué se h
     - el experto más cargado, en ~1.5× la media.
   - En el primer tronco, la ganancia qk subió a 2.25 en 3,000 pasos. No cambia nada todavía, pero hay que vigilarla.
 - **Siguiente:** aplicar 0013, la sonda del 3270 en cualquier cuenta, y el turno 1 del `tronco2`.
+
+## 2026-11-25 · Patch 0013: el tronco empieza de nuevo como tronco2; las pruebas y su COMMIT
+
+- **Qué:**
+  - Se aplicó el patch 0013 (`35b1816`). El tronco vuelve a empezar desde el paso 0 como `tronco2` (P29–P31), con el router corregido.
+  - Encima va un cambio en el relevo (`a9286c4`): cuando un respaldo falla, el error muestra lo que dijo `kaggle` y no sus barras de progreso. Pipe lo aprobó.
+- **Dónde:** el PC, en CPU.
+- **Pruebas con el 0013:**
+  - pyflakes y los notebooks en sincronía;
+  - la prueba lógica de `bench_afmoe.py`, con el checkpoint exacto;
+  - `test_train_cpu.py` (41), `test_relay_cpu.py` (29) y `test_shards_cpu.py` (53), todas PASS;
+  - `scripts/toy_router_loop.py` reproduce byte a byte `results/tronco/toy_router_loop.txt`.
+- **Pruebas con el cambio del respaldo:** `test_relay_cpu.py` (30, con un respaldo rechazado cuyo error sí se ve), `test_train_cpu.py` (41) y la prueba lógica de `bench_afmoe.py`.
+- **La evidencia del P29, comprobada con los `.jsonl` del repo.** El criterio es la carga máx/media por encima de 3 en el 80% de 50 pasos, desde el paso 150.
+  - Con λ 0.01, se rompieron las corridas cuyo `z_router` bajó de ~1.3: el ×2 de 400 pasos en el paso 266 (1.31), el ×1 de 1,200 pasos en el 618 (0.77) y el tronco en el 1335 (0.79).
+  - El ×0.5 y el ×1 de 400 pasos no se rompieron. Su `z_router` no bajó de 3.31 y 1.46.
+  - Con λ 0.04 (×4), se rompió en el paso 150, con 2.18.
+  - Depende del nivel del router frente a λ, no del paso ni del LR.
+- **El `COMMIT` del tronco2 es `a9286c4`**, el mismo en todos sus turnos.
+  - El notebook ya lo trae y usa `configs/tronco_v2.json`.
+  - La T1 sigue con `75cd3a0`.
+  - Los checkpoints 3131 y 3270 del primer tronco quedan en Hugging Face, bajo su etiqueta.
+- **Siguiente:**
+  - antes, revisar el espacio de Kaggle y que cada cuenta del relevo tenga permiso de edición en los dos respaldos;
+  - la sonda sobre el checkpoint 3270 (P31);
+  - el turno 1 del tronco2.

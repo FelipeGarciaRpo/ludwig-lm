@@ -681,7 +681,7 @@ Un turno: toma el candado en Hugging Face, sigue desde el checkpoint más nuevo 
 | `sonda` | Mide el router de un checkpoint guardado en Hugging Face, por capa (P29), sin entrenar ni escribir nada | ~10 min |"""),
     code(r'''MODO = "tronco"          # tronco · sonda · prueba-relevo · prueba-respaldo · g0-16k
 CUENTA = "cuenta 1"      # tu etiqueta en el relevo: nunca el usuario de Kaggle ni el correo
-COMMIT = "3b9c114587b278cf6b4b16b679cb1c925f22c8f1"  # el commit del tronco: el MISMO en todos los turnos
+COMMIT = "a9286c4a7f3300dd981eac32e26a05b5027a0146"  # el commit del tronco2: el MISMO en todos sus turnos
 REPO_URL = "https://github.com/FelipeGarciaRpo/ludwig-lm"
 HF_REPO = "ludwig-v2-lm/ludwig-v2-lm-1"                       # privado, de la organización
 HF_REPO_PRUEBA = "ludwig-v2-lm/ludwig-v2-lm-1-relevo-prueba"  # privado: solo para prueba-relevo
