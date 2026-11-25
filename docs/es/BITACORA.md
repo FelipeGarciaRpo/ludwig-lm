@@ -992,3 +992,30 @@ Todo lo que se corre, se mide o se decide, en orden. Cada entrada dice qué se h
   - Cuando Hugging Face y el respaldo empatan, que es siempre, el relevo lee de Kaggle. Este turno tardó 11.5 min en cargar. Preferir Hugging Face en el empate se puede hacer en el notebook, sin tocar el `COMMIT`, pero falta medir una descarga de 11 GB.
   - El ✅ de "reanudación en otra cuenta" de la celda solo mira que la reanudación sea exacta, no que la cuenta sea otra. Este turno fue de la misma cuenta, así que la G0 sigue esperando un turno de otra cuenta.
 - **Siguiente:** el turno 3, que ya arrancó; un turno en la cuenta de un amigo; la sesión 2 de la T1.
+
+## 2026-11-25 · Tronco: el turno que siguió del paso 3131 se detuvo por picos de pérdida
+
+- **Qué:** un turno del tronco que siguió desde el paso 3131. Entre el turno 2 y este corrieron otros turnos que todavía no tienen sus archivos en el repo. Al empezar, Hugging Face tenía el paso 3131, `ludwig2-respaldo-a2` el 1608 y `ludwig2-respaldo-b` el 2151.
+- **Dónde:** Kaggle, 2×T4. Entrenó 4.74 h.
+- **Archivo:** `results/tronco/pasos_3131-3348_salida_kaggle.txt`, el log, con el usuario de Kaggle enmascarado.
+- **Resultado:**
+  - **Siguió desde Hugging Face,** porque los respaldos de Kaggle eran más viejos. Bajó el checkpoint de 11.29 GiB en 55.4 s y lo cargó en 28 s, con el estado y el primer lote exactos. Son 83 s en total, contra los 688 s que tardó el turno 2 leyendo el respaldo desde el montaje de Kaggle.
+  - Validación en el paso 3131: 0.8853 bits por byte (inglés 1.19, español 1.08, Python 0.67, JS 0.57, matemática 0.85).
+  - **Se detuvo solo en el paso 3348,** con el estado `stopped_spikes`. Saltó tres picos de pérdida en 37 pasos: 3.04 en el 3311, 3.72 en el 3333 y 3.04 en el 3347, con la pérdida alrededor de 2.6. La regla del diseño (5.4) salta un pico de más de 4σ y detiene la corrida con 3 picos en 200 pasos.
+  - Al detenerse no guardó: el último checkpoint es el 3270, subido a Hugging Face a las 3.1 h.
+  - **La carga de los expertos está muy desbalanceada.** Estuvo entre 7.3 y 8.3 veces la media durante todo el turno, contra 1.3–1.9 en los turnos 1 y 2. El techo, con 40 expertos y 4 por token, es 10.
+    - La entropía del router bajó a 2.60: era 3.36 en el paso 1000, y el máximo es 3.69.
+    - La ganancia qk subió a 2.25: era 1.25 en el paso 1000.
+    - La velocidad bajó de ~3,600 a ~3,300 tokens/s.
+  - Ningún salto de FP16. La escala está en 262,144 y la norma del gradiente en ~0.13.
+  - **El respaldo falló.** La subida a `ludwig2-respaldo-a2` llegó al 99% y `kaggle` devolvió un error. El evento guarda solo el principio del mensaje, que son barras de progreso, así que la causa no se ve. Los respaldos de Kaggle siguen en los pasos 1608 y 2151.
+  - La entrega del candado volvió a fallar, y el reintento la soltó al primer intento.
+- **Por qué no basta con lanzar el siguiente turno:** seguiría desde el 3270 con el mismo estado y los mismos datos, así que lo más probable es que vuelva a encontrar los mismos picos y se detenga en el mismo lugar.
+- **Para el chat de diseño, antes del siguiente turno:**
+  - el desbalance de los expertos, que habría empezado después del paso 1083, quizás cuando el LR llegó al pico en el paso 2000;
+  - los picos y la regla que detiene la corrida;
+  - qué cambiar en `configs/tronco_v1.json`, que se decide primero en `DECISIONS.md`.
+- **Siguiente:**
+  - los `.jsonl` y `.relevo.json` de los turnos desde el 3, para ver cuándo empezó el desbalance;
+  - revisar el espacio de Kaggle, porque los respaldos dejaron de actualizarse;
+  - la decisión del chat de diseño.

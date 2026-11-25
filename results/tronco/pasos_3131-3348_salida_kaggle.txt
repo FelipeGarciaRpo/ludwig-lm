@@ -1,0 +1,103 @@
+# Tronco, el turno que siguió desde el paso 3131 (MODO = "tronco"), en Kaggle 2×T4 con el commit 3b9c114. Log copiado del visor de Kaggle, sin editar salvo el usuario de Kaggle, enmascarado como <usuario>. Los turnos entre el paso 1083 y el 3131 todavía no tienen sus archivos en el repo.
+# Se detuvo solo en el paso 3348 (stopped_spikes: 3 picos de pérdida saltados en 200 pasos); el último checkpoint es el 3270. La carga de los expertos estuvo entre 7.3 y 8.3 veces la media, y el respaldo a ludwig2-respaldo-a2 falló al 99%.
+Time	#	Log Message
+7.5s	1	0.00s - Debugger warning: It seems that frozen modules are being used, which may
+7.5s	2	0.00s - make the debugger miss breakpoints. Please pass -Xfrozen_modules=off
+7.5s	3	0.00s - to python to disable frozen modules.
+7.5s	4	0.00s - Note: Debugging will proceed. Set PYDEVD_DISABLE_FILE_VALIDATION=1 to disable this validation.
+8.0s	5	0.00s - Debugger warning: It seems that frozen modules are being used, which may
+8.0s	6	0.00s - make the debugger miss breakpoints. Please pass -Xfrozen_modules=off
+8.0s	7	0.00s - to python to disable frozen modules.
+8.0s	8	0.00s - Note: Debugging will proceed. Set PYDEVD_DISABLE_FILE_VALIDATION=1 to disable this validation.
+10.4s	9	commit 3b9c114587b278cf6b4b16b679cb1c925f22c8f1
+36.6s	10	shards: 28 en datasets/<usuario>/ludwig2-shards-1/t1/manifest.json
+36.6s	11	/tmp: 2514 GiB libres
+37.0s	12	respaldo ludwig2-respaldo-a2: checkpoint.json (0 MiB), checkpoint/step_001608/.metadata (1 MiB), checkpoint/step_001608/__0_0.distcp (5779 MiB), checkpoint/step_001608/__1_0.distcp (5779 MiB), checkpoint/step_001608/meta.json (0 MiB), checkpoint/step_001608/rank0.pt (0 MiB), checkpoint/step_001608/rank1.pt (0 MiB)
+37.0s	13	respaldo ludwig2-respaldo-b: checkpoint.json (0 MiB), checkpoint/step_002151/.metadata (1 MiB), checkpoint/step_002151/__0_0.distcp (5779 MiB), checkpoint/step_002151/__1_0.distcp (5779 MiB), checkpoint/step_002151/meta.json (0 MiB), checkpoint/step_002151/rank0.pt (0 MiB), checkpoint/step_002151/rank1.pt (0 MiB)
+37.1s	14	Tesla T4, 15360 MiB
+37.1s	15	Tesla T4, 15360 MiB
+38.9s	16	candado: libre (el último turno fue de cuenta 1)
+39.3s	17	[relevo] lock until=1795490094
+42.3s	18	[relevo] resume_from where=hf step=3131
+97.8s	19	[relevo] download step=3131 seconds=55.4
+105.5s	20
+105.5s	21	*****************************************
+105.5s	22	Setting OMP_NUM_THREADS environment variable for each process to be 1 in default, to avoid your system being overloaded, please further tune the variable for optimal performance in your application as needed.
+105.5s	23	*****************************************
+105.7s	24
+105.7s	25	*****************************************
+105.7s	26	Setting OMP_NUM_THREADS environment variable for each process to be 1 in default, to avoid your system being overloaded, please further tune the variable for optimal performance in your application as needed.
+105.7s	27	*****************************************
+105.7s	28
+105.7s	29
+105.7s	30	*****************************************
+105.7s	31	Setting OMP_NUM_THREADS environment variable for each process to be 1 in default, to avoid your system being overloaded, please further tune the variable for optimal performance in your application as needed.
+105.7s	32	*****************************************
+154.9s	33	[resume] /tmp/relevo/from_hf/checkpoints/step_003131 at step 3131: state bit-exact = True (28 s)
+154.9s	34	[model] AFMoE 1.906B total, 0.491B active | moe=grouped_mm residual=fp32 reduce=fp16 momentum=cpu | 2 × Tesla T4
+154.9s	35	[data] build 386755d60af32507: 28 shards, 3.76B tokens (from token 820,772,864), meta=mask, val en, es, python, js, math | vocab 65536 | eos 0 | 262144 tokens per step = 2 GPUs × 8 × 2048 × 8 micro-steps
+155.1s	36	[resume] /tmp/relevo/from_hf/checkpoints/step_003131 at step 3131: state bit-exact = True (28 s)
+155.1s	37	[model] AFMoE 1.906B total, 0.491B active | moe=grouped_mm residual=fp32 reduce=fp16 momentum=cpu | 2 × Tesla T4
+155.1s	38	[data] build 386755d60af32507: 28 shards, 3.76B tokens (from token 820,772,864), meta=mask, val en, es, python, js, math | vocab 65536 | eos 0 | 262144 tokens per step = 2 GPUs × 8 × 2048 × 8 micro-steps
+196.2s	39	[eval] step 3131: val bpb 0.8853  en 1.1896  es 1.0765  python 0.6747  js 0.5719  math 0.8476  ce 2.4711  router entropy 2.595  qk gain 2.25  dead experts None  (41 s)
+196.4s	40	[eval] step 3131: val bpb 0.8853  en 1.1896  es 1.0765  python 0.6747  js 0.5719  math 0.8476  ce 2.4711  router entropy 2.595  qk gain 2.25  dead experts None  (41 s)
+199.2s	41	[resume] first batch identical to the saved hash = True
+199.4s	42	[resume] first batch identical to the saved hash = True
+274.7s	43	[train] step  3131  ce 2.6366  lr×1.000  gnorm 0.137  scale 262144  load max/mean 7.92  3,337 tok/s  peak 12.90 GiB
+274.9s	44	[train] step  3131  ce 2.6366  lr×1.000  gnorm 0.137  scale 262144  load max/mean 7.92  3,337 tok/s  peak 12.90 GiB
+965.9s	45	[train] step  3140  ce 2.4970  lr×1.000  gnorm 0.135  scale 262144  load max/mean 7.44  3,593 tok/s  peak 12.90 GiB
+966.1s	46	[train] step  3140  ce 2.4970  lr×1.000  gnorm 0.135  scale 262144  load max/mean 7.44  3,593 tok/s  peak 12.90 GiB
+2432.9s	47	[train] step  3160  ce 2.6763  lr×1.000  gnorm 0.130  scale 262144  load max/mean 7.74  3,603 tok/s  peak 12.90 GiB
+2433.1s	48	[train] step  3160  ce 2.6763  lr×1.000  gnorm 0.130  scale 262144  load max/mean 7.74  3,603 tok/s  peak 12.90 GiB
+3985.0s	49	[train] step  3180  ce 2.6104  lr×1.000  gnorm 0.136  scale 262144  load max/mean 7.89  3,596 tok/s  peak 12.90 GiB
+3985.2s	50	[train] step  3180  ce 2.6104  lr×1.000  gnorm 0.136  scale 262144  load max/mean 7.89  3,596 tok/s  peak 12.90 GiB
+5501.0s	51	[train] step  3200  ce 2.5721  lr×1.000  gnorm 0.131  scale 262144  load max/mean 8.26  3,311 tok/s  peak 12.90 GiB
+5501.2s	52	[train] step  3200  ce 2.5721  lr×1.000  gnorm 0.131  scale 262144  load max/mean 8.26  3,311 tok/s  peak 12.90 GiB
+7086.6s	53	[train] step  3220  ce 2.4335  lr×1.000  gnorm 0.132  scale 262144  load max/mean 7.36  3,304 tok/s  peak 12.90 GiB
+7086.8s	54	[train] step  3220  ce 2.4335  lr×1.000  gnorm 0.132  scale 262144  load max/mean 7.36  3,304 tok/s  peak 12.90 GiB
+8672.8s	55	[train] step  3240  ce 2.7331  lr×1.000  gnorm 0.156  scale 262144  load max/mean 7.26  3,320 tok/s  peak 12.90 GiB
+8673.0s	56	[train] step  3240  ce 2.7331  lr×1.000  gnorm 0.156  scale 262144  load max/mean 7.26  3,320 tok/s  peak 12.90 GiB
+10261.0s	57	[train] step  3260  ce 2.6846  lr×1.000  gnorm 0.159  scale 262144  load max/mean 7.74  3,304 tok/s  peak 12.90 GiB
+10261.2s	58	[train] step  3260  ce 2.6846  lr×1.000  gnorm 0.159  scale 262144  load max/mean 7.74  3,304 tok/s  peak 12.90 GiB
+11034.1s	59	[save] step 3270 (periodic) -> /tmp/relevo/ckpt/step_003270  11.29 GiB in 57 s
+11034.3s	60	[save] step 3270 (periodic) -> /tmp/relevo/ckpt/step_003270  11.29 GiB in 57 s
+11081.2s	61	[relevo] free what=start GiB=11.29
+11192.1s	62	[relevo] upload step=3270 GiB=11.29 seconds=110.9 kept=[3131, 3270]
+11909.2s	63	[train] step  3280  ce 2.8642  lr×1.000  gnorm 0.189  scale 262144  load max/mean 7.30  3,307 tok/s  peak 12.90 GiB
+11909.4s	64	[train] step  3280  ce 2.8642  lr×1.000  gnorm 0.189  scale 262144  load max/mean 7.30  3,307 tok/s  peak 12.90 GiB
+13496.5s	65	[train] step  3300  ce 2.6325  lr×1.000  gnorm 0.137  scale 262144  load max/mean 8.24  3,283 tok/s  peak 12.90 GiB
+13496.7s	66	[train] step  3300  ce 2.6325  lr×1.000  gnorm 0.137  scale 262144  load max/mean 8.24  3,283 tok/s  peak 12.90 GiB
+14368.5s	67	[alarm] step 3311: loss spike 3.038 skipped (1 in the last 200 steps)
+14368.7s	68	[alarm] step 3311: loss spike 3.038 skipped (1 in the last 200 steps)
+15085.4s	69	[train] step  3320  ce 2.5851  lr×1.000  gnorm 0.125  scale 262144  load max/mean 7.71  3,299 tok/s  peak 12.90 GiB
+15085.6s	70	[train] step  3320  ce 2.5851  lr×1.000  gnorm 0.125  scale 262144  load max/mean 7.71  3,299 tok/s  peak 12.90 GiB
+16117.3s	71	[alarm] step 3333: loss spike 3.715 skipped (2 in the last 200 steps)
+16117.5s	72	[alarm] step 3333: loss spike 3.715 skipped (2 in the last 200 steps)
+16673.2s	73	[train] step  3340  ce 2.7655  lr×1.000  gnorm 0.143  scale 262144  load max/mean 8.01  3,302 tok/s  peak 12.90 GiB
+16673.4s	74	[train] step  3340  ce 2.7655  lr×1.000  gnorm 0.143  scale 262144  load max/mean 8.01  3,302 tok/s  peak 12.90 GiB
+17227.3s	75	[alarm] step 3347: loss spike 3.037 skipped (3 in the last 200 steps)
+17227.3s	76	[end] stopped_spikes: step 3348, 877.7M tokens, 4.74 h, 3304 tok/s (last hour), peak 12.9 GiB reserved, 0 FP16 skips, val bpb 0.88526
+17227.5s	77	[alarm] step 3347: loss spike 3.037 skipped (3 in the last 200 steps)
+17227.5s	78	[end] stopped_spikes: step 3348, 877.7M tokens, 4.74 h, 3304 tok/s (last hour), peak 12.9 GiB reserved, 0 FP16 skips, val bpb 0.88526
+17487.5s	79	[relevo] backup_failed error=RuntimeError: kaggle datasets version <usuario>/ludwig2-respaldo-a2: B/s]
+17487.5s	80	 99%|█████████▉| 11.2G/11.3G [02:17<00:01, 95.8MB/s]
+17487.5s	81	 99%|█████████▉| 11.2G/11.3G [02:17<00:01, 88.9MB/s]
+17487.5s	82	 99%|█████████▉| 11.2G/11.3G
+17487.7s	83	[relevo] squash
+17488.3s	84	[relevo] release_failed error=Conflict: ludwig-v2-lm/ludwig-v2-lm-1 moved from 79c0bb1f
+17518.6s	85	candado: soltado al reintentar (intento 1)
+17518.6s	86
+17518.6s	87	stopped_spikes: paso 3348, 0.878B tokens, 4.742 h en esta sesión
+17518.6s	88	Condiciones de la G0 en este turno:
+17518.6s	89	  1. ≥6 h sin NaN, escala estable: ❌ (0 saltos de FP16, escala final 262144.0)
+17518.6s	90	  2. ≥2,600 tokens/s en la última hora: ✅ (3304)
+17518.6s	91	  3. ≤13.5 GiB reservada: ✅ (12.9)
+17518.6s	92	  4. ≥2 subidas: ❌ (1); reanudación en otra cuenta: ✅ (desde {'where': 'hf', 'step': 3131})
+17522.6s	93	/usr/local/lib/python3.13/dist-packages/mistune.py:435: SyntaxWarning: invalid escape sequence '\|'
+17522.6s	94	  cells[i][c] = re.sub('\\\\\|', '|', cell)
+17522.8s	95	/usr/local/lib/python3.13/dist-packages/nbconvert/filters/filter_links.py:36: SyntaxWarning: invalid escape sequence '\_'
+17522.8s	96	  text = re.sub(r'_', '\_', text) # Escape underscores in display text
+17524.1s	97	[NbConvertApp] Converting notebook __notebook__.ipynb to notebook
+17524.2s	98	[NbConvertApp] Writing 256746 bytes to __notebook__.ipynb
+17526.9s	99	[NbConvertApp] Converting notebook __notebook__.ipynb to html
+17527.8s	100	[NbConvertApp] Writing 548306 bytes to __results__.html
