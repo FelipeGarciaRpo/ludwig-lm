@@ -1019,3 +1019,43 @@ Todo lo que se corre, se mide o se decide, en orden. Cada entrada dice qué se h
   - los `.jsonl` y `.relevo.json` de los turnos desde el 3, para ver cuándo empezó el desbalance;
   - revisar el espacio de Kaggle, porque los respaldos dejaron de actualizarse;
   - la decisión del chat de diseño.
+
+## 2026-11-25 · Tronco, turnos 3 a 7: el balanceo de los expertos se rompió desde el paso ~1200
+
+- **Qué:** los registros de los turnos 3 a 7, y el análisis de la serie completa del tronco (pasos 0–3348).
+- **Dónde:** el PC. Los turnos corrieron en Kaggle, 2×T4.
+- **Archivos:**
+  - `results/tronco/turno03_cuenta-1` a `turno07_cuenta-1`, cada uno con su `.jsonl` y su `.relevo.json`. Se restauraron como los anteriores (cada fila se reconstruye byte a byte), con los usuarios de Kaggle enmascarados.
+  - `scripts/resumen_tronco.py`, que resume todos los turnos de `results/tronco/`, y su salida, `results/tronco/resumen_t01-t07.txt`.
+  - El log del turno 7 es `results/tronco/pasos_3131-3348_salida_kaggle.txt`.
+- **Los turnos:**
+  - Turno 3: pasos 1083–1608. Turno 4: 1608–2151. Turno 5: 2151–2633, detenido por picos. Turno 6: del 2601 (el último checkpoint del 5) al 3131. Turno 7: 3131–3348, detenido por picos.
+  - El turno 6 volvió a encontrar en el paso 2632 el pico que detuvo al 5: con el mismo estado y los mismos datos, el pico se repite.
+  - El turno 5 corrió en otra cuenta de Kaggle aunque dice "cuenta 1", porque su respaldo apuntó al usuario de esa cuenta. Su reanudación desde el respaldo de Kaggle fue exacta.
+  - Todas las reanudaciones fueron exactas.
+  - Los respaldos de los turnos 5, 6 y 7 fallaron. El del 5, por el usuario equivocado en `RESPALDO`. Los del 6 y el 7, al 99%, con la causa cortada en el mensaje.
+- **Cuándo se rompió el balanceo** (`resumen_t01-t07.txt`):
+  - Hasta el paso ~1150, la carga máx/media por paso estuvo en ~1.5 y la mínima en ~0.6.
+  - Desde el paso ~1200 (turno 3, con el LR en ×0.6), la carga mínima cae a 0: desde el 1400, en cada paso hay algún experto sin tokens. La máxima pasa de 2 desde el paso 1249, de 3 desde el 1335 y de 5 desde el 1767, y llega a ~7.8.
+  - Está en las primeras 5 capas MoE. En la ventana de 1000 pasos, su experto más cargado tiene 1.5 veces la media (paso 2000) y 1.7 (paso 3000), y las otras 20 capas ~1.00. Que la ventana se vea casi pareja y cada paso no quiere decir que los expertos que acaparan van rotando.
+  - La entropía del router baja de 3.36 (paso 1000) a 2.60, y la velocidad cae de ~3,650 a ~3,300 tokens/s.
+  - No empezó con el LR en el pico (paso 2000), sino en ×0.6. Después siguió creciendo.
+  - Hubo 16 picos de pérdida en los turnos 2–7, casi todos chicos: ~0.35–1 por encima de la media, con σ ~0.08.
+- **Explicación más probable** (falta confirmarla en un checkpoint):
+  - El router usa scores sigmoide, y elige el top-k de score + el sesgo de SMEBU.
+  - El z-loss del router, pensado para routers softmax, penaliza logsumexp(logits)² y empuja todos los logits hacia abajo. `z_router` bajó de 15 a ~0.8, y el quiebre empezó cuando pasó de ~0.9.
+  - Con los logits en la cola de la sigmoide, los pesos de la compuerta, que están normalizados, casi no dependen de su nivel, así que la entropía cruzada no frena la deriva. AdamW, que es el que actualiza el router, convierte ese gradiente chico pero constante en pasos del tamaño del LR.
+  - Con los scores cada vez más chicos, las diferencias entre expertos se achican, y el sesgo de SMEBU, que es igual para todos los tokens, termina decidiendo. Casi todos los tokens van a los mismos expertos; SMEBU los castiga, y en el paso siguiente gana otro grupo.
+  - Los picos de pérdida serían una consecuencia de esos cambios bruscos de expertos.
+- **Propuesta para el chat de diseño:**
+  1. **Confirmar antes de cambiar.** Cargar el checkpoint 3270 en Kaggle y medir, por capa, el nivel de los logits del router, la diferencia de score entre el 4.º y el 5.º experto, y el rango del sesgo. Si en las capas 0–4 el sesgo es mucho mayor que esa diferencia, la explicación queda confirmada.
+  2. **Seguir desde el 3270 con:**
+     - el z-loss del router en 0 (`router_z`); DeepSeek-V3 no lo usa con scores sigmoide;
+     - el sesgo de los expertos y su momento en cero al reanudar, con un flag nuevo en `train.py`, para que vuelvan a decidir los scores;
+     - SMEBU con `lam` 0.001 en vez de 0.01, para que el sesgo no vuelva a dominar;
+     - el `seq_aux` en 1e-3 en vez de 1e-4, una fuerza de balanceo que sí depende de cada token.
+  3. **El LR, sin cambios por ahora.** El problema empezó en ×0.6 y la validación siguió bajando (0.9604 en el paso 2000, 0.8853 en el 3131). Si el balanceo no se recupera con lo anterior, se revisa.
+  4. **La regla de los picos, opcional:** detener con 5 picos en 200 pasos en vez de 3, mientras el router se recupera.
+  - No hay checkpoint de antes del quiebre: Hugging Face tiene el 3131 y el 3270, y los respaldos, el 1608 y el 2151. Volver al 1608 perdería ~1,660 pasos, y ahí la carga ya estaba en ~4.5.
+  - Todo esto cambia `configs/tronco_v1.json` y `train.py`, y con eso el `COMMIT` del tronco. Primero se decide en `DECISIONS.md`.
+- **Siguiente:** que el chat de diseño decida, y no lanzar turnos hasta entonces. Revisar quién corrió los turnos 5 a 7, que cada cuenta tenga su `CUENTA` y permiso de edición en los dos respaldos, y que `RESPALDO` lleve siempre el usuario de Pipe.

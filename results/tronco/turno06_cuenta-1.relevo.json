@@ -1,0 +1,117 @@
+{
+ "session": "181a5b435a104a1a80b2d03fda462ac3",
+ "by": "cuenta 1",
+ "train_exit": 0,
+ "lock_lost": null,
+ "resumed_from": {
+  "where": "hf",
+  "step": 2601
+ },
+ "uploaded_step": 3131,
+ "last_local": "step_003131",
+ "events": [
+  {
+   "kind": "lock",
+   "time": 1795417183.7,
+   "by": "cuenta 1",
+   "session": "181a5b43",
+   "until": 1795424384
+  },
+  {
+   "kind": "resume_from",
+   "time": 1795417186.6,
+   "by": "cuenta 1",
+   "session": "181a5b43",
+   "where": "hf",
+   "step": 2601
+  },
+  {
+   "kind": "download",
+   "time": 1795417233.4,
+   "by": "cuenta 1",
+   "session": "181a5b43",
+   "step": 2601,
+   "seconds": 46.8
+  },
+  {
+   "kind": "free",
+   "time": 1795428217.3,
+   "by": "cuenta 1",
+   "session": "181a5b43",
+   "what": "start",
+   "GiB": 11.29
+  },
+  {
+   "kind": "upload",
+   "time": 1795428329.9,
+   "by": "cuenta 1",
+   "session": "181a5b43",
+   "step": 2747,
+   "GiB": 11.29,
+   "seconds": 112.6,
+   "kept": [
+    2601,
+    2747
+   ]
+  },
+  {
+   "kind": "upload",
+   "time": 1795439181.8,
+   "by": "cuenta 1",
+   "session": "181a5b43",
+   "step": 2894,
+   "GiB": 11.29,
+   "seconds": 108.6,
+   "kept": [
+    2747,
+    2894
+   ]
+  },
+  {
+   "kind": "upload",
+   "time": 1795450101.0,
+   "by": "cuenta 1",
+   "session": "181a5b43",
+   "step": 3040,
+   "GiB": 11.29,
+   "seconds": 116.1,
+   "kept": [
+    2894,
+    3040
+   ]
+  },
+  {
+   "kind": "upload",
+   "time": 1795456843.1,
+   "by": "cuenta 1",
+   "session": "181a5b43",
+   "step": 3131,
+   "GiB": 11.29,
+   "seconds": 80.3,
+   "kept": [
+    3040,
+    3131
+   ]
+  },
+  {
+   "kind": "backup_failed",
+   "time": 1795457088.3,
+   "by": "cuenta 1",
+   "session": "181a5b43",
+   "error": "RuntimeError: kaggle datasets version <usuario>/ludwig2-respaldo-a2: B/s]\n 99%|\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2589| 11.2G/11.3G [02:44<00:01, 79.0MB/s]\n 99%|\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2589| 11.2G/11.3G [02:44<00:01, 79.9MB/s]\n 99%|\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2589| 11.2G/11.3G"
+  },
+  {
+   "kind": "squash",
+   "time": 1795457088.7,
+   "by": "cuenta 1",
+   "session": "181a5b43"
+  },
+  {
+   "kind": "release_failed",
+   "time": 1795457089.2,
+   "by": "cuenta 1",
+   "session": "181a5b43",
+   "error": "Conflict: ludwig-v2-lm/ludwig-v2-lm-1 moved from 35e72d93"
+  }
+ ]
+}

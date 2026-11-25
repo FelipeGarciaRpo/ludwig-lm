@@ -1,0 +1,95 @@
+{
+ "session": "3894fc05c7e347f79048aa3205a13e47",
+ "by": "cuenta 1",
+ "train_exit": 0,
+ "lock_lost": null,
+ "resumed_from": {
+  "where": "kaggle",
+  "step": 2151
+ },
+ "uploaded_step": 2601,
+ "last_local": "step_002601",
+ "events": [
+  {
+   "kind": "lock",
+   "time": 1795375079.5,
+   "by": "cuenta 1",
+   "session": "3894fc05",
+   "until": 1795382280
+  },
+  {
+   "kind": "resume_from",
+   "time": 1795375083.0,
+   "by": "cuenta 1",
+   "session": "3894fc05",
+   "where": "kaggle",
+   "step": 2151
+  },
+  {
+   "kind": "in_place",
+   "time": 1795375083.0,
+   "by": "cuenta 1",
+   "session": "3894fc05",
+   "step": 2151
+  },
+  {
+   "kind": "upload",
+   "time": 1795386850.0,
+   "by": "cuenta 1",
+   "session": "3894fc05",
+   "step": 2301,
+   "GiB": 11.29,
+   "seconds": 123.6,
+   "kept": [
+    2151,
+    2301
+   ]
+  },
+  {
+   "kind": "upload",
+   "time": 1795397706.3,
+   "by": "cuenta 1",
+   "session": "3894fc05",
+   "step": 2451,
+   "GiB": 11.29,
+   "seconds": 113.3,
+   "kept": [
+    2301,
+    2451
+   ]
+  },
+  {
+   "kind": "upload",
+   "time": 1795408623.8,
+   "by": "cuenta 1",
+   "session": "3894fc05",
+   "step": 2601,
+   "GiB": 11.29,
+   "seconds": 114.6,
+   "kept": [
+    2451,
+    2601
+   ]
+  },
+  {
+   "kind": "backup_failed",
+   "time": 1795411100.9,
+   "by": "cuenta 1",
+   "session": "3894fc05",
+   "error": "RuntimeError: kaggle datasets version <usuario>/ludwig2-respaldo-a2: B/s]\n 99%|\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2589| 11.2G/11.3G [02:42<00:02, 57.2MB/s]\n 99%|\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2589| 11.2G/11.3G [02:43<00:01, 58.0MB/s]\n 99%|\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2589| 11.2G/11.3G [02:"
+  },
+  {
+   "kind": "squash",
+   "time": 1795411101.2,
+   "by": "cuenta 1",
+   "session": "3894fc05"
+  },
+  {
+   "kind": "release_failed",
+   "time": 1795411101.6,
+   "by": "cuenta 1",
+   "session": "3894fc05",
+   "error": "Conflict: ludwig-v2-lm/ludwig-v2-lm-1 moved from 98d216d3"
+  }
+ ]
+}

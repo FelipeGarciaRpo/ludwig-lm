@@ -1,0 +1,78 @@
+{
+ "session": "d03621208f9040db82786c65de2e1f4f",
+ "by": "cuenta 1",
+ "train_exit": 0,
+ "lock_lost": null,
+ "resumed_from": {
+  "where": "hf",
+  "step": 3131
+ },
+ "uploaded_step": 3270,
+ "last_local": "step_003270",
+ "events": [
+  {
+   "kind": "lock",
+   "time": 1795482893.8,
+   "by": "cuenta 1",
+   "session": "d0362120",
+   "until": 1795490094
+  },
+  {
+   "kind": "resume_from",
+   "time": 1795482896.9,
+   "by": "cuenta 1",
+   "session": "d0362120",
+   "where": "hf",
+   "step": 3131
+  },
+  {
+   "kind": "download",
+   "time": 1795482952.3,
+   "by": "cuenta 1",
+   "session": "d0362120",
+   "step": 3131,
+   "seconds": 55.4
+  },
+  {
+   "kind": "free",
+   "time": 1795493935.7,
+   "by": "cuenta 1",
+   "session": "d0362120",
+   "what": "start",
+   "GiB": 11.29
+  },
+  {
+   "kind": "upload",
+   "time": 1795494046.6,
+   "by": "cuenta 1",
+   "session": "d0362120",
+   "step": 3270,
+   "GiB": 11.29,
+   "seconds": 110.9,
+   "kept": [
+    3131,
+    3270
+   ]
+  },
+  {
+   "kind": "backup_failed",
+   "time": 1795500342.0,
+   "by": "cuenta 1",
+   "session": "d0362120",
+   "error": "RuntimeError: kaggle datasets version <usuario>/ludwig2-respaldo-a2: B/s]\n 99%|\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2589| 11.2G/11.3G [02:17<00:01, 95.8MB/s]\n 99%|\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2589| 11.2G/11.3G [02:17<00:01, 88.9MB/s]\n 99%|\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2589| 11.2G/11.3G"
+  },
+  {
+   "kind": "squash",
+   "time": 1795500342.3,
+   "by": "cuenta 1",
+   "session": "d0362120"
+  },
+  {
+   "kind": "release_failed",
+   "time": 1795500342.7,
+   "by": "cuenta 1",
+   "session": "d0362120",
+   "error": "Conflict: ludwig-v2-lm/ludwig-v2-lm-1 moved from 79c0bb1f"
+  }
+ ]
+}

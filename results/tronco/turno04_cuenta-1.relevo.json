@@ -1,0 +1,110 @@
+{
+ "session": "bc766e5050ac417a88d8ffbad74f7f2f",
+ "by": "cuenta 1",
+ "train_exit": 0,
+ "lock_lost": null,
+ "resumed_from": {
+  "where": "kaggle",
+  "step": 1608
+ },
+ "uploaded_step": 2151,
+ "last_local": "step_002151",
+ "events": [
+  {
+   "kind": "lock",
+   "time": 1795312199.2,
+   "by": "cuenta 1",
+   "session": "bc766e50",
+   "until": 1795319399
+  },
+  {
+   "kind": "resume_from",
+   "time": 1795312203.5,
+   "by": "cuenta 1",
+   "session": "bc766e50",
+   "where": "kaggle",
+   "step": 1608
+  },
+  {
+   "kind": "in_place",
+   "time": 1795312203.5,
+   "by": "cuenta 1",
+   "session": "bc766e50",
+   "step": 1608
+  },
+  {
+   "kind": "upload",
+   "time": 1795323962.4,
+   "by": "cuenta 1",
+   "session": "bc766e50",
+   "step": 1760,
+   "GiB": 11.29,
+   "seconds": 115.5,
+   "kept": [
+    1608,
+    1760
+   ]
+  },
+  {
+   "kind": "upload",
+   "time": 1795334823.4,
+   "by": "cuenta 1",
+   "session": "bc766e50",
+   "step": 1913,
+   "GiB": 11.29,
+   "seconds": 115.8,
+   "kept": [
+    1760,
+    1913
+   ]
+  },
+  {
+   "kind": "upload",
+   "time": 1795345743.7,
+   "by": "cuenta 1",
+   "session": "bc766e50",
+   "step": 2065,
+   "GiB": 11.29,
+   "seconds": 117.2,
+   "kept": [
+    1913,
+    2065
+   ]
+  },
+  {
+   "kind": "upload",
+   "time": 1795351883.1,
+   "by": "cuenta 1",
+   "session": "bc766e50",
+   "step": 2151,
+   "GiB": 11.29,
+   "seconds": 77.6,
+   "kept": [
+    2065,
+    2151
+   ]
+  },
+  {
+   "kind": "backup",
+   "time": 1795352087.9,
+   "by": "cuenta 1",
+   "session": "bc766e50",
+   "dataset": "<usuario>/ludwig2-respaldo-b",
+   "step": 2151,
+   "seconds": 204.2
+  },
+  {
+   "kind": "squash",
+   "time": 1795352088.3,
+   "by": "cuenta 1",
+   "session": "bc766e50"
+  },
+  {
+   "kind": "release_failed",
+   "time": 1795352088.7,
+   "by": "cuenta 1",
+   "session": "bc766e50",
+   "error": "Conflict: ludwig-v2-lm/ludwig-v2-lm-1 moved from 75bb538d"
+  }
+ ]
+}
