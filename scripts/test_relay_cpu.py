@@ -270,6 +270,20 @@ def test_relay():
     logs = [f for f in json.loads((WORK / "store" / "commits.json").read_text())[-1]["tree"] if f.startswith("logs/")]
     check(logs and all("cuenta" in f for f in logs), "each session's log is in the store, named by its account label")
 
+    # P30: the trunk restarts under a new tag in the same repository, and the first run's checkpoints stay
+    args4 = dict(train_args(manifest, log, "tronco2"), steps=4, save_at=[2])
+    s4 = Session(store, None, "cuenta 4", "tronco2", WORK / "cuenta-4",
+                 lambda r, d: train_command(args4, r, d, python=sys.executable), log, lease_s=3600, renew_s=3600,
+                 poll_s=0.5).run()
+    idx = json.loads(store.read(INDEX, store.head()))["checkpoints"]
+    tree = json.loads((WORK / "store" / "commits.json").read_text())[-1]["tree"]
+    check(s4["resumed_from"]["where"] is None and s4["train_exit"] == 0
+          and [(c["tag"], c["step"]) for c in idx] == [("tronco", 9), ("tronco", 12), ("tronco2", 2), ("tronco2", 4)],
+          "a run with a new tag starts from scratch and rotates only its own checkpoints")
+    check(all(c["path"] == f"checkpoints/{c['tag']}/step_{c['step']:06d}" for c in idx)
+          and any(f.startswith("checkpoints/tronco/step_000012/") for f in tree),
+          "each run's checkpoints live under checkpoints/<tag>/, and the first run's step 12 is still there")
+
 
 def main():
     _rmtree(WORK)

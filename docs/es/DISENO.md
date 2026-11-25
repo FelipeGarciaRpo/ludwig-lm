@@ -39,6 +39,18 @@
 > 4. **Topes por tipo** para el texto escrito por modelos. La v3 queda en 18.5% del tronco.
 > 5. **Sin prueba proxy de mezcla antes del tronco:** la reemplaza la evaluación por dominio desde el paso 0.
 
+> **El tronco desde cero (25 de noviembre de 2026)** (`results/tronco/`; decisiones P29–P31 de [`../DECISIONS.md`](../DECISIONS.md)):
+> 1. **El primer tronco se rompió en el paso ~1250.** En las primeras 5 capas MoE, el experto más cargado de cada paso pasó de ~1.5 a ~7.8 veces la media, y los acaparadores se turnaban. Se detuvo por picos de pérdida en el paso 3348.
+> 2. **La causa (P29):** el z-loss del router, pensado para routers softmax, empujó los scores sigmoide hacia la cola. Ahí se achica la diferencia entre el 4.º y el 5.º experto de cada token, y el paso del sesgo de SMEBU (λ 0.01) la supera: un solo paso re-enruta a casi todos los tokens a la vez. El quiebre empieza en el mismo nivel del router en dos corridas con calendarios muy distintos, y un modelo de juguete del lazo lo reproduce (`scripts/toy_router_loop.py`).
+> 3. **El tronco empieza de cero como `tronco2`** (P30, `configs/tronco_v2.json`):
+>    - sin z-loss del router;
+>    - SMEBU con λ 0.01 hasta el paso 500 y 0.001 después;
+>    - `seq_aux` 1e-3;
+>    - cada paso registra λ contra la brecha más chica entre las capas, y la corrida se detiene y guarda si el balanceo se rompe.
+>
+>    El LR, los datos y el resto no cambian.
+> 4. **La sonda (P31)** mide el router del checkpoint 3270 para confirmar el diagnóstico, sin frenar al `tronco2`.
+
 **Leyenda:** ✅ decidido · ❓ decide Pipe · 📏 se mide antes de fijarlo · 🧪 se prueba en corrida corta · 🟢🟡🔴 licencia de datos (ver 4.8)
 
 ---
@@ -445,6 +457,8 @@ Esto sigue siendo una estimación: la cifra que vale es la que mida la T0.2 (`sc
 | Gradientes no finitos | Más de 10 en 1,000 pasos | Alarma; revisar el escalador |
 | Escalador de pérdida | Por debajo de 1 | Alarma (desborde de FP16) |
 | Carga por experto | Máx/media > 3 durante 500 pasos | Subir el coeficiente de balanceo |
+| Balanceo roto | Experto más cargado > 3× la media en el 80% de 50 pasos, desde el paso 200 | Detener y guardar (P30) |
+| Brecha del router | λ de SMEBU > 5× la brecha más chica entre las capas (la mediana entre el 4.º y el 5.º score de cada token) durante 50 pasos | Alarma: revisar λ y el nivel del router (P29) |
 | Experto muerto | < 10% de la carga media durante 1,000 pasos | Alarma; revisar |
 | Logit máximo de atención | Crece sin parar | Revisar QK-norm |
 | Tokens/s | < ~2,500 | Revisar kernels y sincronización |
@@ -662,8 +676,8 @@ Se agregan a medida que existan: `tokenizer/`, `data/` (recetas, lector, descont
 | T0.2 | ✅ **Velocidad y memoria** (T0.2 v2, `notebooks/t0_2v2_afmoe_2xT4.ipynb`): piezas de velocidad, micro-lote, 2K/4K/16K, guardado y carga, balanceo | 2×T4 | ~1 | Hecho el 12 nov |
 | T0.3 + T2 | ✅ **LR y estabilidad en FP16** (`notebooks/t0_3_t2_lr_2xT4.ipynb`): dos rondas, todas estables. El tronco va a ×1, la receta del Ludwig 1 (P25) | 2×T4 | ~3 × 9.5 + 4 × 11 | Hecho el 15 nov |
 | T1 | **Datos:** fuentes cerradas (4.2, mezcla v3); pre-tokenizado con descontaminación y manifiestos. El código está listo y probado (P18–P24). La sesión 1 hizo 28 shards en 10.4 h; faltan unas 5 sesiones, que pueden correr mientras corre el tronco (`notebooks/t1_shards_cpu.ipynb`) | CPU | ~10 min + ~6 × 11 | Los 168 shards del tronco, con sus manifiestos |
-| G0 | **Compuerta G0** (5.7, P27): G0-0 (ensayo del relevo), G0-1 (16K), y los dos primeros turnos del tronco, que cuentan si pasan | 2×T4 | ~1 + los dos primeros turnos | Pasan las 5 condiciones |
-| T3 | **Tronco** hasta 22.5B | Relevo | ~1,550–2,450 | — |
+| G0 | ✅ **Compuerta G0** (5.7, P27): G0-0 (ensayo del relevo) y G0-1 (16K) el 17 nov, las condiciones 1–4 en el turno 1 del tronco y la reanudación en otra cuenta en el turno 5 | 2×T4 | ~1 + los dos primeros turnos | Hecho en el primer tronco; el `tronco2` usa el mismo relevo y no la repite |
+| T3 | **Tronco** hasta 22.5B. El primer intento llegó al paso 3348 con el balanceo de los expertos roto desde el ~1250 (P29); desde el 25 nov, `tronco2` desde cero (P30) | Relevo | ~1,550–2,450 | — |
 | T4 | **Rama de la v1** (2.5B, con 16K y MTP) | Relevo | ~225–355 | Base lista |
 | T5 | **SFT, MTP, GGUF y evaluación** | 2×T4 | ~60–150 | Ludwig 2 · 25B publicado |
 

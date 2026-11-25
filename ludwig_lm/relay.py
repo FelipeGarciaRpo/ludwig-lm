@@ -3,9 +3,14 @@
 **Hugging Face is the primary store**, a private model repository of the project's organization:
 
     lock.json                    who has the relay: account label, session, until when (a lease)
-    checkpoints/index.json       the complete checkpoints, oldest first (the newest ``keep``)
-    checkpoints/step_XXXXXX/     one full-state checkpoint (ludwig_lm.checkpoint), ~11.3 GB
+    checkpoints/index.json       the complete checkpoints, oldest first: the newest ``keep`` of each run (tag)
+    checkpoints/<tag>/step_XXXXXX/  one full-state checkpoint (ludwig_lm.checkpoint), ~11.3 GB. The first
+                                 trunk (tag ``tronco``) wrote ``checkpoints/step_XXXXXX/``; its entries keep
+                                 that path
     logs/<session>.jsonl         each session's training log
+
+Each run rotates only its own checkpoints, so the trunk restarted under a new tag (P30) leaves the last
+checkpoints of the first one where they are.
 
 Every write is one commit whose parent is the last head this session saw. If another session committed
 in between (because it took the lock after it expired), the commit fails and this session stops: the lock
@@ -367,14 +372,16 @@ class Session:
 
     def upload(self, ckpt: Path):
         meta = json.loads((ckpt / "meta.json").read_text())
-        step, t = meta["step"], time.time()
-        idx = [c for c in self.index() if c["step"] != step]
-        entry = {"step": step, "tokens": meta["tokens"], "path": f"checkpoints/{ckpt.name}", "tag": meta.get("tag"),
+        step, t, tag = meta["step"], time.time(), meta.get("tag") or self.tag
+        idx = [c for c in self.index() if not (c.get("tag") == tag and c["step"] == step)]
+        path = f"checkpoints/{tag}/{ckpt.name}"
+        entry = {"step": step, "tokens": meta["tokens"], "path": path, "tag": tag,
                  "reason": meta.get("reason"), "by": self.label, "session": self.session[:8], "uploaded": self.clock(),
                  "files": {f.name: f.stat().st_size for f in ckpt.iterdir()}}
         idx.append(entry)
-        drop, idx = idx[:-self.keep], idx[-self.keep:]
-        adds = {f"checkpoints/{ckpt.name}/{f.name}": str(f) for f in ckpt.iterdir()}
+        drop = [c for c in idx if c.get("tag") == tag][:-self.keep]       # only this run's: other runs stay
+        idx = [c for c in idx if c not in drop]
+        adds = {f"{path}/{f.name}": str(f) for f in ckpt.iterdir()}
         adds[INDEX] = json.dumps({"checkpoints": idx}, indent=1).encode()
         if self.log_path.exists():
             adds[f"logs/{time.strftime('%Y%m%d', time.gmtime(self.clock()))}-{_slug(self.label)}-{self.session[:8]}.jsonl"] = \
@@ -387,7 +394,7 @@ class Session:
         self.last_renew = self.clock()
         gib = sum(entry["files"].values()) / 2**30
         self.event("upload", step=step, GiB=round(gib, 2), seconds=round(time.time() - t, 1),
-                   kept=[c["step"] for c in idx])
+                   kept=[c["step"] for c in idx if c.get("tag") == tag])
 
     # ---- the turn
     def run(self) -> dict:

@@ -5,7 +5,7 @@
 **A 2B-parameter Mixture-of-Experts language model with 0.49B active parameters, trained from scratch on free Kaggle GPUs and open down to the last log line.**
 
 ![License](https://img.shields.io/badge/license-Apache--2.0-blue)
-![Status](https://img.shields.io/badge/status-phase%20T0-orange)
+![Status](https://img.shields.io/badge/status-phase%20T3-orange)
 ![Parameters](https://img.shields.io/badge/params-1.91B%20total%20%2F%200.49B%20active-6f42c1)
 ![Hardware](https://img.shields.io/badge/trained%20on-Kaggle%202%C3%97T4-20BEFF)
 ![Languages](https://img.shields.io/badge/languages-EN%20%2B%20ES-2ea44f)
@@ -14,7 +14,7 @@
 
 </div>
 
-> **Status, November 15, 2026.** Design v1.2 is approved: Ludwig 2 is stored in the AFMoE format of Arcee's Trinity models, which runs in llama.cpp unpatched. The real training loop ran two rounds of short runs on 2×T4: all stable in FP16, at **3,300–3,600 tokens/s, ~1,900–2,100 h for 25B tokens**, and the trunk trains at ×1, Ludwig 1's learning rate. The 64K tokenizer is fixed ([`tokenizer/`](tokenizer/)): 4.16 bytes per token on the trunk mix, against 4.03 for Qwen3's 151K. The trunk's data becomes pre-tokenized shards on Kaggle's CPU ([notebook](notebooks/t1_shards_cpu.ipynb)). The relay that trains it in turns across accounts is ready: checkpoints on Hugging Face with a lock, and a backup on Kaggle ([notebook](notebooks/tronco_relevo_2xT4.ipynb)). **There are no weights yet.** This repository documents the project from its first test.
+> **Status, November 25, 2026.** Design v1.2 is approved: Ludwig 2 is stored in the AFMoE format of Arcee's Trinity models, which runs in llama.cpp unpatched. The trunk started on November 18, relayed across Kaggle accounts (checkpoints on Hugging Face with a lock, a backup on Kaggle, [notebook](notebooks/tronco_relevo_2xT4.ipynb)), and passed the gate G0. On November 25 it restarts from step 0. From step ~1,250, its expert balance had broken in the first 5 MoE layers: the router z-loss, made for softmax routers, pushed the sigmoid scores into their tail, where each step of the balancing bias re-routed most tokens at once ([`docs/DECISIONS.md`](docs/DECISIONS.md), P29–P30). The restart drops that loss, makes the bias's step 10× smaller after step 500, and stops the run if the balance breaks. Training runs at **3,300–3,600 tokens/s on 2×T4, ~1,900–2,100 h for 25B tokens**, at ×1, Ludwig 1's learning rate. The 64K tokenizer is fixed ([`tokenizer/`](tokenizer/)), and the trunk's data are pre-tokenized shards built on Kaggle's CPU ([notebook](notebooks/t1_shards_cpu.ipynb)). **There are no weights yet.** This repository documents the project from its first test.
 
 ## Why Ludwig 2
 
@@ -165,6 +165,7 @@ The real model and the real training loop ([`scripts/train.py`](scripts/train.py
   - At equal steps, ×2's lead over ×1 falls from 6.65% at step 300 to 1.01% at step 800.
   - ×1 reaches 1.0094 at step 1,100, inside its decay.
 - **The trunk trains at ×1, Ludwig 1's recipe:** that is what the rule fixed in advance gives ([`scripts/lr_horizon.py`](scripts/lr_horizon.py); [`docs/DECISIONS.md`](docs/DECISIONS.md), P9 and P25).
+- **Read later (P29):** both 1,200-step runs had their expert balance broken by step 800 (×1 from step 544, ×2 from 470), by the same router z-loss that broke the first trunk. ×1 stays as the safe choice.
 - **Identical runs differ by ≤0.11%** after 300 steps, because GPU sums are not bit-for-bit repeatable. This does not affect the resume checks (P28).
 - **The speed differences are the machines,** not the LR: within each run the speed does not move with the expert load.
 
@@ -264,10 +265,10 @@ ludwig-lm/
 │                   # · relay.py: the relay's lock, uploads and backup
 │                   # · checkpoint.py: checkpoints with a verified resume · model.py: format A (fallback)
 ├── configs/        # ludwig2_afmoe.json (the real model), tiny_afmoe.json (tests), data_v3.json (the trunk's data),
-│                   # tronco_v1.json (the trunk's training arguments);
+│                   # tronco_v1.json, tronco_v2.json (the trunk's training arguments: the first run, the restart);
 │                   # ludwig2.json, tiny.json (format A)
 ├── scripts/        # train.py (the training loop) and test_train_cpu.py, build_shards.py (T1) and test_shards_cpu.py,
-│                   # test_relay_cpu.py,
+│                   # test_relay_cpu.py, toy_router_loop.py (P29),
 │                   # train_tokenizer.py, smoke_tokenizer.py (T0.1b),
 │                   # bench_afmoe.py (T0.2 v2), smoke_format_afmoe.py (T0.1-C),
 │                   # make_notebooks.py, convert_gguf.py, format-A tools
@@ -291,8 +292,8 @@ ludwig-lm/
 - [x] **Data mix v3** Sources and splits closed, code included ([`results/datos_tronco_v3/`](results/datos_tronco_v3/))
 - [ ] **T1** Data: the builder and the shard reader are ready and tested ([`scripts/build_shards.py`](scripts/build_shards.py)); the build takes about 6 Kaggle CPU sessions, and the first one has made 28 of the 168 shards ([notebook](notebooks/t1_shards_cpu.ipynb))
 - [x] **Relay** Checkpoints on Hugging Face with a lock, a backup on Kaggle, tested on three turns ([notebook](notebooks/tronco_relevo_2xT4.ipynb))
-- [ ] **G0** Gate: the relay's dry run, 50 steps at 16K, and the trunk's first two turns (≥6 h sustained, uploads, a resume on another account)
-- [ ] **T3** Trunk to 22.5B tokens
+- [x] **G0** Gate: the relay's dry run, 50 steps at 16K, and the trunk's turns 1 and 5 (≥6 h sustained, uploads, a resume on another account)
+- [ ] **T3** Trunk to 22.5B tokens: restarted from step 0 on November 25, after the first run's expert balance broke at step ~1,250 (P29, P30)
 - [ ] **T4** v1 branch: 2.5B tokens, 16K
 - [ ] **T5** SFT, GGUF, evaluation: **Ludwig 2 · 25B released**
 

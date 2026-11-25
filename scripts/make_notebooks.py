@@ -661,6 +661,8 @@ tronco.cells = [
 
 Un turno: toma el candado en Hugging Face, sigue desde el checkpoint más nuevo (de Hugging Face o de uno de los dos respaldos de Kaggle), entrena ~11 h, sube un checkpoint cada 3 h mientras entrena, deja el último en el respaldo que toca, aplasta el historial y suelta el candado (`ludwig_lm/relay.py`, D15, P26).
 
+**Desde el 25 de noviembre de 2026, el tronco es `tronco2`** (`configs/tronco_v2.json`, P30): empieza de cero con el router corregido, porque el balanceo de los expertos del primer intento se rompió en el paso ~1250 (P29). Los checkpoints del primer intento (`tronco`) quedan en Hugging Face bajo su etiqueta: cada corrida rota solo los suyos.
+
 **Una vez por cuenta:**
 1. Cuenta de Hugging Face, invitada a la organización del proyecto con rol *write*. Un token *fine-grained* con escritura solo en el repo del relevo.
 2. En Kaggle, *Add-ons → Secrets*: `HF_TOKEN` (ese token), y `KAGGLE_USERNAME` y `KAGGLE_KEY` (el token de la API de tu cuenta, *Settings → API*). Cada uno usa el suyo.
@@ -675,8 +677,9 @@ Un turno: toma el candado en Hugging Face, sigue desde el checkpoint más nuevo 
 | `tronco` | Un turno del tronco | ~11.5 h |
 | `prueba-relevo` | **G0-0:** el relevo completo con un modelo diminuto, contra `HF_REPO_PRUEBA`: candado, subida, aplastado, respaldo y reanudación exacta. Solo antes del primer turno del tronco | ~15 min |
 | `prueba-respaldo` | Sigue desde el respaldo que dejó la última `prueba-relevo`, sin Hugging Face (como `SIN_CANDADO`): lo lee donde Kaggle lo montó y respalda en el otro dataset. Solo antes del primer turno del tronco | ~5 min |
-| `g0-16k` | **G0-1:** 50 pasos del modelo real a 16K de contexto, sin guardar (condición 5 de la G0) | ~30–60 min |"""),
-    code(r'''MODO = "tronco"          # tronco · prueba-relevo · prueba-respaldo · g0-16k
+| `g0-16k` | **G0-1:** 50 pasos del modelo real a 16K de contexto, sin guardar (condición 5 de la G0) | ~30–60 min |
+| `sonda` | Mide el router de un checkpoint guardado en Hugging Face, por capa (P29), sin entrenar ni escribir nada | ~10 min |"""),
+    code(r'''MODO = "tronco"          # tronco · sonda · prueba-relevo · prueba-respaldo · g0-16k
 CUENTA = "cuenta 1"      # tu etiqueta en el relevo: nunca el usuario de Kaggle ni el correo
 COMMIT = "3b9c114587b278cf6b4b16b679cb1c925f22c8f1"  # el commit del tronco: el MISMO en todos los turnos
 REPO_URL = "https://github.com/FelipeGarciaRpo/ludwig-lm"
@@ -684,6 +687,7 @@ HF_REPO = "ludwig-v2-lm/ludwig-v2-lm-1"                       # privado, de la o
 HF_REPO_PRUEBA = "ludwig-v2-lm/ludwig-v2-lm-1-relevo-prueba"  # privado: solo para prueba-relevo
 RESPALDO = ["DUENO/ludwig2-respaldo-a", "DUENO/ludwig2-respaldo-b"]   # los dos datasets privados de Pipe
 SIN_CANDADO = False      # True solo si Hugging Face está caído y se coordinó por WhatsApp: sigue desde Kaggle
+SONDA = ("tronco", 3270)  # MODO sonda: la etiqueta y el paso del checkpoint que se mide
 import time
 T_SESION = time.time()'''),
     code(r'''import os, subprocess, sys, json, glob, shutil
@@ -703,7 +707,7 @@ for k in ("HF_TOKEN", "KAGGLE_USERNAME", "KAGGLE_KEY"):
 os.environ["PYTORCH_CUDA_ALLOC_CONF"] = "expandable_segments:True"
 sys.path.insert(0, ".")
 from ludwig_lm.relay import HFStore, KaggleBackup, Lock, LocalStore, Session, train_command, Busy
-TRONCO = json.load(open("configs/tronco_v1.json"))
+TRONCO = json.load(open("configs/tronco_v2.json"))       # P30: el tronco desde cero, con el router corregido
 manifiestos = sorted(glob.glob("/kaggle/input/**/manifest.json", recursive=True),
                      key=lambda m: len(json.load(open(m))["shards"]))
 MANIFIESTO = manifiestos[-1] if manifiestos else None
@@ -856,6 +860,44 @@ Pasa si sigue desde Kaggle en el paso del respaldo, sin copiarlo, con el estado 
               f"{f['tokens_per_s_mean']} tokens/s")
     else:
         print("G0-1 ❌ no terminó: ver el log de arriba (¿out of memory?)")'''),
+    md("""## Sonda del router · `sonda`
+
+Baja de Hugging Face el checkpoint de `SONDA` (etiqueta y paso) y lo evalúa con `train.py --eval-only`, en las dos GPUs: la validación y, por capa MoE, el estado del router (P29). No toma el candado ni escribe nada en Hugging Face ni en Kaggle, así que puede correr mientras otra cuenta tiene un turno.
+
+Por capa imprime:
+- **la brecha:** la mediana, sobre los tokens, de la diferencia entre el score del experto k-ésimo y el del (k+1)-ésimo;
+- **λ/brecha:** cuánto puede mover SMEBU esa elección en un paso. Con más de ~5, un paso del sesgo re-enruta a casi todos los tokens a la vez (en el modelo de juguete del P29: estable hasta ~4, colapso desde ~10);
+- **el rango del sesgo** y la fracción de tokens cuyos expertos cambian por el sesgo;
+- **el experto más cargado** en la validación, en veces la media.
+
+En el checkpoint 3270 del primer intento, el diagnóstico del P29 queda confirmado si λ/brecha está alto en las primeras 5 capas MoE y bajo en las otras 20. **Entradas:** los datasets de shards, como en un turno."""),
+    code(r'''if MODO == "sonda":
+    etiqueta, paso = SONDA
+    tienda = HFStore(HF_REPO, os.environ.get("HF_TOKEN"))          # solo lee: ni candado ni commits
+    cabeza = tienda.head()
+    idx = json.loads(tienda.read("checkpoints/index.json", cabeza))["checkpoints"]
+    elegido = [c for c in idx if c.get("tag") == etiqueta and c["step"] == paso]
+    if not elegido:
+        raise SystemExit(f"⛔ {HF_REPO} no tiene {etiqueta} {paso}; tiene: "
+                         + ", ".join(f"{c.get('tag')} {c['step']}" for c in idx))
+    t = time.time()
+    ruta = tienda.download(elegido[0]["path"], cabeza, "/tmp/sonda")
+    print(f"checkpoint {etiqueta} {paso}: bajado en {time.time() - t:.0f} s")
+    base = json.load(open("configs/tronco_v1.json")) if etiqueta == "tronco" else TRONCO
+    LOG = f"/kaggle/working/results/tronco/sonda-{etiqueta}-{paso}.jsonl"
+    os.makedirs(os.path.dirname(LOG), exist_ok=True)
+    a = dict(base["args"], shards=MANIFIESTO, shard_roots="/kaggle/input", tag=f"sonda-{etiqueta}", out=LOG,
+             eval_only=True)
+    p = subprocess.run(train_command(a, str(ruta), "/tmp/sonda_ckpt"))
+    ev = [r for r in map(json.loads, open(LOG)) if r["type"] == "eval"][-1:] if os.path.exists(LOG) else []
+    if p.returncode or not ev:
+        raise SystemExit("⛔ la sonda no terminó: ver el log de arriba")
+    e = ev[0]
+    print(f"\nval bpb {e['val_bpb']} · λ de SMEBU en ese paso {e['lam']}")
+    print("capa MoE |  brecha | λ/brecha | rango del sesgo | el sesgo decide | más cargado")
+    for i, (m, d, b, c) in enumerate(zip(e["router_margin"], e["bias_decides"], e["bias_range"],
+                                         e["val_load_max_over_mean"])):
+        print(f"{i:8d} | {m:7.1e} | {e['lam'] / max(m, 1e-12):8.1f} | {b:15.3f} | {d:15.0%} | {c:9.2f}×")'''),
     md("""## Tronco · un turno
 
 Entrena hasta ~11 h desde que empezó la sesión y deja ~45 min para la subida final, el respaldo (~11 GB a Kaggle) y el aplastado. Cada línea `[relevo]` es un evento: candado, de dónde siguió, cada subida, lo que se borra del disco, el respaldo y la entrega.
@@ -920,6 +962,7 @@ En `/tmp` nunca hay más de dos checkpoints a la vez (~23 GiB). El de partida se
 1. **Del turno:**
    - De la salida (`results/tronco/`): el `.jsonl` del turno y su `.relevo.json`, con los eventos del relevo.
    - Van al repo en `results/tronco/`, con su fila en `results/README.md` y una entrada en la bitácora. El log también queda en `logs/` del repo de Hugging Face.
+   - De una `sonda`: su `.jsonl` (`results/tronco/sonda-<etiqueta>-<paso>.jsonl`) y la tabla que imprimió, igual.
 2. **WhatsApp:** "relevo libre, paso N". Si el resumen dice `lock_lost`, otra sesión tomó el candado después de que este venciera, y esta paró sola: avisa.
 3. **La G0** está completa cuando:
    - el primer turno del tronco pasa las condiciones 1–4 (menos la reanudación);

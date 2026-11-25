@@ -13,7 +13,11 @@
       match its fingerprint and the first batch its saved hash;
    P0 hits the time limit before its first step: stops without saving;
    P1 pauses before step 2 and saves it; P2 resumes it with --resume latest and must equal A;
-   S  treats every step as a loss spike: the steps are skipped and the third one stops the run.
+   S  treats every step as a loss spike: the steps are skipped and the third one stops the run;
+   L  switches SMEBU's step from 0.01 to 0.001 at step 3 (P30);
+   G  stops on a broken expert balance (a threshold no step can meet) and saves where it stopped;
+   E  evaluates A's step-3 checkpoint with --eval-only: B's evaluation there, bit for bit, and no step.
+   Every step logs the router's health, and every evaluation logs it per MoE layer (P29).
 """
 from __future__ import annotations
 
@@ -196,7 +200,8 @@ def same(r1, r2, keys):
 
 def test_training():
     print("training (2 processes on CPU)", flush=True)
-    keys = ["step", "tokens", "ce", "grad_norm", "scale", "lr_mult", "batch_sha", "load_max_over_mean", "bias_abs_max"]
+    keys = ["step", "tokens", "ce", "grad_norm", "scale", "lr_mult", "batch_sha", "load_max_over_mean", "bias_abs_max",
+            "margin_min", "bias_decides_max", "lam"]
     code, a = torchrun("A", WORK / "a.jsonl", "--save-dir", str(WORK / "ckpt_a"), "--save-at", "3")
     check(code == 0 and by(a, "end") and by(a, "end")[-1]["status"] == "done", "A runs to the end")
     sa = {r["step"]: r for r in by(a, "step")}
@@ -206,6 +211,11 @@ def test_training():
     check([r["reason"] for r in by(a, "save")] == ["requested", "pre_decay"], "A saves at step 3 and before the decay")
     check(sa[7]["lr_mult"] < sa[5]["lr_mult"] == 1.0, "the LR decays over the last 3 steps")
     check(all(r["ce"] == r["ce"] for r in sa.values()), "no NaN")
+    check(all(r["margin_min"] > 0 and 0 <= r["bias_decides_max"] <= 1 and r["lam_over_margin"] > 0 and r["lam"] == 0.01
+              for r in sa.values()), "every step logs the router's health: score gap, λ over it, how often the bias decides")
+    per_layer = ("router_margin", "bias_decides", "bias_range", "val_load_max_over_mean")
+    check(all(r[k] and len(r[k]) == len(ea[0]["router_margin"]) for r in ea.values() for k in per_layer),
+          f"every evaluation logs the router per MoE layer ({len(ea[0]['router_margin'])} layers)")
 
     code, b = torchrun("B", WORK / "b.jsonl", "--resume", str(WORK / "ckpt_a" / "step_000003"),
                        "--save-dir", str(WORK / "ckpt_b"))
@@ -240,6 +250,23 @@ def test_training():
     end = by(p2, "end")[-1]
     check(end["steps_done"] == 8 and end["val_bpb_final"] == ea[8]["val_bpb"] and end["val_bpb_pre_decay"] == ea[5]["val_bpb"],
           "P2's summary has A's final and pre-decay validation")
+
+    code, lr = torchrun("L", WORK / "l.jsonl", "--steps", "5", "--lam", "0.01", "--lam-final", "0.001", "--lam-steps", "3")
+    check(code == 0 and [r["lam"] for r in by(lr, "step")] == [0.01, 0.01, 0.01, 0.001, 0.001],
+          "L: SMEBU's step is 0.01 for steps 0–2 and 0.001 from step 3")
+    code, g = torchrun("G", WORK / "g.jsonl", "--save-dir", str(WORK / "ckpt_g"), "--balance-stop", "0.5",
+                       "--balance-window", "3", "--balance-frac", "0.6", "--balance-min-step", "0")
+    end_g = (by(g, "end") or [{}])[-1]
+    check(code == 0 and end_g.get("status") == "stopped_balance" and end_g.get("steps_done") == 3
+          and [r["reason"] for r in by(g, "save")] == ["stopped_balance"] and (WORK / "ckpt_g" / "step_000003").exists()
+          and any(r.get("alarm") == "expert_balance_broke" for r in by(g, "alarm")),
+          "G: a broken balance stops the run after its window, and it saves where it stopped")
+    code, e = torchrun("E", WORK / "e.jsonl", "--resume", str(WORK / "ckpt_a" / "step_000003"), "--eval-only")
+    ee = by(e, "eval")
+    check(code == 0 and (by(e, "end") or [{}])[-1].get("status") == "evaluated" and not by(e, "step")
+          and len(ee) == 1 and ee[0]["step"] == 3 and ee[0]["val_bpb"] == eb[3]["val_bpb"]
+          and ee[0]["router_margin"] == eb[3]["router_margin"],
+          "E: --eval-only evaluates A's step 3 as B did after resuming, router included, and takes no step")
 
 
 def main():

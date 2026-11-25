@@ -13,7 +13,10 @@ the reserved memory under the G0 limit of 13.5 GiB. What a real run adds:
                optional batch ramp (--ramp-tokens)
   evaluation   validation loss and bits per byte on fixed held-out windows, per domain with --shards
   alarms       the design's table (5.4): a loss spike above mean + 4σ is skipped, 3 within 200 steps stop
-               the run; everything else is logged as an alarm row
+               the run; with --balance-stop, so does a broken expert balance (P30). Both stops save. Everything
+               else is logged as an alarm row
+  router       every step logs the router's health (P29): the smallest median gap between each token's k-th
+               and (k+1)-th expert score, against SMEBU's step λ; each evaluation, per MoE layer
   checkpoints  ludwig_lm.checkpoint: the full state; each resume checks the state bit for bit and the first
                batch against its saved hash
   time limit   --max-hours: save and stop cleanly, before Kaggle's 12 h
@@ -103,9 +106,14 @@ def parse(argv=None):
     g.add_argument("--clip", type=float, default=1.0)
     g.add_argument("--balance", default="smebu", choices=["smebu", "sign"])
     g.add_argument("--lam", type=float, default=1e-2, help="SMEBU step (T0.2 v2: 0.01 balanced best)")
+    g.add_argument("--lam-final", type=float, default=None,
+                   help="SMEBU step from --lam-steps on (P30: 0.01 balances the start fast, then DeepSeek-V3's 0.001)")
+    g.add_argument("--lam-steps", type=int, default=0, help="steps with --lam before --lam-final")
     g.add_argument("--gamma", type=float, default=1e-3, help="sign-update step")
     g.add_argument("--seq-aux", type=float, default=1e-4)
-    g.add_argument("--router-z", type=float, default=1e-4)
+    g.add_argument("--router-z", type=float, default=0.0,
+                   help="router z-loss. 0 (P30): made for softmax routers; with sigmoid scores it pushed the logits "
+                        "down until SMEBU's bias decided every token, and the trunk's balance broke at step ~1250")
     g.add_argument("--output-z", type=float, default=1e-4)
     g = ap.add_argument_group("evaluation and alarms")
     g.add_argument("--eval-every", type=int, default=50, help="0: only at the start, before the decay and at the end")
@@ -114,6 +122,12 @@ def parse(argv=None):
     g.add_argument("--spike-window", type=int, default=200)
     g.add_argument("--spike-min-history", type=int, default=50)
     g.add_argument("--spike-stop", type=int, default=3, help="skipped spikes within --spike-window that stop the run")
+    g.add_argument("--balance-stop", type=float, default=0.0,
+                   help="stop and save when the busiest expert is above this many times the mean in --balance-frac "
+                        "of the last --balance-window steps (0: never; P30: 3)")
+    g.add_argument("--balance-window", type=int, default=50)
+    g.add_argument("--balance-frac", type=float, default=0.8)
+    g.add_argument("--balance-min-step", type=int, default=200, help="a run from scratch balances first")
     g = ap.add_argument_group("checkpoints and time")
     g.add_argument("--save-dir", default="", help="empty: never save")
     g.add_argument("--save-every-hours", type=float, default=0)
@@ -123,6 +137,8 @@ def parse(argv=None):
     g.add_argument("--resume", default="", help="a checkpoint directory, or 'latest' in --save-dir")
     g.add_argument("--max-hours", type=float, default=0, help="save and stop before this many hours (0: no limit)")
     g.add_argument("--pause-at-step", type=int, default=-1, help="save and stop before this step, like the time limit")
+    g.add_argument("--eval-only", action="store_true",
+                   help="with --resume: evaluate the checkpoint once (validation and the router per layer) and stop")
     a("--log-every", type=int, default=10, help="print every N steps (every step goes to --out)")
     a("--tag", default="run")
     a("--out", default=str(ROOT / "results" / "train.jsonl"))
@@ -131,6 +147,8 @@ def parse(argv=None):
         ap.error("give either --shards or both --train and --val")
     if not args.shards and not (args.train and args.val):
         ap.error("--train and --val go together")
+    if args.eval_only and not args.resume:
+        ap.error("--eval-only evaluates a checkpoint: give --resume")
     return args
 
 
@@ -341,7 +359,24 @@ class Trainer:
             loss, mets = self.model(ids, self.weights, ce_chunk=self.args.ce_chunk, loss_mask=mask)
         (loss * (self.scaler.scale / ga)).backward()
         self.balancer.accumulate(mets["chosen"])
+        self.health += torch.stack([mets["router_margin"], mets["bias_decides"]])
         return torch.stack([mets["ce"], mets["z_out"], mets["seq_aux"], mets["z_router"], mets["router_entropy"]])
+
+    def lam_at(self, step):
+        a = self.args
+        return a.lam_final if (a.lam_final is not None and step >= a.lam_steps) else a.lam
+
+    def router_health(self):
+        """The step's router health: the MoE layer with the smallest score gap, and the one where the bias
+        decides most often (P29). λ over that gap is the balancing loop's gain: above ~5, unstable."""
+        mg, dc = self.health[0], self.health[1]
+        if not mg.numel():                                # no MoE layer
+            return {}
+        im, idc = int(mg.argmin()), int(dc.argmax())
+        lam = self.balancer.lam
+        return {"lam": lam, "margin_min": round(float(mg[im]), 6), "margin_min_layer": im,
+                "lam_over_margin": round(lam / max(float(mg[im]), 1e-12), 2),
+                "bias_decides_max": round(float(dc[idc]), 4), "bias_decides_max_layer": idc}
 
     def zero_grad(self):
         for opt in self.opts:
@@ -372,6 +407,9 @@ class Trainer:
         names = list(self.val_sets)
         per = torch.zeros(len(names), 3, dtype=torch.float64, device=self.device)      # nats, tokens, bytes
         ent = torch.zeros((), dtype=torch.float64, device=self.device)
+        n_moe, n_exp = len(self.balancer.blocks), self.cfg.num_experts
+        health = torch.zeros(2, n_moe, dtype=torch.float64, device=self.device)        # margin, bias decides
+        load = torch.zeros(n_moe, n_exp, dtype=torch.float64, device=self.device)      # tokens per expert
         n_mb = 0
         for j, name in enumerate(names):
             val_ids, val_bytes = self.val_sets[name]
@@ -383,20 +421,34 @@ class Trainer:
                 per[j, 0] += mets["ce"].double() * n
                 per[j, 1] += n
                 ent += mets["router_entropy"].double()
+                health += torch.stack([mets["router_margin"], mets["bias_decides"]]).double()
+                for li, c in enumerate(mets["chosen"]):
+                    load[li] += torch.bincount(c.reshape(-1), minlength=n_exp).double()
                 n_mb += 1
             per[j, 2] += val_bytes
         self.model.train()
         if hasattr(self.model, "reshard"):
             self.model.reshard()                       # the root stays unsharded after a forward without backward
-        tot = torch.cat([per.reshape(-1), (ent / max(1, n_mb)).reshape(1)])
+        tot = torch.cat([per.reshape(-1), (ent / max(1, n_mb)).reshape(1), (health / max(1, n_mb)).reshape(-1),
+                         load.reshape(-1)])
         dist.all_reduce(tot)
-        per, ent_all = tot[:-1].reshape(len(names), 3), float(tot[-1])
+        k = per.numel()
+        per, ent_all = tot[:k].reshape(len(names), 3), float(tot[k])
+        health = tot[k + 1:k + 1 + 2 * n_moe].reshape(2, n_moe) / self.world
+        load = tot[k + 1 + 2 * n_moe:].reshape(n_moe, n_exp)
+        load = load / load.mean(1, keepdim=True).clamp_min(1.0)
+        bias_range = [float(b.expert_bias.max() - b.expert_bias.min()) for b in self.balancer.blocks]
+        lam = self.balancer.lam
         nats, n_tok, n_bytes = (float(x) for x in per.sum(0))
         ce = nats / n_tok
         row = {"step": step, "tokens": tokens, "val_ce": round(ce, 5), "val_bpb": round(nats / LN2 / n_bytes, 5),
                "val_tokens": int(n_tok), "val_bytes": int(n_bytes), "router_entropy": round(ent_all / self.world, 4),
                "qk_gain_max": round(self.qk_gain_max(), 3), "eval_s": round(time.time() - t, 1),
-               **self.balancer.window_stats(), **extra}
+               **self.balancer.window_stats(),
+               "router_margin": [round(float(x), 6) for x in health[0]],
+               "bias_decides": [round(float(x), 4) for x in health[1]],
+               "bias_range": [round(x, 5) for x in bias_range],
+               "val_load_max_over_mean": [round(float(x), 3) for x in load.max(1).values], "lam": lam, **extra}
         if names != ["val"]:
             row["val_bpb_by_domain"] = {n: round(float(per[j, 0] / LN2 / per[j, 2]), 5) for j, n in enumerate(names)}
         self.log.row("eval", **row)
@@ -404,6 +456,12 @@ class Trainer:
         self.log.say(f"[eval] step {step}: val bpb {row['val_bpb']:.4f}{by}  ce {ce:.4f}  router entropy "
                      f"{row['router_entropy']:.3f}  qk gain {row['qk_gain_max']:.2f}  dead experts "
                      f"{row['dead_experts_window']}  ({row['eval_s']:.0f} s)")
+        if n_moe:
+            im = min(range(n_moe), key=lambda i: row["router_margin"][i])
+            self.log.say(f"[eval] router: smallest score gap {row['router_margin'][im]:.2e} in MoE layer {im} "
+                         f"(λ/gap {lam / max(row['router_margin'][im], 1e-12):.1f}, bias range {bias_range[im]:.3f}); "
+                         f"the bias decides for {max(row['bias_decides']):.0%} of tokens at most; busiest expert "
+                         f"{max(row['val_load_max_over_mean']):.2f}× the mean")
         return row
 
     def peak_memory(self):
@@ -494,6 +552,7 @@ class Trainer:
             hist.extend(meta.get("loss_history", []))
             self.hours_before = meta.get("train_hours", 0.0)
         self.reader = self.make_reader(reader_state)
+        self.balancer.lam = self.lam_at(start)
         tps_now, ga = self.tokens_per_step(tokens)
         flops_tok = flops_per_token(self.cfg, self.counts["active"], a.seq)
         gpu = torch.cuda.get_device_name(0) if self.use_cuda else "cpu"
@@ -523,9 +582,18 @@ class Trainer:
                      f"{tps_now} tokens per step = {self.world} GPUs × {a.micro} × {a.seq} × {ga} micro-steps")
 
         self.t_loop = self.last_save = time.time()
+        if a.eval_only:
+            row = self.evaluate(start, tokens, after_resume=True, eval_only=True)
+            self.reader.close()
+            self.log.row("end", status="evaluated", steps_done=start, steps_this_session=0, tokens=tokens,
+                         val_bpb_last=row["val_bpb"])
+            self.log.say(f"[end] evaluated: step {start}, val bpb {row['val_bpb']}")
+            return 0
         self.save_s = 60.0 if self.use_cuda else 1.0      # updated by the first save
         alarms = Alarms(self.log)
         spikes, spikes_total = deque(), 0
+        broken = deque(maxlen=max(1, a.balance_window))   # steps with the busiest expert above --balance-stop
+        steep = deque(maxlen=50)                          # steps with λ above 5× the smallest score gap
         times = deque(maxlen=20)                           # recent step times
         hour = deque()                                     # (time, tokens) over the last hour
         decay_start = a.steps - a.decay_steps if a.decay_steps else None
@@ -570,6 +638,8 @@ class Trainer:
             mult = lr_factor(step, a.warmup, a.steps, a.decay_steps) * a.lr_mult
             t0 = time.time()
             acc = torch.zeros(5, device=self.device)
+            self.health = torch.zeros(2, len(self.balancer.blocks), device=self.device)
+            self.balancer.lam = self.lam_at(step)
             sha = None
             for m in range(ga):
                 ids = self.reader.next()
@@ -584,6 +654,9 @@ class Trainer:
             acc /= ga
             dist.all_reduce(acc)
             acc /= self.world
+            self.health /= ga
+            dist.all_reduce(self.health)
+            self.health /= self.world
             ce = float(acc[0])
             spike = bool(math.isfinite(ce) and len(hist) >= a.spike_min_history
                          and ce > float(np.mean(hist)) + a.spike_sigma * max(float(np.std(hist)), 0.01))
@@ -618,6 +691,7 @@ class Trainer:
                    "grad_norm": None if gnorm is None else round(gnorm, 4), "scale": self.scaler.scale,
                    "skipped_inf": found_inf, "skipped_spike": spike, **{k: (round(v, 4) if isinstance(v, float) else v)
                                                                         for k, v in bal.items()},
+                   **self.router_health(),
                    "step_s": round(dt, 2), "tokens_per_s": round(tps_now / dt), "grad_accum": ga,
                    "peak_alloc_GiB": peak[0], "peak_reserved_GiB": peak[1], "batch_sha": sha}
             self.log.row("step", **row)
@@ -629,14 +703,32 @@ class Trainer:
             if step % a.log_every == 0 or first or step == a.steps - 1:
                 self.log.say(f"[train] step {step:5d}  ce {ce:.4f}  lr×{mult:.3f}  gnorm "
                              f"{'-' if gnorm is None else f'{gnorm:.3f}'}  scale {self.scaler.scale:.0f}  load max/mean "
-                             f"{bal['load_max_over_mean']:.2f}  {tps_now / dt:,.0f} tok/s  peak {peak[1]:.2f} GiB")
+                             f"{bal['load_max_over_mean']:.2f}  λ/gap {row.get('lam_over_margin', 0):.1f}  "
+                             f"{tps_now / dt:,.0f} tok/s  peak {peak[1]:.2f} GiB")
             alarms.check(step, found_inf, self.scaler.scale, bal, tps_hour if step >= start + 20 else None, peak[1])
+            steep.append(row.get("lam_over_margin", 0) > 5)
+            if len(steep) == steep.maxlen and all(steep):
+                alarms._fire(step, "router_gap_below_lambda_over_5_for_50_steps", 500,
+                             margin_min=row["margin_min"], layer=row["margin_min_layer"], lam=row["lam"])
             if len(spikes) >= a.spike_stop:            # an orderly stop: the status is in the end row
                 status = "stopped_spikes"
                 step += 1
                 break
+            if a.balance_stop and not spike and step >= a.balance_min_step:
+                broken.append(bal["load_max_over_mean"] > a.balance_stop)
+                if len(broken) == broken.maxlen and sum(broken) >= a.balance_frac * broken.maxlen:
+                    self.log.row("alarm", step=step, alarm="expert_balance_broke", above=sum(broken),
+                                 window=broken.maxlen, threshold=a.balance_stop, margin_min=row.get("margin_min"),
+                                 layer=row.get("margin_min_layer"))
+                    self.log.say(f"[alarm] step {step}: the busiest expert was above {a.balance_stop}× the mean in "
+                                 f"{sum(broken)} of the last {broken.maxlen} steps: stopping")
+                    status = "stopped_balance"
+                    step += 1
+                    break
         else:
             step = a.steps
+        if status in ("stopped_spikes", "stopped_balance") and a.save_dir and step > start:
+            self.save(step, tokens, status, hist)        # the state where it stopped, to study or resume from
         if status == "done":
             if last_eval != step:
                 evals[step] = self.evaluate(step, tokens, final=True)

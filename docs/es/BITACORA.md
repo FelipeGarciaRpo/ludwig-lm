@@ -1059,3 +1059,61 @@ Todo lo que se corre, se mide o se decide, en orden. Cada entrada dice qué se h
   - No hay checkpoint de antes del quiebre: Hugging Face tiene el 3131 y el 3270, y los respaldos, el 1608 y el 2151. Volver al 1608 perdería ~1,660 pasos, y ahí la carga ya estaba en ~4.5.
   - Todo esto cambia `configs/tronco_v1.json` y `train.py`, y con eso el `COMMIT` del tronco. Primero se decide en `DECISIONS.md`.
 - **Siguiente:** que el chat de diseño decida, y no lanzar turnos hasta entonces. Revisar quién corrió los turnos 5 a 7, que cada cuenta tenga su `CUENTA` y permiso de edición en los dos respaldos, y que `RESPALDO` lleve siempre el usuario de Pipe.
+
+## 2026-11-25 · El router rompió el primer tronco, y el tronco vuelve a empezar (patch 0013)
+
+- **Qué:** el diagnóstico del desbalance de los expertos del primer tronco (P29), la decisión (P30) y la sonda que lo confirma (P31). También lo que hace falta para el nuevo arranque.
+- **Dónde:** chat de diseño, en CPU, con los `.jsonl` de `results/tronco/` y de `results/t0_3_t2/`.
+- **El diagnóstico (P29):**
+  - **El quiebre depende del nivel del router, no del paso ni del LR.** Empieza con el mismo `z_router` (~0.85, con λ 0.01) en dos corridas con calendarios muy distintos:
+    - el tronco, en el paso 1249;
+    - `lr-x1-1200` de la T2, con 100 pasos de calentamiento, en el 544.
+
+    `lr-x2` se rompió con z ≈ 1.0–1.3, y `lr-x4`, con λ 0.04, con z ≈ 2.2. Las corridas que nunca bajaron de z ≈ 1.5 nunca se rompieron.
+  - **El mecanismo:**
+    1. El z-loss del router (1e-4 × logsumexp²) empuja todos los logits hacia abajo.
+    2. Los pesos de la compuerta están normalizados entre los 4 expertos elegidos, así que la entropía cruzada no ve el nivel de los logits.
+    3. AdamW convierte ese gradiente chico pero constante en pasos del tamaño del LR.
+    4. Los scores sigmoide se hunden en la cola, y la diferencia entre el 4.º y el 5.º score de cada token se achica con ellos.
+    5. SMEBU mueve el sesgo hasta λ por paso. Cuando λ es varias veces esa diferencia, un paso del sesgo re-enruta a casi todos los tokens a la vez. Los acaparadores se castigan y gana el grupo siguiente: el lazo da vueltas.
+  - **Un modelo de juguete del lazo lo reproduce** (`scripts/toy_router_loop.py`, `results/tronco/toy_router_loop.txt`): scores sigmoide, top-4 de score + sesgo, y SMEBU.
+    - Con λ 0.01, el experto más cargado queda en 1.1× mientras λ/brecha ≤ 3.9, tambalea con 10 (2.8× de media, 6.8× de máximo) y colapsa con 27 (8.6× y 9.8×, de un techo de 10, turnándose).
+    - Con λ 0.001 aguanta una brecha 10 veces más chica.
+  - **La T2 comparó corridas rotas:** `lr-x1-1200` se rompió en el paso 544 y `lr-x2-320-800` en el 470, antes del paso 800 que compara la P25. ×1 se queda, porque es la opción segura.
+- **La decisión (P30):** el tronco vuelve a empezar desde el paso 0 como `tronco2` (`configs/tronco_v2.json`).
+  - Sin z-loss del router (`router_z` 0, ahora también por defecto). El z-loss de salida se queda, porque la cabeza sí es una softmax.
+  - SMEBU con λ 0.01 hasta el paso 500 (arranque rápido) y 0.001 después (el γ de DeepSeek-V3).
+  - `seq_aux` 1e-3 en vez de 1e-4.
+  - Evalúa cada 250 pasos.
+  - El LR, los datos y el resto, igual.
+- **Por qué de cero y no desde el 3270:**
+  - No queda ningún checkpoint de antes del quiebre: Hugging Face tiene el 3131 y el 3270, y los respaldos, el 1608 y el 2151.
+  - En el 3270, el sesgo llevaba ~2,000 pasos eligiendo los expertos de todos los tokens en las primeras 5 capas MoE.
+  - Empezar de cero cuesta ~3,350 pasos: ~3 días de relevo, 3.7% del tronco. A cambio, la corrida tiene una sola configuración desde el paso 0, y prueba el arreglo justo donde falló. Pipe prefería reentrenar para que los expertos queden limpios.
+- **Archivos:**
+  - `ludwig_lm/afmoe.py`: la salud del router por capa: la brecha mediana y cuántas veces decide el sesgo.
+  - `scripts/train.py`:
+    - el cambio de λ (`--lam-final`, `--lam-steps`);
+    - la salud del router en cada paso y, por capa, en cada evaluación;
+    - la alarma de brecha;
+    - la parada por balanceo (`--balance-stop`), que guarda, igual que ahora la parada por picos;
+    - `--eval-only`;
+    - `router_z` 0 por defecto.
+  - `ludwig_lm/relay.py`: cada corrida rota solo sus checkpoints, bajo `checkpoints/<etiqueta>/`.
+  - `configs/tronco_v2.json`.
+  - `scripts/toy_router_loop.py` y su salida.
+  - El notebook del tronco: `tronco2` y el `MODO` `sonda`.
+- **Resultado:**
+  - `test_train_cpu.py` PASS (41): el cambio de λ en el paso 3; la parada por balanceo, que guarda donde paró; y `--eval-only`, que da la evaluación de B en el paso 3 bit a bit, router incluido, sin dar un paso.
+  - `test_relay_cpu.py` PASS (29): una corrida con etiqueta nueva empieza de cero y deja los checkpoints de la otra.
+  - `test_shards_cpu.py` PASS (53).
+  - La celda de la sonda corrió completa contra el almacén local del test del relevo.
+- **Ojo:**
+  - **El `COMMIT` del `tronco2` es el de este patch,** en todos sus turnos.
+  - **No borrar el 3131 ni el 3270** de Hugging Face antes de que corra la sonda. Los respaldos de Kaggle del primer tronco se reemplazan con los del `tronco2`.
+  - **Qué mirar en el turno 1 del `tronco2`:**
+    - `z_router` (ahora solo se registra) no debería bajar como en el primer tronco;
+    - el `λ/gap` del log, por debajo de ~2;
+    - el experto más cargado, en ~1.5× la media.
+  - En el primer tronco, la ganancia qk subió a 2.25 en 3,000 pasos. No cambia nada todavía, pero hay que vigilarla.
+- **Siguiente:** aplicar 0013, la sonda del 3270 en cualquier cuenta, y el turno 1 del `tronco2`.

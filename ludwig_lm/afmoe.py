@@ -15,8 +15,9 @@ Everything here works around the model, never changes its parameters or their na
 * ``ExpertBalancer``: aux-loss-free balancing. SMEBU (Arcee Trinity: tanh-clamped, re-centred,
   momentum) or the plain sign update, for comparison.
 * ``LudwigAfmoe.forward``: chunked cross-entropy with the tied head, output z-loss,
-  sequence-wise auxiliary loss (DeepSeek-V3), router z-loss. With ``fp32_residual`` the residual
-  stream stays in FP32 when the caller runs it under FP16 autocast.
+  sequence-wise auxiliary loss (DeepSeek-V3), router z-loss (0 since P30), and the router's health per
+  MoE layer (P29). With ``fp32_residual`` the residual stream stays in FP32 when the caller runs it under
+  FP16 autocast.
 * ``init_ludwig``: depth-scaled sandwich norm (Trinity): output-norm gains start at 1/sqrt(L); the router
   starts random (transformers starts it at zero, which sends every token to the same 4 experts); and the
   padding row trains like any other (transformers turns pad_token_id into a frozen ``padding_idx`` row; until
@@ -215,15 +216,21 @@ def shard_model(model, mesh, mp_policy, prefetch: bool = True):
 class LossWeights:
     output_z: float = 1e-4
     seq_aux: float = 1e-4        # sequence-wise balance loss (DeepSeek-V3); the bias does the rest
-    router_z: float = 1e-4
+    router_z: float = 0.0        # P30: made for softmax routers; with sigmoid scores it broke the trunk's balance
 
 
 def moe_losses(records, batch: int, seq: int, n_exp: int, k: int):
-    """Sequence-wise auxiliary loss and router z-loss, averaged over the MoE layers; plus the mean entropy of
-    each token's normalized router scores (a log; at most ln E)."""
+    """Sequence-wise auxiliary loss and router z-loss, averaged over the MoE layers; the mean entropy of each
+    token's normalized router scores (a log; at most ln E); and the router's health in each MoE layer (P29):
+
+    * ``margin``: the median, over the tokens, of the gap between the k-th and the (k+1)-th score. SMEBU moves
+      the bias by up to λ per step: once λ is several times this gap, one step of the bias re-routes most
+      tokens at once, and the busiest experts take turns (the trunk from step ~1250);
+    * ``decides``: the fraction of tokens whose k experts are not the k best scores, because of the bias."""
     aux = torch.zeros((), device=records[0][0].device)
     rz = torch.zeros((), device=records[0][0].device)
     ent = torch.zeros((), device=records[0][0].device)
+    margins, decides = [], []
     for logits, chosen in records:
         s = torch.sigmoid(logits)
         pt = s / s.sum(-1, keepdim=True)                                                 # (B*T, E)
@@ -235,8 +242,12 @@ def moe_losses(records, batch: int, seq: int, n_exp: int, k: int):
         with torch.no_grad():
             q = pt.detach()
             ent = ent + (-(q * torch.log(q.clamp_min(1e-20))).sum(-1).mean())
+            top = torch.topk(s.detach(), k + 1, dim=-1)
+            margins.append((top.values[:, k - 1] - top.values[:, k]).median())
+            own = top.indices[:, :k].sort(-1).values
+            decides.append((own != chosen.reshape(-1, k).sort(-1).values).any(-1).float().mean())
     n = len(records)
-    return aux / n, rz / n, ent / n
+    return aux / n, rz / n, ent / n, torch.stack(margins), torch.stack(decides)
 
 
 # --------------------------------------------------------------------------- model
@@ -263,10 +274,11 @@ class LudwigAfmoe(nn.Module):
         finally:
             _RECORD = previous
         ce, z = chunked_cross_entropy(h[:, :-1], self.lm.lm_head.weight, input_ids[:, 1:], ce_chunk, mask=loss_mask)
-        aux, rz, ent = moe_losses(records, batch, seq, cfg.num_experts, cfg.num_experts_per_tok)
+        aux, rz, ent, margin, decides = moe_losses(records, batch, seq, cfg.num_experts, cfg.num_experts_per_tok)
         loss = ce + weights.output_z * z + weights.seq_aux * aux + weights.router_z * rz
         metrics = {"ce": ce.detach(), "z_out": z.detach(), "seq_aux": aux.detach(), "z_router": rz.detach(),
-                   "router_entropy": ent, "chosen": [c for _, c in records]}
+                   "router_entropy": ent, "router_margin": margin, "bias_decides": decides,
+                   "chosen": [c for _, c in records]}
         return loss, metrics
 
 

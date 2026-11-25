@@ -5,7 +5,7 @@
 **Un modelo de lenguaje Mixture-of-Experts de 2B parámetros con 0.49B activos, entrenado desde cero en GPUs gratis de Kaggle y abierto hasta la última línea de log.**
 
 ![Licencia](https://img.shields.io/badge/licencia-Apache--2.0-blue)
-![Estado](https://img.shields.io/badge/estado-fase%20T0-orange)
+![Estado](https://img.shields.io/badge/estado-fase%20T3-orange)
 ![Parámetros](https://img.shields.io/badge/par%C3%A1metros-1.91B%20totales%20%2F%200.49B%20activos-6f42c1)
 ![Hardware](https://img.shields.io/badge/entrenado%20en-Kaggle%202%C3%97T4-20BEFF)
 ![Idiomas](https://img.shields.io/badge/idiomas-ES%20%2B%20EN-2ea44f)
@@ -14,7 +14,7 @@
 
 </div>
 
-> **Estado, 15 de noviembre de 2026.** El diseño v1.2 está aprobado: Ludwig 2 se guarda en el formato AFMoE de los modelos Trinity de Arcee, que corre en llama.cpp sin parche. El bucle de entrenamiento real hizo dos rondas de corridas cortas en 2×T4: todas estables en FP16, a **3,300–3,600 tokens/s, ~1,900–2,100 h para 25B tokens**, y el tronco entrena con ×1, el learning rate del Ludwig 1. El tokenizador de 64K quedó fijado ([`tokenizer/`](tokenizer/)): 4.16 bytes por token en la mezcla del tronco, contra 4.03 del de Qwen3, de 151K. Los datos del tronco se convierten en shards pre-tokenizados en la CPU de Kaggle ([notebook](notebooks/t1_shards_cpu.ipynb)). El relevo que lo entrena por turnos entre cuentas está listo: checkpoints en Hugging Face con candado y respaldo en Kaggle ([notebook](notebooks/tronco_relevo_2xT4.ipynb)). **Todavía no hay pesos.** Este repositorio documenta el proyecto desde la primera prueba.
+> **Estado, 25 de noviembre de 2026.** El diseño v1.2 está aprobado: Ludwig 2 se guarda en el formato AFMoE de los modelos Trinity de Arcee, que corre en llama.cpp sin parche. El tronco arrancó el 18 de noviembre, por turnos entre cuentas de Kaggle (checkpoints en Hugging Face con candado y respaldo en Kaggle, [notebook](notebooks/tronco_relevo_2xT4.ipynb)), y pasó la compuerta G0. El 25 de noviembre vuelve a empezar desde el paso 0. Desde el paso ~1,250, el balanceo de los expertos se había roto en las primeras 5 capas MoE: el z-loss del router, pensado para routers softmax, empujó los scores sigmoide hacia la cola, donde cada paso del sesgo de balanceo re-enrutaba a casi todos los tokens a la vez ([`docs/DECISIONS.md`](docs/DECISIONS.md), P29–P30). El nuevo arranque quita esa pérdida, achica 10 veces el paso del sesgo desde el paso 500 y detiene la corrida si el balanceo se rompe. El entrenamiento va a **3,300–3,600 tokens/s en 2×T4, ~1,900–2,100 h para 25B tokens**, con ×1, el learning rate del Ludwig 1. El tokenizador de 64K quedó fijado ([`tokenizer/`](tokenizer/)), y los datos del tronco son shards pre-tokenizados en la CPU de Kaggle ([notebook](notebooks/t1_shards_cpu.ipynb)). **Todavía no hay pesos.** Este repositorio documenta el proyecto desde la primera prueba.
 
 ## Por qué Ludwig 2
 
@@ -165,6 +165,7 @@ El modelo real con el bucle de entrenamiento real ([`scripts/train.py`](scripts/
   - En el mismo paso, la ventaja de ×2 sobre ×1 baja de 6.65% en el paso 300 a 1.01% en el 800.
   - ×1 llega a 1.0094 en el paso 1,100, dentro de su enfriamiento.
 - **El tronco entrena con ×1, la receta del Ludwig 1:** es lo que da la regla decidida de antemano ([`scripts/lr_horizon.py`](scripts/lr_horizon.py); [`docs/DECISIONS.md`](docs/DECISIONS.md), P9 y P25).
+- **Visto después (P29):** las dos corridas de 1,200 pasos tenían el balanceo de los expertos roto antes del paso 800 (×1 desde el 544, ×2 desde el 470), por el mismo z-loss del router que rompió el primer tronco. ×1 se queda, porque es la opción segura.
 - **Dos corridas idénticas difieren ≤0.11%** después de 300 pasos, porque las sumas en la GPU no se repiten bit a bit. Esto no afecta las verificaciones de la reanudación (P28).
 - **Las diferencias de velocidad son de las máquinas,** no del LR: dentro de cada corrida la velocidad no cambia con la carga de los expertos.
 
@@ -264,10 +265,10 @@ ludwig-lm/
 │                   # · relay.py: el candado, las subidas y el respaldo del relevo
 │                   # · checkpoint.py: checkpoints con reanudación verificada · model.py: formato A (respaldo)
 ├── configs/        # ludwig2_afmoe.json (el modelo real), tiny_afmoe.json (pruebas), data_v3.json (los datos del tronco),
-│                   # tronco_v1.json (los argumentos de entrenamiento del tronco);
+│                   # tronco_v1.json, tronco_v2.json (los argumentos de entrenamiento del tronco: el primero y el nuevo arranque);
 │                   # ludwig2.json, tiny.json (formato A)
 ├── scripts/        # train.py (el bucle de entrenamiento) y test_train_cpu.py, build_shards.py (T1) y test_shards_cpu.py,
-│                   # test_relay_cpu.py,
+│                   # test_relay_cpu.py, toy_router_loop.py (P29),
 │                   # train_tokenizer.py, smoke_tokenizer.py (T0.1b),
 │                   # bench_afmoe.py (T0.2 v2), smoke_format_afmoe.py (T0.1-C),
 │                   # make_notebooks.py, convert_gguf.py, lo del formato A
@@ -291,8 +292,8 @@ ludwig-lm/
 - [x] **Mezcla v3** Fuentes y repartos cerrados, código incluido ([`results/datos_tronco_v3/`](results/datos_tronco_v3/))
 - [ ] **T1** Datos: el constructor y el lector de shards están listos y probados ([`scripts/build_shards.py`](scripts/build_shards.py)); la construcción son unas 6 sesiones de CPU de Kaggle, y la primera ya hizo 28 de los 168 shards ([notebook](notebooks/t1_shards_cpu.ipynb))
 - [x] **Relevo** Checkpoints en Hugging Face con candado y respaldo en Kaggle, probado en tres turnos ([notebook](notebooks/tronco_relevo_2xT4.ipynb))
-- [ ] **G0** Compuerta: el ensayo del relevo, 50 pasos a 16K y los dos primeros turnos del tronco (≥6 h sostenidas, subidas, una reanudación en otra cuenta)
-- [ ] **T3** Tronco hasta 22.5B tokens
+- [x] **G0** Compuerta: el ensayo del relevo, 50 pasos a 16K y los turnos 1 y 5 del tronco (≥6 h sostenidas, subidas, una reanudación en otra cuenta)
+- [ ] **T3** Tronco hasta 22.5B tokens: vuelve a empezar desde el paso 0 el 25 de noviembre, porque el balanceo de los expertos del primer intento se rompió en el paso ~1,250 (P29, P30)
 - [ ] **T4** Rama de la v1: 2.5B tokens, 16K
 - [ ] **T5** SFT, GGUF y evaluación: **Ludwig 2 · 25B publicado**
 
