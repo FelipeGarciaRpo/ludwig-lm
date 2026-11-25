@@ -1201,3 +1201,24 @@ Todo lo que se corre, se mide o se decide, en orden. Cada entrada dice qué se h
 - **Notebook:** el `COMMIT` del tronco2 pasa a `048efa5`, y las instrucciones del turno dicen qué mirar mientras corre.
 - **Pruebas en el PC:** pyflakes, notebooks en sincronía, la prueba lógica de `bench_afmoe.py` (checkpoint exacto), `test_train_cpu.py` (43, con la alarma de `z_router` y el nivel por capa) y `test_relay_cpu.py` (30).
 - **Siguiente:** el turno 1 del tronco2. En sus evaluaciones (pasos 250 y 500) se mira sobre todo las capas MoE 0–4. Si una capa se acerca a los umbrales, o `z_router` baja de forma sostenida, se avisa al chat de diseño.
+
+## 2026-11-25 · Pregunta abierta: qué hace la literatura con el router sigmoide y las primeras capas MoE
+
+- **Qué:** una revisión de papers durante el turno 1 del tronco2, porque `z_router` baja de forma sostenida, aunque más lento que en el primer tronco. La pregunta: cómo mantienen otros el nivel del router, y si el tronco2 hace lo suficiente.
+- **Dónde:** el PC (lectura de papers; no corrió nada).
+- **Lo que dicen:**
+  - **ST-MoE** ([2202.08906](https://arxiv.org/abs/2202.08906)) hizo el router z-loss para routers softmax, para que los logits no crezcan. Ninguno de los papers leídos lo usa para frenar una caída del nivel.
+  - **DeepSeek-V3** ([2412.19437](https://arxiv.org/abs/2412.19437)): sigmoide normalizada entre los expertos elegidos, el sesgo solo para elegir, γ 0.001 (0 al final), pérdida por secuencia α 1e-4, sin router z-loss, 3 capas densas de 61.
+  - **Trinity Large** ([2602.17004](https://arxiv.org/abs/2602.17004), de donde salen AFMoE y SMEBU): sus primeras corridas fallaron como el primer tronco ("routing behavior drifted and expert load became increasingly uneven, eventually resulting in collapsed experts"; MaxVio estable y luego una subida de golpe). Lo arreglaron con seis cambios a la vez, sin ablaciones: SMEBU (λ 5e-4, β 0.5, κ 2), BF16 en vez de MXFP8, z-loss 1e-6 (no dicen si del router o de la salida; por un bug entrenaron con 0, y valores mayores desestabilizaban), pérdida por secuencia 1e-4, capas densas de 3 a 6 (de 60) y máscara dentro de cada documento.
+  - **Sigma-MoE-Tiny** ([2512.16248](https://arxiv.org/abs/2512.16248), 1 experto de 96): con el sesgo de DeepSeek, el sesgo de las capas bajas crece hasta dominar los scores y un experto se lleva casi todos los tokens. Lo arreglaron activando más expertos en las 8 primeras capas (8, 8, 6, 6, 4, 4, 2, 2) y con una pérdida de balanceo global de 1e-3.
+- **Comparación con el tronco2** (`configs/tronco_v2.json`, `configs/ludwig2_afmoe.json`):
+
+  | | DeepSeek-V3 | Trinity Large | Tronco2 |
+  |---|---|---|---|
+  | Router z-loss | no | 0 por el bug; luego 1e-6 | 0 |
+  | Paso del sesgo | 0.001 | 5e-4 | 0.01 hasta el paso 500, luego 0.001 |
+  | Pérdida por secuencia | 1e-4 | 1e-4 | 1e-3 |
+  | Capas densas | 3 de 61 | 6 de 60 | 1 de 26 |
+
+- **Pregunta abierta para el chat de diseño:** en Trinity, en Sigma-MoE y en el primer tronco (capas MoE 0–4), el punto débil son las primeras capas MoE. Si el tronco2 se rompe y hay que reiniciar, ¿se agregan capas densas o se activan más expertos en las primeras capas? Eso solo cambia con un reinicio. El paso del sesgo, la pérdida por secuencia y un piso para el nivel del router sí pueden cambiar entre turnos.
+- **Siguiente:** las evaluaciones de los pasos 250 y 500 del turno 1.
