@@ -1143,3 +1143,25 @@ Todo lo que se corre, se mide o se decide, en orden. Cada entrada dice qué se h
   - antes, revisar el espacio de Kaggle y que cada cuenta del relevo tenga permiso de edición en los dos respaldos;
   - la sonda sobre el checkpoint 3270 (P31);
   - el turno 1 del tronco2.
+
+## 2026-11-25 · La sonda del checkpoint 3270 (P31): λ/brecha no separa las capas rotas, el rango del sesgo sí
+
+- **Qué:** la sonda del router (`MODO = "sonda"`) sobre el checkpoint 3270 del primer tronco, con `a9286c4`.
+- **Dónde:** Kaggle, 2×T4, 4 min.
+- **Archivo:** `results/tronco/sonda-tronco-3270_salida_kaggle.txt`, con el usuario de Kaggle enmascarado. Falta su `.jsonl`.
+- **Resultado:**
+  - El checkpoint bajó en 52 s y cargó exacto. La validación da 0.8812 bits por byte.
+  - **λ/brecha es bajo en todas las capas:** 0.6–1.6 en las capas MoE 0–4 y 0.5–2.5 en las otras 20. La brecha mediana entre el score del 4.º y el del 5.º experto tampoco es menor en las capas rotas: 0.0096, contra 0.011.
+  - **Lo que separa a las capas 0–4:**
+    - el rango del sesgo: 0.23–0.42, contra 0.03–0.14 en las demás. Es 22–60 veces la brecha, contra 4–17;
+    - el sesgo cambia los expertos del 92–100% de los tokens, contra el 37–66%;
+    - el experto más cargado recibe 4.5–7.6 veces la media, contra 1.4–1.85.
+- **Conclusión:**
+  - El P31 decía que el P29 queda confirmado si λ/brecha sale alto (≳5) en las capas 0–4 y bajo en las demás. No sale.
+  - Las capas 0–4 sí están dominadas por el sesgo, pero por su tamaño acumulado, no por el paso λ frente a la brecha.
+  - Es el estado del paso 3270, ~2,000 pasos después del quiebre; el comienzo pudo ser distinto.
+- **Para el chat de diseño** (el P31 dice que, si la sonda contradice al P29, se decide de nuevo antes del paso ~1,000 del tronco2):
+  - ¿Alcanza el arreglo del tronco2? El `seq_aux` 1e-3 actúa sobre el router mismo, que es lo que haría falta si el sesgo está compensando una preferencia del router por ciertos expertos, igual para todos los tokens.
+  - La alarma de λ/brecha no habría avisado en este estado; la parada por balanceo (3×) sí. Las evaluaciones del tronco2 registran por capa el rango del sesgo y la brecha, así que su cociente se puede vigilar.
+  - Los checkpoints 1608 (`ludwig2-respaldo-a2`) y 2151 (`ludwig2-respaldo-b`) están más cerca del comienzo del quiebre, pero el tronco2 los reemplaza en sus dos primeros respaldos. Para sondearlos, la sonda tendría que leerlos desde Kaggle.
+- **Siguiente:** el turno 1 del tronco2, según el plan. Sus evaluaciones muestran el sesgo por capa cada 250 pasos. La decisión del chat va antes del paso ~1,000.
