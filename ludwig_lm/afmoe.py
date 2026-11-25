@@ -223,14 +223,17 @@ def moe_losses(records, batch: int, seq: int, n_exp: int, k: int):
     """Sequence-wise auxiliary loss and router z-loss, averaged over the MoE layers; the mean entropy of each
     token's normalized router scores (a log; at most ln E); and the router's health in each MoE layer (P29):
 
-    * ``margin``: the median, over the tokens, of the gap between the k-th and the (k+1)-th score. SMEBU moves
-      the bias by up to λ per step: once λ is several times this gap, one step of the bias re-routes most
-      tokens at once, and the busiest experts take turns (the trunk from step ~1250);
-    * ``decides``: the fraction of tokens whose k experts are not the k best scores, because of the bias."""
+    * ``margin``: the median, over the tokens, of the gap between the k-th and the (k+1)-th score. λ over it
+      is logged, but it is not a health signal (P31): when the router's preferences are common to all tokens,
+      the tokens share one boundary, and one bias step moves them together even at λ/gap ~1;
+    * ``decides``: the fraction of tokens whose k experts are not the k best scores, because of the bias;
+    * ``z`` and ``lse``: the router's level, the mean of logsumexp(logits)² (the z-loss) and of logsumexp itself
+      (signed: if the logits sank below 0, z would rise again and hide it). The break began when the layers'
+      level fell (P29); the mean over 25 layers can hide 5 that sink (P30)."""
     aux = torch.zeros((), device=records[0][0].device)
     rz = torch.zeros((), device=records[0][0].device)
     ent = torch.zeros((), device=records[0][0].device)
-    margins, decides = [], []
+    margins, decides, zs, lses = [], [], [], []
     for logits, chosen in records:
         s = torch.sigmoid(logits)
         pt = s / s.sum(-1, keepdim=True)                                                 # (B*T, E)
@@ -238,7 +241,8 @@ def moe_losses(records, batch: int, seq: int, n_exp: int, k: int):
         cnt = torch.zeros(batch, n_exp, device=logits.device)
         cnt.scatter_add_(1, chosen.view(batch, -1), torch.ones(batch, seq * k, device=logits.device))
         aux = aux + ((cnt * (n_exp / (k * seq))) * p).sum(-1).mean()
-        rz = rz + torch.logsumexp(logits, -1).pow(2).mean()
+        lse = torch.logsumexp(logits, -1)
+        rz = rz + lse.pow(2).mean()
         with torch.no_grad():
             q = pt.detach()
             ent = ent + (-(q * torch.log(q.clamp_min(1e-20))).sum(-1).mean())
@@ -246,8 +250,11 @@ def moe_losses(records, batch: int, seq: int, n_exp: int, k: int):
             margins.append((top.values[:, k - 1] - top.values[:, k]).median())
             own = top.indices[:, :k].sort(-1).values
             decides.append((own != chosen.reshape(-1, k).sort(-1).values).any(-1).float().mean())
+            zs.append(lse.detach().float().pow(2).mean())
+            lses.append(lse.detach().float().mean())
     n = len(records)
-    return aux / n, rz / n, ent / n, torch.stack(margins), torch.stack(decides)
+    return (aux / n, rz / n, ent / n, torch.stack(margins), torch.stack(decides), torch.stack(zs),
+            torch.stack(lses))
 
 
 # --------------------------------------------------------------------------- model
@@ -274,10 +281,12 @@ class LudwigAfmoe(nn.Module):
         finally:
             _RECORD = previous
         ce, z = chunked_cross_entropy(h[:, :-1], self.lm.lm_head.weight, input_ids[:, 1:], ce_chunk, mask=loss_mask)
-        aux, rz, ent, margin, decides = moe_losses(records, batch, seq, cfg.num_experts, cfg.num_experts_per_tok)
+        aux, rz, ent, margin, decides, z_layers, lse_layers = moe_losses(records, batch, seq, cfg.num_experts,
+                                                                         cfg.num_experts_per_tok)
         loss = ce + weights.output_z * z + weights.seq_aux * aux + weights.router_z * rz
         metrics = {"ce": ce.detach(), "z_out": z.detach(), "seq_aux": aux.detach(), "z_router": rz.detach(),
                    "router_entropy": ent, "router_margin": margin, "bias_decides": decides,
+                   "router_z_layers": z_layers, "router_lse_layers": lse_layers,
                    "chosen": [c for _, c in records]}
         return loss, metrics
 

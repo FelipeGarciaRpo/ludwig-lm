@@ -15,8 +15,10 @@ the reserved memory under the G0 limit of 13.5 GiB. What a real run adds:
   alarms       the design's table (5.4): a loss spike above mean + 4σ is skipped, 3 within 200 steps stop
                the run; with --balance-stop, so does a broken expert balance (P30). Both stops save. Everything
                else is logged as an alarm row
-  router       every step logs the router's health (P29): the smallest median gap between each token's k-th
-               and (k+1)-th expert score, against SMEBU's step λ; each evaluation, per MoE layer
+  router       every step logs the router's health (P29): its mean level (z_router; --z-router-alarm warns when
+               it stays low, P30) and the smallest median gap between each token's k-th and (k+1)-th expert score;
+               each evaluation logs it per MoE layer, with the level as z and signed lse, and flags a layer near
+               the first trunk's broken ones (P31)
   checkpoints  ludwig_lm.checkpoint: the full state; each resume checks the state bit for bit and the first
                batch against its saved hash
   time limit   --max-hours: save and stop cleanly, before Kaggle's 12 h
@@ -46,6 +48,9 @@ import torch
 import torch.distributed as dist
 
 ROOT = Path(__file__).resolve().parents[1]
+# P31: an evaluation flags an MoE layer near the first trunk's broken ones (its probe: the healthy layers
+# reached 66%, 17x and 1.85x; the broken ones started at 92%, 22x and 4.49x)
+WATCH_DECIDES, WATCH_RANGE_OVER_GAP, WATCH_BUSIEST = 0.8, 20.0, 2.0
 sys.path.insert(0, str(ROOT))
 import ludwig_lm  # noqa: E402
 from ludwig_lm import checkpoint as ckpt  # noqa: E402
@@ -128,6 +133,10 @@ def parse(argv=None):
     g.add_argument("--balance-window", type=int, default=50)
     g.add_argument("--balance-frac", type=float, default=0.8)
     g.add_argument("--balance-min-step", type=int, default=200, help="a run from scratch balances first")
+    g.add_argument("--z-router-alarm", type=float, default=0.0,
+                   help="alarm when the mean router z-loss value stays below this for --z-router-window steps "
+                        "(0: never; P30: 1.5, the level the first trunk crossed ~250 steps before its break)")
+    g.add_argument("--z-router-window", type=int, default=50)
     g = ap.add_argument_group("checkpoints and time")
     g.add_argument("--save-dir", default="", help="empty: never save")
     g.add_argument("--save-every-hours", type=float, default=0)
@@ -408,7 +417,7 @@ class Trainer:
         per = torch.zeros(len(names), 3, dtype=torch.float64, device=self.device)      # nats, tokens, bytes
         ent = torch.zeros((), dtype=torch.float64, device=self.device)
         n_moe, n_exp = len(self.balancer.blocks), self.cfg.num_experts
-        health = torch.zeros(2, n_moe, dtype=torch.float64, device=self.device)        # margin, bias decides
+        health = torch.zeros(4, n_moe, dtype=torch.float64, device=self.device)        # margin, bias decides, z, lse
         load = torch.zeros(n_moe, n_exp, dtype=torch.float64, device=self.device)      # tokens per expert
         n_mb = 0
         for j, name in enumerate(names):
@@ -421,7 +430,8 @@ class Trainer:
                 per[j, 0] += mets["ce"].double() * n
                 per[j, 1] += n
                 ent += mets["router_entropy"].double()
-                health += torch.stack([mets["router_margin"], mets["bias_decides"]]).double()
+                health += torch.stack([mets["router_margin"], mets["bias_decides"], mets["router_z_layers"],
+                                       mets["router_lse_layers"]]).double()
                 for li, c in enumerate(mets["chosen"]):
                     load[li] += torch.bincount(c.reshape(-1), minlength=n_exp).double()
                 n_mb += 1
@@ -434,8 +444,8 @@ class Trainer:
         dist.all_reduce(tot)
         k = per.numel()
         per, ent_all = tot[:k].reshape(len(names), 3), float(tot[k])
-        health = tot[k + 1:k + 1 + 2 * n_moe].reshape(2, n_moe) / self.world
-        load = tot[k + 1 + 2 * n_moe:].reshape(n_moe, n_exp)
+        health = tot[k + 1:k + 1 + 4 * n_moe].reshape(4, n_moe) / self.world
+        load = tot[k + 1 + 4 * n_moe:].reshape(n_moe, n_exp)
         load = load / load.mean(1, keepdim=True).clamp_min(1.0)
         bias_range = [float(b.expert_bias.max() - b.expert_bias.min()) for b in self.balancer.blocks]
         lam = self.balancer.lam
@@ -448,6 +458,8 @@ class Trainer:
                "router_margin": [round(float(x), 6) for x in health[0]],
                "bias_decides": [round(float(x), 4) for x in health[1]],
                "bias_range": [round(x, 5) for x in bias_range],
+               "router_z": [round(float(x), 4) for x in health[2]],
+               "router_lse": [round(float(x), 4) for x in health[3]],
                "val_load_max_over_mean": [round(float(x), 3) for x in load.max(1).values], "lam": lam, **extra}
         if names != ["val"]:
             row["val_bpb_by_domain"] = {n: round(float(per[j, 0] / LN2 / per[j, 2]), 5) for j, n in enumerate(names)}
@@ -457,11 +469,24 @@ class Trainer:
                      f"{row['router_entropy']:.3f}  qk gain {row['qk_gain_max']:.2f}  dead experts "
                      f"{row['dead_experts_window']}  ({row['eval_s']:.0f} s)")
         if n_moe:
-            im = min(range(n_moe), key=lambda i: row["router_margin"][i])
-            self.log.say(f"[eval] router: smallest score gap {row['router_margin'][im]:.2e} in MoE layer {im} "
-                         f"(λ/gap {lam / max(row['router_margin'][im], 1e-12):.1f}, bias range {bias_range[im]:.3f}); "
-                         f"the bias decides for {max(row['bias_decides']):.0%} of tokens at most; busiest expert "
-                         f"{max(row['val_load_max_over_mean']):.2f}× the mean")
+            lse, zl, dec, busy = row["router_lse"], row["router_z"], row["bias_decides"], row["val_load_max_over_mean"]
+            over = [bias_range[i] / max(row["router_margin"][i], 1e-12) for i in range(n_moe)]
+            low = min(range(n_moe), key=lambda i: lse[i])
+            self.log.say(f"[eval] router: level (lse) {min(lse):.2f} to {max(lse):.2f} by layer, lowest in MoE layer "
+                         f"{low}; z {min(zl):.2f} to {max(zl):.2f}; the bias decides {min(dec):.0%} to {max(dec):.0%} "
+                         f"of tokens; bias range up to {max(over):.0f}× the gap; busiest expert {max(busy):.2f}× the mean")
+            # P31's thresholds, from the probe of the first trunk: healthy layers reached 66%, 17× and 1.85×,
+            # the broken ones started at 92%, 22× and 4.49×. A layer near them is worth a look before the stop.
+            watch = [i for i in range(n_moe) if dec[i] > WATCH_DECIDES or over[i] > WATCH_RANGE_OVER_GAP
+                     or busy[i] > WATCH_BUSIEST] if step >= a.balance_min_step else []
+            for i in watch:
+                self.log.say(f"[eval] watch: MoE layer {i}: the bias decides {dec[i]:.0%} of tokens (> "
+                             f"{WATCH_DECIDES:.0%}?), bias range {over[i]:.0f}× the gap (> {WATCH_RANGE_OVER_GAP:.0f}?), "
+                             f"busiest expert {busy[i]:.2f}× the mean (> {WATCH_BUSIEST}?), level {lse[i]:.2f}")
+            if watch:
+                self.log.row("alarm", step=step, alarm="router_layer_watch", layers=watch,
+                             bias_decides=[dec[i] for i in watch], range_over_gap=[round(over[i], 1) for i in watch],
+                             busiest=[busy[i] for i in watch], lse=[lse[i] for i in watch])
         return row
 
     def peak_memory(self):
@@ -594,6 +619,7 @@ class Trainer:
         spikes, spikes_total = deque(), 0
         broken = deque(maxlen=max(1, a.balance_window))   # steps with the busiest expert above --balance-stop
         steep = deque(maxlen=50)                          # steps with λ above 5× the smallest score gap
+        zlow = deque(maxlen=max(1, a.z_router_window))    # steps with the router's mean level below --z-router-alarm
         times = deque(maxlen=20)                           # recent step times
         hour = deque()                                     # (time, tokens) over the last hour
         decay_start = a.steps - a.decay_steps if a.decay_steps else None
@@ -703,13 +729,18 @@ class Trainer:
             if step % a.log_every == 0 or first or step == a.steps - 1:
                 self.log.say(f"[train] step {step:5d}  ce {ce:.4f}  lr×{mult:.3f}  gnorm "
                              f"{'-' if gnorm is None else f'{gnorm:.3f}'}  scale {self.scaler.scale:.0f}  load max/mean "
-                             f"{bal['load_max_over_mean']:.2f}  λ/gap {row.get('lam_over_margin', 0):.1f}  "
-                             f"{tps_now / dt:,.0f} tok/s  peak {peak[1]:.2f} GiB")
+                             f"{bal['load_max_over_mean']:.2f}  z_router {row['z_router']:.2f}  "
+                             f"λ/gap {row.get('lam_over_margin', 0):.1f}  {tps_now / dt:,.0f} tok/s  peak {peak[1]:.2f} GiB")
             alarms.check(step, found_inf, self.scaler.scale, bal, tps_hour if step >= start + 20 else None, peak[1])
             steep.append(row.get("lam_over_margin", 0) > 5)
             if len(steep) == steep.maxlen and all(steep):
                 alarms._fire(step, "router_gap_below_lambda_over_5_for_50_steps", 500,
                              margin_min=row["margin_min"], layer=row["margin_min_layer"], lam=row["lam"])
+            if a.z_router_alarm:                           # P30: the precursor of the first trunk's break
+                zlow.append(row["z_router"] < a.z_router_alarm)
+                if len(zlow) == zlow.maxlen and all(zlow):
+                    alarms._fire(step, "z_router_below_alarm", 500, z_router=row["z_router"],
+                                 threshold=a.z_router_alarm, window=zlow.maxlen)
             if len(spikes) >= a.spike_stop:            # an orderly stop: the status is in the end row
                 status = "stopped_spikes"
                 step += 1

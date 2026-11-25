@@ -17,7 +17,8 @@
    L  switches SMEBU's step from 0.01 to 0.001 at step 3 (P30);
    G  stops on a broken expert balance (a threshold no step can meet) and saves where it stopped;
    E  evaluates A's step-3 checkpoint with --eval-only: B's evaluation there, bit for bit, and no step.
-   Every step logs the router's health, and every evaluation logs it per MoE layer (P29).
+   Every step logs the router's health, and every evaluation logs it per MoE layer (P29), with the router's
+   level as z and signed lse; L also sets the z_router alarm (P30) so that it must fire.
 """
 from __future__ import annotations
 
@@ -213,9 +214,11 @@ def test_training():
     check(all(r["ce"] == r["ce"] for r in sa.values()), "no NaN")
     check(all(r["margin_min"] > 0 and 0 <= r["bias_decides_max"] <= 1 and r["lam_over_margin"] > 0 and r["lam"] == 0.01
               for r in sa.values()), "every step logs the router's health: score gap, λ over it, how often the bias decides")
-    per_layer = ("router_margin", "bias_decides", "bias_range", "val_load_max_over_mean")
+    per_layer = ("router_margin", "bias_decides", "bias_range", "val_load_max_over_mean", "router_z", "router_lse")
     check(all(r[k] and len(r[k]) == len(ea[0]["router_margin"]) for r in ea.values() for k in per_layer),
           f"every evaluation logs the router per MoE layer ({len(ea[0]['router_margin'])} layers)")
+    check(all(z >= lse * lse - 1e-4 for r in ea.values() for z, lse in zip(r["router_z"], r["router_lse"])),
+          "each layer's level: z, the mean of lse², is at least the square of the signed mean lse")
 
     code, b = torchrun("B", WORK / "b.jsonl", "--resume", str(WORK / "ckpt_a" / "step_000003"),
                        "--save-dir", str(WORK / "ckpt_b"))
@@ -251,9 +254,13 @@ def test_training():
     check(end["steps_done"] == 8 and end["val_bpb_final"] == ea[8]["val_bpb"] and end["val_bpb_pre_decay"] == ea[5]["val_bpb"],
           "P2's summary has A's final and pre-decay validation")
 
-    code, lr = torchrun("L", WORK / "l.jsonl", "--steps", "5", "--lam", "0.01", "--lam-final", "0.001", "--lam-steps", "3")
+    code, lr = torchrun("L", WORK / "l.jsonl", "--steps", "5", "--lam", "0.01", "--lam-final", "0.001", "--lam-steps", "3",
+                        "--z-router-alarm", "1e9", "--z-router-window", "2")
     check(code == 0 and [r["lam"] for r in by(lr, "step")] == [0.01, 0.01, 0.01, 0.001, 0.001],
           "L: SMEBU's step is 0.01 for steps 0–2 and 0.001 from step 3")
+    zal = [r for r in by(lr, "alarm") if r.get("alarm") == "z_router_below_alarm"]
+    check(code == 0 and len(zal) == 1 and zal[0]["step"] == 1 and zal[0]["window"] == 2,
+          "L: the z_router alarm fires once its window is full of steps below the threshold (P30)")
     code, g = torchrun("G", WORK / "g.jsonl", "--save-dir", str(WORK / "ckpt_g"), "--balance-stop", "0.5",
                        "--balance-window", "3", "--balance-frac", "0.6", "--balance-min-step", "0")
     end_g = (by(g, "end") or [{}])[-1]

@@ -1,5 +1,5 @@
 {
-  "_nota": "El tronco desde cero (P30), igual que tronco_v1.json salvo el router. Sin z-loss del router (router_z 0); SMEBU con λ 0.01 hasta el paso 500 y 0.001 después; seq_aux 1e-3; se detiene y guarda si el balanceo se rompe (balance_stop 3); evalúa cada 250 pasos, con el router por capa. La etiqueta nueva separa sus checkpoints de los del primer intento, que quedan en Hugging Face.",
+  "_nota": "El tronco desde cero (P30), igual que tronco_v1.json salvo el router. Sin z-loss del router (router_z 0); SMEBU con λ 0.01 hasta el paso 500 y 0.001 después; seq_aux 1e-3; se detiene y guarda si el balanceo se rompe (balance_stop 3); evalúa cada 250 pasos, con el router por capa; avisa si z_router se queda por debajo de 1.5 durante 50 pasos (P30). La etiqueta nueva separa sus checkpoints de los del primer intento, que quedan en Hugging Face.",
   "tag": "tronco2",
   "args": {
     "config": "configs/ludwig2_afmoe.json",
@@ -29,6 +29,7 @@
     "seq_aux": 0.001,
     "lam_final": 0.001,
     "lam_steps": 500,
-    "balance_stop": 3.0
+    "balance_stop": 3.0,
+    "z_router_alarm": 1.5
   }
 }
