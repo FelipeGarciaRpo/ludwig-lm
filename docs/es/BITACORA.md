@@ -1186,3 +1186,18 @@ Todo lo que se corre, se mide o se decide, en orden. Cada entrada dice qué se h
   - Lo que cambió en el quiebre fue el nivel del router, como dice el P29. El test del P31 (λ/brecha en el 3270) medía el estado final, no la causa.
   - `z_router` bajó de 1.5 hacia el paso ~1000, unos 250 pasos antes del quiebre. En todas las corridas fue la señal previa: con λ 0.01, ninguna que se quedó por encima de ~1.5 se rompió.
 - **Siguiente:** proponer al chat de diseño mostrar `z_router` en cada línea del turno, con una alarma si baja de 1.5, antes del turno 1 del tronco2.
+
+## 2026-11-25 · Vigilar el nivel del router: el retoque aprobado, y el COMMIT del tronco2 pasa a 048efa5
+
+- **Qué:** el chat de diseño aprobó vigilar el nivel del router en vez de λ/brecha, con un agregado. La receta del tronco2 no cambia. Commit `048efa5`.
+  - **Cada paso:** la línea `[train]` muestra `z_router`. Con `--z-router-alarm` (1.5 en `configs/tronco_v2.json`), salta una alarma si se queda debajo durante 50 pasos. El primer tronco lo cruzó ~250 pasos antes de su quiebre.
+  - **Cada evaluación** registra por capa MoE el nivel como `z` y como `lse` con signo. Un promedio de 25 capas puede esconder 5 que se hunden, y `z`, que es un cuadrado, volvería a subir si el router cayera por debajo de 0.
+  - **Aviso por capa:** cada evaluación marca la capa donde el sesgo decide más del 80% de los tokens, el rango del sesgo pasa de 20× la brecha o el experto más cargado pasa de 2×. Son los umbrales de la sonda: las capas sanas llegaron a 66%, 17× y 1.85×, y las rotas empezaron en 92%, 22× y 4.49×.
+  - λ/brecha se sigue registrando, pero no es una señal de salud.
+- **`DECISIONS.md`:**
+  - P29: se corrige el mecanismo. Los routers de las capas rotas tenían preferencias comunes a todos los tokens, y el sesgo necesario se achicó con el nivel del router. Lleva la tabla del sesgo, con λ en el 6.9% del sesgo justo antes del quiebre del tronco y en el 5.2% en `lr-x1-1200`, contra ~3% en las corridas ×2.
+  - P30: la vigilancia pasa a ser el nivel del router.
+  - P31: ❌, con los números de la sonda.
+- **Notebook:** el `COMMIT` del tronco2 pasa a `048efa5`, y las instrucciones del turno dicen qué mirar mientras corre.
+- **Pruebas en el PC:** pyflakes, notebooks en sincronía, la prueba lógica de `bench_afmoe.py` (checkpoint exacto), `test_train_cpu.py` (43, con la alarma de `z_router` y el nivel por capa) y `test_relay_cpu.py` (30).
+- **Siguiente:** el turno 1 del tronco2. En sus evaluaciones (pasos 250 y 500) se mira sobre todo las capas MoE 0–4. Si una capa se acerca a los umbrales, o `z_router` baja de forma sostenida, se avisa al chat de diseño.

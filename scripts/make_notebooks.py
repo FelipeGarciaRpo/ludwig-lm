@@ -681,7 +681,7 @@ Un turno: toma el candado en Hugging Face, sigue desde el checkpoint más nuevo 
 | `sonda` | Mide el router de un checkpoint guardado en Hugging Face, por capa (P29), sin entrenar ni escribir nada | ~10 min |"""),
     code(r'''MODO = "tronco"          # tronco · sonda · prueba-relevo · prueba-respaldo · g0-16k
 CUENTA = "cuenta 1"      # tu etiqueta en el relevo: nunca el usuario de Kaggle ni el correo
-COMMIT = "a9286c4a7f3300dd981eac32e26a05b5027a0146"  # el commit del tronco2: el MISMO en todos sus turnos
+COMMIT = "048efa5d0a79830b40fa58068b68d439a3611d11"  # el commit del tronco2: el MISMO en todos sus turnos
 REPO_URL = "https://github.com/FelipeGarciaRpo/ludwig-lm"
 HF_REPO = "ludwig-v2-lm/ludwig-v2-lm-1"                       # privado, de la organización
 HF_REPO_PRUEBA = "ludwig-v2-lm/ludwig-v2-lm-1-relevo-prueba"  # privado: solo para prueba-relevo
@@ -902,7 +902,12 @@ En el checkpoint 3270 del primer intento, el diagnóstico del P29 queda confirma
 
 Entrena hasta ~11 h desde que empezó la sesión y deja ~45 min para la subida final, el respaldo (~11 GB a Kaggle) y el aplastado. Cada línea `[relevo]` es un evento: candado, de dónde siguió, cada subida, lo que se borra del disco, el respaldo y la entrega.
 
-En `/tmp` nunca hay más de dos checkpoints a la vez (~23 GiB). El de partida se borra después del primer guardado nuevo, se guarda localmente solo el periódico más nuevo, y antes del respaldo solo queda el último."""),
+En `/tmp` nunca hay más de dos checkpoints a la vez (~23 GiB). El de partida se borra después del primer guardado nuevo, se guarda localmente solo el periódico más nuevo, y antes del respaldo solo queda el último.
+
+**Qué mirar mientras corre** (P30). Si pasa alguna de estas cosas, avisa por WhatsApp; el turno sigue solo:
+- **`z_router`** en cada línea `[train]`: el nivel del router. Debería quedarse alto. Si baja de forma sostenida, avisa; si sale `[alarm] … z_router_below_alarm`, quedó por debajo de 1.5 durante 50 pasos, que es lo que anticipó el quiebre del primer tronco.
+- **`[eval] watch: MoE layer …`**, en las evaluaciones (cada 250 pasos): una capa se acerca a las rotas del primer tronco (el sesgo decide más del 80% de los tokens, su rango pasa de 20× la brecha, o el experto más cargado pasa de 2×).
+- **`load max/mean`** debería rondar 1.5. Si el balanceo se rompe, el turno se detiene solo y guarda (`stopped_balance`): no lo relances."""),
     code(r'''if MODO == "tronco":
     LOG = f"/kaggle/working/results/tronco/{time.strftime('%Y%m%d-%H%M')}-{CUENTA.replace(' ', '-')}.jsonl"
     os.makedirs(os.path.dirname(LOG), exist_ok=True)
