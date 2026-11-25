@@ -1165,3 +1165,24 @@ Todo lo que se corre, se mide o se decide, en orden. Cada entrada dice qué se h
   - La alarma de λ/brecha no habría avisado en este estado; la parada por balanceo (3×) sí. Las evaluaciones del tronco2 registran por capa el rango del sesgo y la brecha, así que su cociente se puede vigilar.
   - Los checkpoints 1608 (`ludwig2-respaldo-a2`) y 2151 (`ludwig2-respaldo-b`) están más cerca del comienzo del quiebre, pero el tronco2 los reemplaza en sus dos primeros respaldos. Para sondearlos, la sonda tendría que leerlos desde Kaggle.
 - **Siguiente:** el turno 1 del tronco2, según el plan. Sus evaluaciones muestran el sesgo por capa cada 250 pasos. La decisión del chat va antes del paso ~1,000.
+
+## 2026-11-25 · El sesgo no causó el quiebre: era más chico justo cuando empezó
+
+- **Qué:** el tamaño del sesgo de SMEBU (`bias_abs_max`, el máximo sobre todas las capas, registrado en cada paso) y `z_router`, por tramos del primer tronco. Sale de `results/tronco/turno01` a `turno07_cuenta-1.jsonl`.
+- **Dónde:** el PC.
+- **Resultado** (medias por tramo):
+
+  | Pasos | Sesgo (máx) | `z_router` | Carga máx/media |
+  |---|---|---|---|
+  | 0–550 (sano) | 0.317 (0.416) | 10.24 | 1.50 |
+  | 550–1100 (sano) | 0.226 (0.350) | 2.50 | 1.51 |
+  | 1150–1300 (el quiebre) | 0.146 (0.179) | 0.88 | 1.85 |
+  | 1300–2000 | 0.222 (0.443) | 0.71 | 4.63 |
+  | 2000–3348 | 0.392 (0.563) | 0.86 | 7.02 |
+
+- **Conclusión:**
+  - Con un sesgo de 0.3–0.4, los expertos estaban balanceados mientras `z_router` estaba alto (turno 1). El quiebre empezó con el sesgo en su punto más chico y `z_router` en ~0.88.
+  - El tamaño del sesgo no lo causó: creció después del quiebre, persiguiendo el desbalance. Es lo que la sonda vio en el paso 3270, donde el rango del sesgo separa a las capas rotas.
+  - Lo que cambió en el quiebre fue el nivel del router, como dice el P29. El test del P31 (λ/brecha en el 3270) medía el estado final, no la causa.
+  - `z_router` bajó de 1.5 hacia el paso ~1000, unos 250 pasos antes del quiebre. En todas las corridas fue la señal previa: con λ 0.01, ninguna que se quedó por encima de ~1.5 se rompió.
+- **Siguiente:** proponer al chat de diseño mostrar `z_router` en cada línea del turno, con una alarma si baja de 1.5, antes del turno 1 del tronco2.
