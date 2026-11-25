@@ -171,6 +171,19 @@ def test_backup():
     check({s: v[0] for s, v in bk.copies().items()} == {"dueno/respaldo-b": 8},
           "an unpacked copy without DCP's .metadata does not count (it could not be loaded)")
 
+    def refused(cmd, capture_output=True, text=True):          # like turns 6 and 7: the upload ends, the version fails
+        bars = "".join(f"\r {p}%|{'#' * (p // 10):<10}| {p / 10:.1f}G/11.3G [02:17<00:01, 95.8MB/s]" for p in range(0, 100, 3))
+        return subprocess.CompletedProcess(cmd, 1, "Starting upload for file checkpoint.tar\nUpload successful\n"
+                                           "403 - Forbidden - Permission 'datasets.update' was denied\n", bars)
+    try:
+        KaggleBackup(slugs, roots=[root], tag="t", run=refused).upload(ck / "step_000011", "dueno/respaldo-a", "step 11",
+                                                                      WORK / "stage")
+        said = ""
+    except RuntimeError as e:
+        said = str(e)
+    check("403 - Forbidden" in said and "%|" not in said and len(said) < 700,
+          "a refused backup reports kaggle's own error, not its progress bars")
+
 
 def make_shards():
     import test_shards_cpu as ts

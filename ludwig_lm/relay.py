@@ -59,6 +59,12 @@ def _slug(label: str) -> str:
     return re.sub(r"[^a-z0-9]+", "-", label.lower()).strip("-")
 
 
+def _said(text: str, n: int = 4) -> list[str]:
+    """The last ``n`` lines of a command's output that are not progress bars (tqdm redraws them with \\r)."""
+    lines = (s.strip() for s in (text or "").replace("\r", "\n").split("\n"))
+    return [s for s in lines if s and "%|" not in s][-n:]
+
+
 # ----------------------------------------------------------------------------- stores
 class HFStore:
     """A Hugging Face repository as the relay's store (a private model repository)."""
@@ -283,8 +289,9 @@ class KaggleBackup:
                                                                   "licenses": [{"name": "other"}]}))
         p = self.run(["kaggle", "datasets", "version", "-p", str(stage), "-m", message, "-d"],
                      capture_output=True, text=True)
-        if p.returncode != 0:
-            raise RuntimeError(f"kaggle datasets version {slug}: {(p.stdout + p.stderr)[-800:]}")
+        if p.returncode != 0:                        # the cause, not the progress bars that hid it in turns 5-7
+            said = _said(p.stdout) + _said(p.stderr)
+            raise RuntimeError(f"kaggle datasets version {slug} (exit {p.returncode}): " + " | ".join(said)[-500:])
 
 
 def train_command(args: dict, resume: str | None, save_dir: str, nproc: int = 2, python: str = "python") -> list[str]:
@@ -465,7 +472,7 @@ class Session:
                     self.backup.upload(last, slug, f"{self.tag} step {last.name[5:]} by {self.label}", self.work / "backup")
                     self.event("backup", dataset=slug, step=int(last.name[5:]), seconds=round(time.time() - t, 1))
                 except Exception as e:  # noqa: BLE001
-                    self.event("backup_failed", error=f"{type(e).__name__}: {str(e)[:200]}")
+                    self.event("backup_failed", error=f"{type(e).__name__}: {str(e)[:600]}")
         if not self.no_lock and lost is None:
             if self.squash_on:
                 try:
