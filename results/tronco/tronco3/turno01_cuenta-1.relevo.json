@@ -1,0 +1,99 @@
+{
+ "session": "b4a59bb91653420a8b4cc445af7ffd26",
+ "by": "cuenta 1",
+ "train_exit": 0,
+ "lock_lost": null,
+ "resumed_from": {
+  "where": null,
+  "step": -1
+ },
+ "uploaded_step": 498,
+ "last_local": "step_000498",
+ "events": [
+  {
+   "kind": "lock",
+   "time": 1795657965.5,
+   "by": "cuenta 1",
+   "session": "b4a59bb9",
+   "until": 1795665165
+  },
+  {
+   "kind": "resume_from",
+   "time": 1795657967.7,
+   "by": "cuenta 1",
+   "session": "b4a59bb9",
+   "where": null,
+   "step": -1
+  },
+  {
+   "kind": "upload",
+   "time": 1795669014.9,
+   "by": "cuenta 1",
+   "session": "b4a59bb9",
+   "step": 137,
+   "GiB": 11.46,
+   "seconds": 120.6,
+   "kept": [
+    137
+   ]
+  },
+  {
+   "kind": "upload",
+   "time": 1795679878.9,
+   "by": "cuenta 1",
+   "session": "b4a59bb9",
+   "step": 274,
+   "GiB": 11.46,
+   "seconds": 118.1,
+   "kept": [
+    137,
+    274
+   ]
+  },
+  {
+   "kind": "upload",
+   "time": 1795690744.9,
+   "by": "cuenta 1",
+   "session": "b4a59bb9",
+   "step": 412,
+   "GiB": 11.46,
+   "seconds": 118.8,
+   "kept": [
+    274,
+    412
+   ]
+  },
+  {
+   "kind": "upload",
+   "time": 1795697553.3,
+   "by": "cuenta 1",
+   "session": "b4a59bb9",
+   "step": 498,
+   "GiB": 11.46,
+   "seconds": 84.7,
+   "kept": [
+    412,
+    498
+   ]
+  },
+  {
+   "kind": "backup_failed",
+   "time": 1795698120.4,
+   "by": "cuenta 1",
+   "session": "b4a59bb9",
+   "error": "RuntimeError: kaggle datasets version <usuario>/ludwig2-respaldo-a2 (exit 1): Upload successful: checkpoint.json (6KB) | Starting upload for file checkpoint.tar | Upload successful: checkpoint.tar (11GB) | 403 Client Error: Forbidden for url: https://api.kaggle.com/v1/datasets.DatasetApiService/CreateDatasetVersion"
+  },
+  {
+   "kind": "squash",
+   "time": 1795698121.2,
+   "by": "cuenta 1",
+   "session": "b4a59bb9"
+  },
+  {
+   "kind": "release",
+   "time": 1795698122.3,
+   "by": "cuenta 1",
+   "session": "b4a59bb9"
+  }
+ ]
+}

@@ -1320,3 +1320,37 @@ Todo lo que se corre, se mide o se decide, en orden. Cada entrada dice qué se h
     - si una capa sale marcada en dos evaluaciones seguidas (el sesgo decide más del 80% de sus tokens, o su experto más cargado pasa de 2× la media), λ después del paso 500 baja de 0.001 a 5e-4, el de Trinity Large.
   - En cada paso, `router_floor` vale 0 hasta que una capa llega al piso.
 - **Siguiente:** el turno 2 del `tronco3` con este commit, o el 3 según lo de arriba.
+
+## 2026-11-25 · tronco2: el turno 1 se cancela, y Hugging Face se limpia
+
+- **Qué:** Pipe canceló el turno 1 del `tronco2` cuando se decidió el `tronco3` (P32), para no gastar más GPU. Después, una celda en un notebook de Kaggle limpió Hugging Face entre turnos.
+- **Dónde:** Kaggle (el turno, 2×T4; la limpieza, CPU).
+- **El turno cancelado:** su última subida a Hugging Face fue el checkpoint 272. Cada subida lleva también el `.jsonl` del entrenamiento hasta ese momento, así que el log del turno está en `logs/20261126-cuenta-1-d73cbd62.jsonl` de Hugging Face, con la evaluación del paso 250. Todavía no está en `results/`.
+- **La limpieza:** la celda revisa el candado, borra los checkpoints y pone el índice al día en un solo commit, y aplasta el historial.
+  - Primero corrió en seco, para mostrar qué haría.
+  - El candado seguía tomado por la sesión cancelada, así que se soltó a mano en el mismo commit.
+  - Se borraron el 3131 del `tronco` y el 136 del `tronco2`; quedaron el 3270 y el 272.
+  - Con el historial aplastado, ese espacio se liberó en el momento.
+- **Siguiente:** bajar el log del `tronco2` a `results/tronco/tronco2/`.
+
+## 2026-11-26 · tronco3: turno 1, pasos 0–498
+
+- **Qué:** el primer turno del `tronco3` (P32), desde el paso 0.
+- **Dónde:** Kaggle 2×T4, cuenta 1, código `020ba9c`, shards `ludwig2-shards-1` (build `386755d6`), respaldos `ludwig2-respaldo-a2` y `-b`.
+- **Archivos:** `results/tronco/tronco3/turno01_cuenta-1.jsonl` (una fila por evento) y `.relevo.json` (los eventos del relevo). Llegaron con CRLF y sin el último salto de línea, y se restauraron; cada fila se re-serializa byte por byte. El usuario de Kaggle del error del respaldo queda como `<usuario>`.
+- **Resultado:**
+  - 498 pasos y 130.5M tokens en 10.96 h, a 3,330 tokens/s en la última hora, con pico de 13.11 GiB reservados y 0 saltos de FP16. Cuatro subidas a Hugging Face: 137, 274, 412 y 498.
+  - Val bpb 4.0500 en el paso 0 y 2.3009 en el 250.
+  - **El router en el paso 250, por capa MoE:**
+    - lse de 3.59 a 3.85, el más bajo en la capa MoE 7. Las capas MoE 0–2, que son las 3–5 del modelo, están en 3.77, 3.68 y 3.67;
+    - el sesgo decide el 96–99% de los tokens en todas las capas, y su rango es 21–32× la brecha;
+    - el experto más cargado va de 1.16 a 1.56× (capas MoE 0–4: 1.20–1.27×).
+    - El aviso por capa marcó las 23, por los dos primeros criterios.
+  - **`z_router`:** 15.84 en el paso 0, 15.41 en el 120, 13.86 en el 240, 11.94 en el 400 y 10.50 en el 497.
+  - **El sesgo más grande:** 0.30 en el paso 240, 0.41 en el 400 y 0.54 en el 497. El primer tronco tenía 0.39 en el 400 y 0.40 en el 500 (`results/tronco/turno01_cuenta-1.jsonl`).
+  - **La carga máx/media por paso**, entre los pasos 400 y 497: de 1.36 a 2.19, con media 1.54.
+  - **El respaldo falló.** `kaggle datasets version` subió los archivos, y Kaggle respondió 403 Forbidden al crear la versión nueva de `ludwig2-respaldo-a2`. Los respaldos de los turnos 6 y 7 del primer tronco ya habían fallado al 99% en ese mismo dataset, con la causa cortada; probablemente es lo mismo. Hugging Face tiene el 412 y el 498, y los dos respaldos siguen con el 1608 y el 2151 del primer tronco.
+  - El candado se soltó y el historial se aplastó. Las condiciones 1–4 de la G0 se cumplieron.
+- **Conclusión:** el turno está sano. El nivel del router sigue bajando, a ~la mitad del ritmo del primer tronco, y el chat de diseño encendió el piso desde el turno 2 (P34, patch 0015).
+- **Pregunta abierta para el chat de diseño:** el aviso por capa marca las 23 capas desde el paso 250 por el criterio del 80% (el sesgo decide el 96–99%), con el experto más cargado bajo 1.6×. La regla de la P34 que baja λ a 5e-4 tras dos evaluaciones marcadas se cumpliría en la del paso 498 sin que ninguna capa esté desbalanceada.
+- **Siguiente:** borrar el 272 del `tronco2` en Hugging Face y lanzar el turno 2 con el `COMMIT` `e074712`. Revisar por qué Kaggle rechaza el respaldo.
