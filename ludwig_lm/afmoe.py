@@ -217,9 +217,11 @@ class LossWeights:
     output_z: float = 1e-4
     seq_aux: float = 1e-4        # sequence-wise balance loss (DeepSeek-V3); the bias does the rest
     router_z: float = 0.0        # P30: made for softmax routers; with sigmoid scores it broke the trunk's balance
+    router_floor: float = 0.0    # P33: a floor for each MoE layer's level, off unless the level sinks
+    router_floor_lse: float = 1.2
 
 
-def moe_losses(records, batch: int, seq: int, n_exp: int, k: int):
+def moe_losses(records, batch: int, seq: int, n_exp: int, k: int, floor_lse: float = 1.2):
     """Sequence-wise auxiliary loss and router z-loss, averaged over the MoE layers; the mean entropy of each
     token's normalized router scores (a log; at most ln E); and the router's health in each MoE layer (P29):
 
@@ -233,6 +235,7 @@ def moe_losses(records, batch: int, seq: int, n_exp: int, k: int):
     aux = torch.zeros((), device=records[0][0].device)
     rz = torch.zeros((), device=records[0][0].device)
     ent = torch.zeros((), device=records[0][0].device)
+    fl = torch.zeros((), device=records[0][0].device)
     margins, decides, zs, lses = [], [], [], []
     for logits, chosen in records:
         s = torch.sigmoid(logits)
@@ -243,6 +246,7 @@ def moe_losses(records, batch: int, seq: int, n_exp: int, k: int):
         aux = aux + ((cnt * (n_exp / (k * seq))) * p).sum(-1).mean()
         lse = torch.logsumexp(logits, -1)
         rz = rz + lse.pow(2).mean()
+        fl = fl + torch.relu(floor_lse - lse.mean()).pow(2)       # P33: zero while the layer's level is above
         with torch.no_grad():
             q = pt.detach()
             ent = ent + (-(q * torch.log(q.clamp_min(1e-20))).sum(-1).mean())
@@ -254,7 +258,7 @@ def moe_losses(records, batch: int, seq: int, n_exp: int, k: int):
             lses.append(lse.detach().float().mean())
     n = len(records)
     return (aux / n, rz / n, ent / n, torch.stack(margins), torch.stack(decides), torch.stack(zs),
-            torch.stack(lses))
+            torch.stack(lses), fl / n)
 
 
 # --------------------------------------------------------------------------- model
@@ -281,10 +285,12 @@ class LudwigAfmoe(nn.Module):
         finally:
             _RECORD = previous
         ce, z = chunked_cross_entropy(h[:, :-1], self.lm.lm_head.weight, input_ids[:, 1:], ce_chunk, mask=loss_mask)
-        aux, rz, ent, margin, decides, z_layers, lse_layers = moe_losses(records, batch, seq, cfg.num_experts,
-                                                                         cfg.num_experts_per_tok)
-        loss = ce + weights.output_z * z + weights.seq_aux * aux + weights.router_z * rz
+        aux, rz, ent, margin, decides, z_layers, lse_layers, floor = moe_losses(
+            records, batch, seq, cfg.num_experts, cfg.num_experts_per_tok, weights.router_floor_lse)
+        loss = (ce + weights.output_z * z + weights.seq_aux * aux + weights.router_z * rz
+                + weights.router_floor * floor)
         metrics = {"ce": ce.detach(), "z_out": z.detach(), "seq_aux": aux.detach(), "z_router": rz.detach(),
+                   "router_floor": floor.detach(),
                    "router_entropy": ent, "router_margin": margin, "bias_decides": decides,
                    "router_z_layers": z_layers, "router_lse_layers": lse_layers,
                    "chosen": [c for _, c in records]}

@@ -16,7 +16,9 @@
    S  treats every step as a loss spike: the steps are skipped and the third one stops the run;
    L  switches SMEBU's step from 0.01 to 0.001 at step 3 (P30);
    G  stops on a broken expert balance (a threshold no step can meet) and saves where it stopped;
-   E  evaluates A's step-3 checkpoint with --eval-only: B's evaluation there, bit for bit, and no step.
+   E  evaluates A's step-3 checkpoint with --eval-only: B's evaluation there, bit for bit, and no step;
+   F  turns on the floor for the router's level above the level, which must rise against A's (P33).
+   Before the training: the trunk's models build with their dense layers and parameter counts (P32).
    Every step logs the router's health, and every evaluation logs it per MoE layer (P29), with the router's
    level as z and signed lse; L also sets the z_router alarm (P30) so that it must fire.
 """
@@ -162,6 +164,21 @@ def test_optimizer():
           "Muon decays its matrices at the AdamW LR x wd (Ludwig 1), not at its own LR")
 
 
+def test_trunk_model():
+    import torch
+
+    from ludwig_lm.afmoe import LudwigAfmoe, load_config, moe_blocks
+
+    print("the trunk's model", flush=True)
+    for name, dense, total in (("ludwig2_afmoe.json", 1, 1.906), ("ludwig2_afmoe_d3.json", 3, 1.793)):
+        cfg = load_config(ROOT / "configs" / name)
+        with torch.device("meta"):
+            m = LudwigAfmoe(cfg)
+        n = sum(p.numel() for p in m.parameters()) / 1e9
+        check(cfg.num_dense_layers == dense and len(moe_blocks(m.lm)) == cfg.num_hidden_layers - dense
+              and round(n, 3) == total, f"{name}: {dense} dense layers, {cfg.num_hidden_layers - dense} MoE, {n:.3f}B")
+
+
 def test_public_paths():
     sys.path.insert(0, str(ROOT / "scripts"))
     from train import public
@@ -268,6 +285,14 @@ def test_training():
           and [r["reason"] for r in by(g, "save")] == ["stopped_balance"] and (WORK / "ckpt_g" / "step_000003").exists()
           and any(r.get("alarm") == "expert_balance_broke" for r in by(g, "alarm")),
           "G: a broken balance stops the run after its window, and it saves where it stopped")
+    check(all(r["router_floor"] >= 0 for r in sa.values()), "every step logs the level floor's term (P33; off: weight 0)")
+    code, f = torchrun("F", WORK / "f.jsonl", "--router-floor", "1", "--router-floor-lse", "50")
+    sf, ef = {r["step"]: r for r in by(f, "step")}, {r["step"]: r for r in by(f, "eval")}
+    mean = lambda xs: sum(xs) / len(xs)
+    check(code == 0 and all(r["router_floor"] > 0 and r["ce"] == r["ce"] for r in sf.values())
+          and mean(ef[8]["router_lse"]) > mean(ea[8]["router_lse"]),
+          f"F: a floor above the level raises it (mean lse at step 8: {mean(ef[8]['router_lse']):.3f} with it, "
+          f"{mean(ea[8]['router_lse']):.3f} without)")
     code, e = torchrun("E", WORK / "e.jsonl", "--resume", str(WORK / "ckpt_a" / "step_000003"), "--eval-only")
     ee = by(e, "eval")
     check(code == 0 and (by(e, "end") or [{}])[-1].get("status") == "evaluated" and not by(e, "step")
@@ -282,6 +307,7 @@ def main():
     make_data(WORK)
     test_reader(WORK)
     test_optimizer()
+    test_trunk_model()
     test_public_paths()
     test_training()
     print("PASS" if not FAILS else f"FAIL: {len(FAILS)} checks", flush=True)

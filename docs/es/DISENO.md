@@ -51,6 +51,15 @@
 >    El LR, los datos y el resto no cambian.
 > 4. **La sonda (P31)** mide el router del checkpoint 3270 para confirmar el diagnóstico, sin frenar al `tronco2`.
 
+> **El tronco desde cero otra vez, con 3 capas densas (25 de noviembre de 2026, en la noche)** (decisiones P32–P33 de [`../DECISIONS.md`](../DECISIONS.md)):
+> 1. **El `tronco2` estaba sano en el paso 220,** pero el nivel de su router baja igual, aun sin z-loss, a ~45% del ritmo del primer tronco.
+> 2. **La literatura señala las primeras capas MoE:**
+>    - Sigma-MoE-Tiny vio ahí crecer el sesgo hasta que decidía solo, y lo arregló activando más expertos en esas capas;
+>    - Trinity Large pasó de 3 a 6 capas densas como parte del arreglo de un colapso igual al nuestro;
+>    - DeepSeek-V3 usa 3.
+> 3. **El `tronco3` empieza de cero con 3 capas densas en vez de 1:** 1.793B parámetros totales (antes 1.906B) y los mismos 0.491B activos. El resto de la receta del `tronco2` no cambia, y el formato sigue sirviendo en llama.cpp sin cambios (`results/t0_1c_afmoe_d3.json`).
+> 4. **El piso para el nivel del router** (P33) queda listo y apagado.
+
 **Leyenda:** ✅ decidido · ❓ decide Pipe · 📏 se mide antes de fijarlo · 🧪 se prueba en corrida corta · 🟢🟡🔴 licencia de datos (ver 4.8)
 
 ---
@@ -677,7 +686,7 @@ Se agregan a medida que existan: `tokenizer/`, `data/` (recetas, lector, descont
 | T0.3 + T2 | ✅ **LR y estabilidad en FP16** (`notebooks/t0_3_t2_lr_2xT4.ipynb`): dos rondas, todas estables. El tronco va a ×1, la receta del Ludwig 1 (P25) | 2×T4 | ~3 × 9.5 + 4 × 11 | Hecho el 15 nov |
 | T1 | **Datos:** fuentes cerradas (4.2, mezcla v3); pre-tokenizado con descontaminación y manifiestos. El código está listo y probado (P18–P24). La sesión 1 hizo 28 shards en 10.4 h; faltan unas 5 sesiones, que pueden correr mientras corre el tronco (`notebooks/t1_shards_cpu.ipynb`) | CPU | ~10 min + ~6 × 11 | Los 168 shards del tronco, con sus manifiestos |
 | G0 | ✅ **Compuerta G0** (5.7, P27): G0-0 (ensayo del relevo) y G0-1 (16K) el 17 nov, las condiciones 1–4 en el turno 1 del tronco y la reanudación en otra cuenta en el turno 5 | 2×T4 | ~1 + los dos primeros turnos | Hecho en el primer tronco; el `tronco2` usa el mismo relevo y no la repite |
-| T3 | **Tronco** hasta 22.5B. El primer intento llegó al paso 3348 con el balanceo de los expertos roto desde el ~1250 (P29); desde el 25 nov, `tronco2` desde cero (P30) | Relevo | ~1,550–2,450 | — |
+| T3 | **Tronco** hasta 22.5B. El primer intento llegó al paso 3348 con el balanceo de los expertos roto desde el ~1250 (P29); el 25 nov, `tronco2` desde cero (P30), y desde su segundo turno `tronco3`, con 3 capas densas (P32) | Relevo | ~1,550–2,450 | — |
 | T4 | **Rama de la v1** (2.5B, con 16K y MTP) | Relevo | ~225–355 | Base lista |
 | T5 | **SFT, MTP, GGUF y evaluación** | 2×T4 | ~60–150 | Ludwig 2 · 25B publicado |
 

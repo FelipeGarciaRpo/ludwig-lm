@@ -1222,3 +1222,38 @@ Todo lo que se corre, se mide o se decide, en orden. Cada entrada dice qué se h
 
 - **Pregunta abierta para el chat de diseño:** en Trinity, en Sigma-MoE y en el primer tronco (capas MoE 0–4), el punto débil son las primeras capas MoE. Si el tronco2 se rompe y hay que reiniciar, ¿se agregan capas densas o se activan más expertos en las primeras capas? Eso solo cambia con un reinicio. El paso del sesgo, la pérdida por secuencia y un piso para el nivel del router sí pueden cambiar entre turnos.
 - **Siguiente:** las evaluaciones de los pasos 250 y 500 del turno 1.
+
+## 2026-11-25 · Tres capas densas: el tronco vuelve a empezar como tronco3 (patch 0014)
+
+- **Qué:** la respuesta del chat de diseño a la pregunta abierta de `f515922`, que era cómo evitar que los routers vuelvan a colapsar (P32–P33).
+- **Dónde:** chat de diseño, en CPU. Leí las fuentes: el informe de Trinity Large (§6 y tabla 2) y el de Sigma-MoE-Tiny (§2.2.2 y §3.5.2).
+- **Lo que confirman las fuentes:**
+  - **Trinity Large:** su enrutado derivó hasta colapsar los expertos. Lo arreglaron con seis cambios a la vez y sin ablaciones; uno fue pasar de 3 a 6 capas densas (de 60). Del z-loss de 1e-6 que metieron a mitad de corrida no dice si era del router o de la salida, pero lo calculan con el kernel fusionado de la entropía cruzada (§3.3) y hablan del logit máximo, lo que apunta a la salida.
+  - **Sigma-MoE-Tiny:** con el sesgo de DeepSeek, el sesgo de las capas bajas crece hasta que los scores del router dejan de importar, y el experto con más sesgo se lleva casi todos los tokens: lo mismo que la sonda vio en las capas MoE 0–4 del primer tronco. También vieron que la pérdida de balanceo, en esas capas, se satisface volviendo uniformes las probabilidades sin balancear los tokens. Es una razón para vigilar que el `seq_aux` 1e-3 no aplane los scores de las primeras capas.
+- **Lo que vimos en el tronco2:** sano en el paso 220 (carga 1.4–1.6), pero el nivel del router baja aun sin z-loss: `z_router` 13.31 en el paso 220, contra 11.01 del primer tronco, ~45% del ritmo. El z-loss aceleraba una caída que no causaba él solo. Lo que se ve encaja con que la entropía cruzada afila la compuerta bajando el nivel, pero eso no está medido.
+- **La decisión (P32):** el tronco vuelve a empezar como `tronco3`, con 3 capas densas en vez de 1 (`configs/ludwig2_afmoe_d3.json`).
+  - 1.793B parámetros totales, contra 1.906B; los mismos 0.491B activos, porque el FFN denso (4,096) es tan ancho como los 4 expertos compartidos y los 4 elegidos de 512.
+  - El MoE empieza en la capa 3, después de las dos capas MoE que peor se rompieron.
+  - El resto de la receta es la del `tronco2`.
+  - Es el momento más barato, porque solo se pierde el primer turno del `tronco2`.
+- **El piso (P33):** `--router-floor` y `--router-floor-lse`, una pena (τ − lse medio)² por capa por debajo de τ = 1.2. Está apagado en `tronco_v3.json`; encenderlo es un cambio de config y un commit nuevo.
+- **Archivos:**
+  - `ludwig_lm/afmoe.py` y `scripts/train.py`: el piso, y su término en cada paso.
+  - `configs/ludwig2_afmoe_d3.json` y `configs/tronco_v3.json`.
+  - El notebook del tronco: `tronco3`, y la sonda con la config de cada etiqueta.
+  - `scripts/test_train_cpu.py`: los dos modelos con sus capas y sus conteos, y la corrida F con el piso encendido.
+  - `configs/tiny_afmoe_d3.json` y `results/t0_1c_afmoe_d3.json`: la prueba del formato con 3 capas densas.
+- **Resultado:**
+  - `test_train_cpu.py` PASS: los dos modelos dan 1.906B y 1.793B; sin piso, su término es 0; con τ encima del nivel, el lse medio en el paso 8 sube de 2.077 a 2.665.
+  - `test_relay_cpu.py` y `test_shards_cpu.py` PASS.
+  - `smoke_format_afmoe.py --config configs/tiny_afmoe_d3.json`, contra llama.cpp `dd6b945` sin cambios: C1–C5 PASS, probabilidades a 4.0e-6, greedy 4/4. El formato sigue sirviendo con 3 capas densas.
+- **Ojo:**
+  - **El turno 1 del `tronco2` termina normal.** Sus evaluaciones de los pasos 250 y 500 muestran cómo van sus primeras capas con 1 capa densa.
+  - **El `COMMIT` del `tronco3` es el de este patch,** en todos sus turnos.
+  - **Hugging Face guarda 2 checkpoints por etiqueta.** Para no acercarse a los 100 GB:
+    - borrar el 3131 del `tronco` (el 3270 queda para el registro);
+    - del `tronco2`, borrar el más viejo cuando termine su turno 1, y el otro cuando el `tronco3` pase el paso ~1,500 sano.
+  - **En cada evaluación del `tronco3`:**
+    - que el lse de sus primeras capas MoE no baje más rápido que el de las demás;
+    - que el sesgo no decida más del ~80% de sus tokens.
+- **Siguiente:** aplicar 0014, que no toca el turno que corre porque ese usa su propio `COMMIT`. Cuando el turno 1 del `tronco2` suelte el candado, el turno 1 del `tronco3`.

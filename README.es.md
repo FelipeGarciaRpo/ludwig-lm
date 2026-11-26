@@ -6,7 +6,7 @@
 
 ![Licencia](https://img.shields.io/badge/licencia-Apache--2.0-blue)
 ![Estado](https://img.shields.io/badge/estado-fase%20T3-orange)
-![Parámetros](https://img.shields.io/badge/par%C3%A1metros-1.91B%20totales%20%2F%200.49B%20activos-6f42c1)
+![Parámetros](https://img.shields.io/badge/par%C3%A1metros-1.79B%20totales%20%2F%200.49B%20activos-6f42c1)
 ![Hardware](https://img.shields.io/badge/entrenado%20en-Kaggle%202%C3%97T4-20BEFF)
 ![Idiomas](https://img.shields.io/badge/idiomas-ES%20%2B%20EN-2ea44f)
 
@@ -14,7 +14,7 @@
 
 </div>
 
-> **Estado, 25 de noviembre de 2026.** El diseño v1.2 está aprobado: Ludwig 2 se guarda en el formato AFMoE de los modelos Trinity de Arcee, que corre en llama.cpp sin parche. El tronco arrancó el 18 de noviembre, por turnos entre cuentas de Kaggle (checkpoints en Hugging Face con candado y respaldo en Kaggle, [notebook](notebooks/tronco_relevo_2xT4.ipynb)), y pasó la compuerta G0. El 25 de noviembre vuelve a empezar desde el paso 0. Desde el paso ~1,250, el balanceo de los expertos se había roto en las primeras 5 capas MoE: el z-loss del router, pensado para routers softmax, empujó los scores sigmoide hacia la cola, donde cada paso del sesgo de balanceo re-enrutaba a casi todos los tokens a la vez ([`docs/DECISIONS.md`](docs/DECISIONS.md), P29–P30). El nuevo arranque quita esa pérdida, achica 10 veces el paso del sesgo desde el paso 500 y detiene la corrida si el balanceo se rompe. El entrenamiento va a **3,300–3,600 tokens/s en 2×T4, ~1,900–2,100 h para 25B tokens**, con ×1, el learning rate del Ludwig 1. El tokenizador de 64K quedó fijado ([`tokenizer/`](tokenizer/)), y los datos del tronco son shards pre-tokenizados en la CPU de Kaggle ([notebook](notebooks/t1_shards_cpu.ipynb)). **Todavía no hay pesos.** Este repositorio documenta el proyecto desde la primera prueba.
+> **Estado, 25 de noviembre de 2026.** El diseño v1.2 está aprobado: Ludwig 2 se guarda en el formato AFMoE de los modelos Trinity de Arcee, que corre en llama.cpp sin parche. El tronco arrancó el 18 de noviembre, por turnos entre cuentas de Kaggle (checkpoints en Hugging Face con candado y respaldo en Kaggle, [notebook](notebooks/tronco_relevo_2xT4.ipynb)), y pasó la compuerta G0. Desde el paso ~1,250, el balanceo de los expertos se rompió en las primeras 5 capas MoE, donde el sesgo de balanceo terminó eligiendo los expertos de todos los tokens. Empezó cuando bajó el nivel del router, y el z-loss del router lo aceleró ([`docs/DECISIONS.md`](docs/DECISIONS.md), P29–P31). El 25 de noviembre el tronco volvió a empezar desde el paso 0 sin esa pérdida, con el paso del sesgo 10 veces más chico desde el paso 500 y una parada si el balanceo se rompe. Después del primer turno de esa corrida, vuelve a empezar una vez más como `tronco3`, con 3 capas densas antes de la primera capa MoE en vez de 1, como hace DeepSeek-V3 y como hizo Trinity Large para arreglar el mismo colapso (P32). Así el modelo queda en 1.793B parámetros totales, con los mismos 0.491B activos. El entrenamiento va a **3,300–3,600 tokens/s en 2×T4, ~1,900–2,100 h para 25B tokens**, con ×1, el learning rate del Ludwig 1. El tokenizador de 64K quedó fijado ([`tokenizer/`](tokenizer/)), y los datos del tronco son shards pre-tokenizados en la CPU de Kaggle ([notebook](notebooks/t1_shards_cpu.ipynb)). **Todavía no hay pesos.** Este repositorio documenta el proyecto desde la primera prueba.
 
 ## Por qué Ludwig 2
 
@@ -28,7 +28,7 @@
 
 | | |
 |---|---|
-| Parámetros | **1.906B totales, 0.491B activos** por token |
+| Parámetros | **1.793B totales, 0.491B activos** por token (3 capas densas desde la P32; 1.906B con 1) |
 | Forma | 26 capas × ancho 1024: la primera es densa y las otras 25 son MoE |
 | Atención | GQA (16 cabezas de query y 4 de KV, de 64), QK-norm, compuerta sigmoide a la salida |
 | Capas locales y globales | 3 capas locales (ventana deslizante de 2,048 tokens, RoPE θ = 10K) por cada global (sin codificación de posición): 20 locales y 6 globales |
@@ -70,7 +70,7 @@ Ludwig 2 toma la **forma** de MobileMoE-M de Meta (profunda y delgada) y el **bl
 | | MobileMoE-M (Meta) | Ludwig 2 |
 |---|---|---|
 | Forma | 26 × 1024, GQA 16/4 | Igual |
-| Totales / activos | 2.82B / 528M | 1.91B / 491M |
+| Totales / activos | 2.82B / 528M | 1.79B / 491M |
 | Vocabulario | 128K (Llama 3) | 64K: la cabeza a la mitad |
 | QK-norm y compuerta | No las menciona | Las dos |
 | Router | Sigmoide sin pérdida auxiliar | Sigmoide con un bias por experto que actualiza SMEBU |
@@ -127,7 +127,7 @@ Salida cruda: [`results/banco_t4_v1/`](results/banco_t4_v1/). Lo que deja decidi
 
 ### T0.1-C: el formato AFMoE (CPU, 11 de noviembre de 2026)
 
-Un `AfmoeForCausalLM` diminuto con la estructura de Ludwig 2, con prompts más largos que su ventana deslizante y un bias de expertos grande a propósito, coincide con transformers en llama.cpp **sin cambios**: probabilidades a 5.9e-5, greedy 4/4 y el bias de los expertos respetado ([`scripts/smoke_format_afmoe.py`](scripts/smoke_format_afmoe.py), [`results/t0_1c_afmoe.json`](results/t0_1c_afmoe.json)). Para eso son obligatorias dos opciones: `mup_enabled` (llama.cpp siempre multiplica los embeddings por √d) y `route_norm`.
+Un `AfmoeForCausalLM` diminuto con la estructura de Ludwig 2, con prompts más largos que su ventana deslizante y un bias de expertos grande a propósito, coincide con transformers en llama.cpp **sin cambios**: probabilidades a 5.9e-5, greedy 4/4 y el bias de los expertos respetado ([`scripts/smoke_format_afmoe.py`](scripts/smoke_format_afmoe.py), [`results/t0_1c_afmoe.json`](results/t0_1c_afmoe.json)). Para eso son obligatorias dos opciones: `mup_enabled` (llama.cpp siempre multiplica los embeddings por √d) y `route_norm`. El 25 de noviembre la misma prueba pasó con 3 capas densas en vez de 1, el único cambio que la P32 le hace al modelo real: probabilidades a 4.0e-6 y greedy 4/4 ([`configs/tiny_afmoe_d3.json`](configs/tiny_afmoe_d3.json), [`results/t0_1c_afmoe_d3.json`](results/t0_1c_afmoe_d3.json)).
 
 ### T0.2 v2: el entrenamiento real en 2×T4 (Kaggle, 12 de noviembre de 2026)
 
@@ -264,8 +264,8 @@ ludwig-lm/
 │                   # · shards.py: los shards de la T1 y su lector · sources.py, build.py: el constructor de shards
 │                   # · relay.py: el candado, las subidas y el respaldo del relevo
 │                   # · checkpoint.py: checkpoints con reanudación verificada · model.py: formato A (respaldo)
-├── configs/        # ludwig2_afmoe.json (el modelo real), tiny_afmoe.json (pruebas), data_v3.json (los datos del tronco),
-│                   # tronco_v1.json, tronco_v2.json (los argumentos de entrenamiento del tronco: el primero y el nuevo arranque);
+├── configs/        # ludwig2_afmoe_d3.json (el modelo real, 3 capas densas), ludwig2_afmoe.json (con 1, las dos primeras corridas),
+│                   # tiny_afmoe.json, tiny_afmoe_d3.json (pruebas), data_v3.json (los datos del tronco), tronco_v1.json … tronco_v3.json (las corridas del tronco);
 │                   # ludwig2.json, tiny.json (formato A)
 ├── scripts/        # train.py (el bucle de entrenamiento) y test_train_cpu.py, build_shards.py (T1) y test_shards_cpu.py,
 │                   # test_relay_cpu.py, toy_router_loop.py (P29),
@@ -293,7 +293,7 @@ ludwig-lm/
 - [ ] **T1** Datos: el constructor y el lector de shards están listos y probados ([`scripts/build_shards.py`](scripts/build_shards.py)); la construcción son unas 6 sesiones de CPU de Kaggle, y la primera ya hizo 28 de los 168 shards ([notebook](notebooks/t1_shards_cpu.ipynb))
 - [x] **Relevo** Checkpoints en Hugging Face con candado y respaldo en Kaggle, probado en tres turnos ([notebook](notebooks/tronco_relevo_2xT4.ipynb))
 - [x] **G0** Compuerta: el ensayo del relevo, 50 pasos a 16K y los turnos 1 y 5 del tronco (≥6 h sostenidas, subidas, una reanudación en otra cuenta)
-- [ ] **T3** Tronco hasta 22.5B tokens: vuelve a empezar desde el paso 0 el 25 de noviembre, porque el balanceo de los expertos del primer intento se rompió en el paso ~1,250 (P29, P30)
+- [ ] **T3** Tronco hasta 22.5B tokens: vuelve a empezar desde el paso 0 el 25 de noviembre, porque el balanceo de los expertos del primer intento se rompió en el paso ~1,250 (P29, P30), y otra vez después de un turno como `tronco3`, con 3 capas densas (P32)
 - [ ] **T4** Rama de la v1: 2.5B tokens, 16K
 - [ ] **T5** SFT, GGUF y evaluación: **Ludwig 2 · 25B publicado**
 

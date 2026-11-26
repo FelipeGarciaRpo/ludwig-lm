@@ -6,7 +6,7 @@
 
 ![License](https://img.shields.io/badge/license-Apache--2.0-blue)
 ![Status](https://img.shields.io/badge/status-phase%20T3-orange)
-![Parameters](https://img.shields.io/badge/params-1.91B%20total%20%2F%200.49B%20active-6f42c1)
+![Parameters](https://img.shields.io/badge/params-1.79B%20total%20%2F%200.49B%20active-6f42c1)
 ![Hardware](https://img.shields.io/badge/trained%20on-Kaggle%202%C3%97T4-20BEFF)
 ![Languages](https://img.shields.io/badge/languages-EN%20%2B%20ES-2ea44f)
 
@@ -14,7 +14,7 @@
 
 </div>
 
-> **Status, November 25, 2026.** Design v1.2 is approved: Ludwig 2 is stored in the AFMoE format of Arcee's Trinity models, which runs in llama.cpp unpatched. The trunk started on November 18, relayed across Kaggle accounts (checkpoints on Hugging Face with a lock, a backup on Kaggle, [notebook](notebooks/tronco_relevo_2xT4.ipynb)), and passed the gate G0. On November 25 it restarts from step 0. From step ~1,250, its expert balance had broken in the first 5 MoE layers: the router z-loss, made for softmax routers, pushed the sigmoid scores into their tail, where each step of the balancing bias re-routed most tokens at once ([`docs/DECISIONS.md`](docs/DECISIONS.md), P29–P30). The restart drops that loss, makes the bias's step 10× smaller after step 500, and stops the run if the balance breaks. Training runs at **3,300–3,600 tokens/s on 2×T4, ~1,900–2,100 h for 25B tokens**, at ×1, Ludwig 1's learning rate. The 64K tokenizer is fixed ([`tokenizer/`](tokenizer/)), and the trunk's data are pre-tokenized shards built on Kaggle's CPU ([notebook](notebooks/t1_shards_cpu.ipynb)). **There are no weights yet.** This repository documents the project from its first test.
+> **Status, November 25, 2026.** Design v1.2 is approved: Ludwig 2 is stored in the AFMoE format of Arcee's Trinity models, which runs in llama.cpp unpatched. The trunk started on November 18, relayed across Kaggle accounts (checkpoints on Hugging Face with a lock, a backup on Kaggle, [notebook](notebooks/tronco_relevo_2xT4.ipynb)), and passed the gate G0. From step ~1,250 its expert balance broke in the first 5 MoE layers, where the balancing bias ended up choosing the experts of every token. It began when the router's level fell, which the router z-loss sped up ([`docs/DECISIONS.md`](docs/DECISIONS.md), P29–P31). On November 25 the trunk restarted from step 0 without that loss, with the bias's step 10× smaller after step 500 and a stop if the balance breaks. After that run's first turn, it restarts once more as `tronco3`, with 3 dense layers before the first MoE layer instead of 1, as DeepSeek-V3 does and as Trinity Large did to fix the same collapse (P32). That makes the model 1.793B total parameters, with the same 0.491B active. Training runs at **3,300–3,600 tokens/s on 2×T4, ~1,900–2,100 h for 25B tokens**, at ×1, Ludwig 1's learning rate. The 64K tokenizer is fixed ([`tokenizer/`](tokenizer/)), and the trunk's data are pre-tokenized shards built on Kaggle's CPU ([notebook](notebooks/t1_shards_cpu.ipynb)). **There are no weights yet.** This repository documents the project from its first test.
 
 ## Why Ludwig 2
 
@@ -28,7 +28,7 @@
 
 | | |
 |---|---|
-| Parameters | **1.906B total, 0.491B active** per token |
+| Parameters | **1.793B total, 0.491B active** per token (3 dense layers since P32; 1.906B with 1) |
 | Shape | 26 layers × width 1024: the first is dense, the other 25 are MoE |
 | Attention | GQA (16 query / 4 KV heads of 64), QK-norm, sigmoid output gate |
 | Local and global layers | 3 local layers (sliding window of 2,048 tokens, RoPE θ = 10K) per global layer (no positional encoding): 20 local, 6 global |
@@ -70,7 +70,7 @@ Ludwig 2 takes its **shape** from Meta's MobileMoE-M (deep and thin) and its **b
 | | MobileMoE-M (Meta) | Ludwig 2 |
 |---|---|---|
 | Shape | 26 × 1024, GQA 16/4 | Same |
-| Total / active | 2.82B / 528M | 1.91B / 491M |
+| Total / active | 2.82B / 528M | 1.79B / 491M |
 | Vocabulary | 128K (Llama 3) | 64K, half the head |
 | QK-norm, output gate | Not mentioned | Both |
 | Router | Sigmoid, no auxiliary loss | Sigmoid with an expert bias updated by SMEBU |
@@ -127,7 +127,7 @@ Raw output: [`results/banco_t4_v1/`](results/banco_t4_v1/). What it settles and 
 
 ### T0.1-C: the AFMoE format (CPU, November 11, 2026)
 
-A tiny `AfmoeForCausalLM` with Ludwig 2's layout, run with prompts longer than its sliding window and a deliberately large expert bias, matches transformers on **stock** llama.cpp: next-token probabilities within 5.9e-5, greedy 4/4, expert bias respected ([`scripts/smoke_format_afmoe.py`](scripts/smoke_format_afmoe.py), [`results/t0_1c_afmoe.json`](results/t0_1c_afmoe.json)). Two settings are mandatory for that: `mup_enabled` (llama.cpp always scales the embeddings by √d) and `route_norm`.
+A tiny `AfmoeForCausalLM` with Ludwig 2's layout, run with prompts longer than its sliding window and a deliberately large expert bias, matches transformers on **stock** llama.cpp: next-token probabilities within 5.9e-5, greedy 4/4, expert bias respected ([`scripts/smoke_format_afmoe.py`](scripts/smoke_format_afmoe.py), [`results/t0_1c_afmoe.json`](results/t0_1c_afmoe.json)). Two settings are mandatory for that: `mup_enabled` (llama.cpp always scales the embeddings by √d) and `route_norm`. On November 25 the same test passed with 3 dense layers instead of 1, the only change P32 makes to the real model: probabilities within 4.0e-6, greedy 4/4 ([`configs/tiny_afmoe_d3.json`](configs/tiny_afmoe_d3.json), [`results/t0_1c_afmoe_d3.json`](results/t0_1c_afmoe_d3.json)).
 
 ### T0.2 v2: the real training stack on 2×T4 (Kaggle, November 12, 2026)
 
@@ -264,8 +264,8 @@ ludwig-lm/
 │                   # · shards.py: T1's shards and their reader · sources.py, build.py: the shard builder
 │                   # · relay.py: the relay's lock, uploads and backup
 │                   # · checkpoint.py: checkpoints with a verified resume · model.py: format A (fallback)
-├── configs/        # ludwig2_afmoe.json (the real model), tiny_afmoe.json (tests), data_v3.json (the trunk's data),
-│                   # tronco_v1.json, tronco_v2.json (the trunk's training arguments: the first run, the restart);
+├── configs/        # ludwig2_afmoe_d3.json (the real model, 3 dense layers), ludwig2_afmoe.json (with 1, the first two runs),
+│                   # tiny_afmoe.json, tiny_afmoe_d3.json (tests), data_v3.json (the trunk's data), tronco_v1.json … tronco_v3.json (the trunk's runs);
 │                   # ludwig2.json, tiny.json (format A)
 ├── scripts/        # train.py (the training loop) and test_train_cpu.py, build_shards.py (T1) and test_shards_cpu.py,
 │                   # test_relay_cpu.py, toy_router_loop.py (P29),
@@ -293,7 +293,7 @@ ludwig-lm/
 - [ ] **T1** Data: the builder and the shard reader are ready and tested ([`scripts/build_shards.py`](scripts/build_shards.py)); the build takes about 6 Kaggle CPU sessions, and the first one has made 28 of the 168 shards ([notebook](notebooks/t1_shards_cpu.ipynb))
 - [x] **Relay** Checkpoints on Hugging Face with a lock, a backup on Kaggle, tested on three turns ([notebook](notebooks/tronco_relevo_2xT4.ipynb))
 - [x] **G0** Gate: the relay's dry run, 50 steps at 16K, and the trunk's turns 1 and 5 (≥6 h sustained, uploads, a resume on another account)
-- [ ] **T3** Trunk to 22.5B tokens: restarted from step 0 on November 25, after the first run's expert balance broke at step ~1,250 (P29, P30)
+- [ ] **T3** Trunk to 22.5B tokens: restarted from step 0 on November 25, after the first run's expert balance broke at step ~1,250 (P29, P30), and again after one turn as `tronco3`, with 3 dense layers (P32)
 - [ ] **T4** v1 branch: 2.5B tokens, 16K
 - [ ] **T5** SFT, GGUF, evaluation: **Ludwig 2 · 25B released**
 

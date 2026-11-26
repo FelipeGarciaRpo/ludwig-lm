@@ -661,7 +661,7 @@ tronco.cells = [
 
 Un turno: toma el candado en Hugging Face, sigue desde el checkpoint más nuevo (de Hugging Face o de uno de los dos respaldos de Kaggle), entrena ~11 h, sube un checkpoint cada 3 h mientras entrena, deja el último en el respaldo que toca, aplasta el historial y suelta el candado (`ludwig_lm/relay.py`, D15, P26).
 
-**Desde el 25 de noviembre de 2026, el tronco es `tronco2`** (`configs/tronco_v2.json`, P30): empieza de cero con el router corregido, porque el balanceo de los expertos del primer intento se rompió en el paso ~1250 (P29). Los checkpoints del primer intento (`tronco`) quedan en Hugging Face bajo su etiqueta: cada corrida rota solo los suyos.
+**Desde el 25 de noviembre de 2026 en la noche, el tronco es `tronco3`** (`configs/tronco_v3.json`, P32): empieza de cero con 3 capas densas en vez de 1 y la receta del router del `tronco2` (P30). El balanceo de los expertos del primer intento (`tronco`) se rompió en el paso ~1250, en sus primeras capas MoE (P29). Los checkpoints de `tronco` y `tronco2` quedan en Hugging Face bajo su etiqueta: cada corrida rota solo los suyos.
 
 **Una vez por cuenta:**
 1. Cuenta de Hugging Face, invitada a la organización del proyecto con rol *write*. Un token *fine-grained* con escritura solo en el repo del relevo.
@@ -707,7 +707,8 @@ for k in ("HF_TOKEN", "KAGGLE_USERNAME", "KAGGLE_KEY"):
 os.environ["PYTORCH_CUDA_ALLOC_CONF"] = "expandable_segments:True"
 sys.path.insert(0, ".")
 from ludwig_lm.relay import HFStore, KaggleBackup, Lock, LocalStore, Session, train_command, Busy
-TRONCO = json.load(open("configs/tronco_v2.json"))       # P30: el tronco desde cero, con el router corregido
+TRONCO = json.load(open("configs/tronco_v3.json"))       # P32: desde cero, con 3 capas densas y el router del P30
+CONFIG_DE = {"tronco": "configs/tronco_v1.json", "tronco2": "configs/tronco_v2.json"}   # para la sonda
 manifiestos = sorted(glob.glob("/kaggle/input/**/manifest.json", recursive=True),
                      key=lambda m: len(json.load(open(m))["shards"]))
 MANIFIESTO = manifiestos[-1] if manifiestos else None
@@ -883,7 +884,7 @@ En el checkpoint 3270 del primer intento, el diagnóstico del P29 queda confirma
     t = time.time()
     ruta = tienda.download(elegido[0]["path"], cabeza, "/tmp/sonda")
     print(f"checkpoint {etiqueta} {paso}: bajado en {time.time() - t:.0f} s")
-    base = json.load(open("configs/tronco_v1.json")) if etiqueta == "tronco" else TRONCO
+    base = json.load(open(CONFIG_DE[etiqueta])) if etiqueta in CONFIG_DE else TRONCO
     LOG = f"/kaggle/working/results/tronco/sonda-{etiqueta}-{paso}.jsonl"
     os.makedirs(os.path.dirname(LOG), exist_ok=True)
     a = dict(base["args"], shards=MANIFIESTO, shard_roots="/kaggle/input", tag=f"sonda-{etiqueta}", out=LOG,

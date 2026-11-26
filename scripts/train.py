@@ -119,6 +119,10 @@ def parse(argv=None):
     g.add_argument("--router-z", type=float, default=0.0,
                    help="router z-loss. 0 (P30): made for softmax routers; with sigmoid scores it pushed the logits "
                         "down until SMEBU's bias decided every token, and the trunk's balance broke at step ~1250")
+    g.add_argument("--router-floor", type=float, default=0.0,
+                   help="P33, plan B: weight of a floor for each MoE layer's level, (τ − mean lse)² below τ (0: off)")
+    g.add_argument("--router-floor-lse", type=float, default=1.2,
+                   help="τ of --router-floor, in signed lse: 1.2 ≈ the z_router alarm's 1.5 (1.2² ≈ 1.5)")
     g.add_argument("--output-z", type=float, default=1e-4)
     g = ap.add_argument_group("evaluation and alarms")
     g.add_argument("--eval-every", type=int, default=50, help="0: only at the start, before the decay and at the end")
@@ -310,7 +314,8 @@ class Trainer:
         self.params = [p for p in self.model.parameters() if p.requires_grad]
         self.scaler = DynamicLossScaler(init_scale=2.0 ** 15 if self.use_cuda else 1.0)
         self.balancer = ExpertBalancer(self.model, rule=a.balance, lam=a.lam, gamma=a.gamma)
-        self.weights = LossWeights(output_z=a.output_z, seq_aux=a.seq_aux, router_z=a.router_z)
+        self.weights = LossWeights(output_z=a.output_z, seq_aux=a.seq_aux, router_z=a.router_z,
+                                   router_floor=a.router_floor, router_floor_lse=a.router_floor_lse)
         self.amp_dtype = torch.float16 if self.use_cuda else torch.bfloat16   # bf16 only exercises the CPU path
 
         if a.shards:
@@ -369,7 +374,8 @@ class Trainer:
         (loss * (self.scaler.scale / ga)).backward()
         self.balancer.accumulate(mets["chosen"])
         self.health += torch.stack([mets["router_margin"], mets["bias_decides"]])
-        return torch.stack([mets["ce"], mets["z_out"], mets["seq_aux"], mets["z_router"], mets["router_entropy"]])
+        return torch.stack([mets["ce"], mets["z_out"], mets["seq_aux"], mets["z_router"], mets["router_entropy"],
+                            mets["router_floor"]])
 
     def lam_at(self, step):
         a = self.args
@@ -663,7 +669,7 @@ class Trainer:
             tps_now, ga = self.tokens_per_step(tokens)
             mult = lr_factor(step, a.warmup, a.steps, a.decay_steps) * a.lr_mult
             t0 = time.time()
-            acc = torch.zeros(5, device=self.device)
+            acc = torch.zeros(6, device=self.device)
             self.health = torch.zeros(2, len(self.balancer.blocks), device=self.device)
             self.balancer.lam = self.lam_at(step)
             sha = None
@@ -714,6 +720,7 @@ class Trainer:
             row = {"step": step, "tokens": tokens, "lr_mult": round(mult, 6), "lr_muon": a.lr * mult,
                    "ce": round(ce, 5), "z_out": round(float(acc[1]), 3), "seq_aux": round(float(acc[2]), 5),
                    "z_router": round(float(acc[3]), 3), "router_entropy": round(float(acc[4]), 4),
+                   "router_floor": round(float(acc[5]), 6),
                    "grad_norm": None if gnorm is None else round(gnorm, 4), "scale": self.scaler.scale,
                    "skipped_inf": found_inf, "skipped_spike": spike, **{k: (round(v, 4) if isinstance(v, float) else v)
                                                                         for k, v in bal.items()},
