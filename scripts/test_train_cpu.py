@@ -18,6 +18,7 @@
    G  stops on a broken expert balance (a threshold no step can meet) and saves where it stopped;
    E  evaluates A's step-3 checkpoint with --eval-only: B's evaluation there, bit for bit, and no step;
    F  turns on the floor for the router's level above the level, which must rise against A's (P33).
+   F0 turns it on below the level, as the trunk runs it: nothing may change against A (P34).
    Before the training: the trunk's models build with their dense layers and parameter counts (P32).
    Every step logs the router's health, and every evaluation logs it per MoE layer (P29), with the router's
    level as z and signed lse; L also sets the z_router alarm (P30) so that it must fire.
@@ -293,6 +294,13 @@ def test_training():
           and mean(ef[8]["router_lse"]) > mean(ea[8]["router_lse"]),
           f"F: a floor above the level raises it (mean lse at step 8: {mean(ef[8]['router_lse']):.3f} with it, "
           f"{mean(ea[8]['router_lse']):.3f} without)")
+    code, f0 = torchrun("F0", WORK / "f0.jsonl", "--router-floor", "0.01", "--router-floor-lse", "-50")
+    s0, e0 = {r["step"]: r for r in by(f0, "step")}, {r["step"]: r for r in by(f0, "eval")}
+    check(code == 0 and s0.keys() == sa.keys()
+          and all(s0[k]["ce"] == sa[k]["ce"] and s0[k]["grad_norm"] == sa[k]["grad_norm"] and s0[k]["router_floor"] == 0
+                  for k in sa)
+          and e0[8]["val_bpb"] == ea[8]["val_bpb"] and e0[8]["router_lse"] == ea[8]["router_lse"],
+          "F0: a floor below the level changes nothing: the same loss, gradient norm and router levels as A (P34)")
     code, e = torchrun("E", WORK / "e.jsonl", "--resume", str(WORK / "ckpt_a" / "step_000003"), "--eval-only")
     ee = by(e, "eval")
     check(code == 0 and (by(e, "end") or [{}])[-1].get("status") == "evaluated" and not by(e, "step")

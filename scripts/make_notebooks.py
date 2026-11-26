@@ -661,7 +661,7 @@ tronco.cells = [
 
 Un turno: toma el candado en Hugging Face, sigue desde el checkpoint más nuevo (de Hugging Face o de uno de los dos respaldos de Kaggle), entrena ~11 h, sube un checkpoint cada 3 h mientras entrena, deja el último en el respaldo que toca, aplasta el historial y suelta el candado (`ludwig_lm/relay.py`, D15, P26).
 
-**Desde el 25 de noviembre de 2026 en la noche, el tronco es `tronco3`** (`configs/tronco_v3.json`, P32): empieza de cero con 3 capas densas en vez de 1 y la receta del router del `tronco2` (P30). El balanceo de los expertos del primer intento (`tronco`) se rompió en el paso ~1250, en sus primeras capas MoE (P29). Los checkpoints de `tronco` y `tronco2` quedan en Hugging Face bajo su etiqueta: cada corrida rota solo los suyos.
+**Desde el 25 de noviembre de 2026 en la noche, el tronco es `tronco3`** (`configs/tronco_v3.json`, P32): empieza de cero con 3 capas densas en vez de 1 y la receta del router del `tronco2` (P30). Desde el 26 de noviembre, con el piso del router encendido (P34): vale cero mientras el lse medio de cada capa MoE esté sobre 1.5. El balanceo de los expertos del primer intento (`tronco`) se rompió en el paso ~1250, en sus primeras capas MoE (P29). Los checkpoints de `tronco` y `tronco2` quedan en Hugging Face bajo su etiqueta: cada corrida rota solo los suyos.
 
 **Una vez por cuenta:**
 1. Cuenta de Hugging Face, invitada a la organización del proyecto con rol *write*. Un token *fine-grained* con escritura solo en el repo del relevo.
@@ -906,7 +906,7 @@ Entrena hasta ~11 h desde que empezó la sesión y deja ~45 min para la subida f
 En `/tmp` nunca hay más de dos checkpoints a la vez (~23 GiB). El de partida se borra después del primer guardado nuevo, se guarda localmente solo el periódico más nuevo, y antes del respaldo solo queda el último.
 
 **Qué mirar mientras corre** (P30). Si pasa alguna de estas cosas, avisa por WhatsApp; el turno sigue solo:
-- **`z_router`** en cada línea `[train]`: el nivel del router. Debería quedarse alto. Si baja de forma sostenida, avisa; si sale `[alarm] … z_router_below_alarm`, quedó por debajo de 1.5 durante 50 pasos, que es lo que anticipó el quiebre del primer tronco.
+- **`z_router`** en cada línea `[train]`: el nivel del router. Baja despacio mientras sube el LR, y el piso (P34) sostiene cada capa sobre lse 1.5, así que no debería bajar de ~2. Si sale `[alarm] … z_router_below_alarm`, quedó por debajo de 1.5 durante 50 pasos: el piso no está sosteniendo, y eso fue lo que anticipó el quiebre del primer tronco.
 - **`[eval] watch: MoE layer …`**, en las evaluaciones (cada 250 pasos): una capa se acerca a las rotas del primer tronco (el sesgo decide más del 80% de los tokens, su rango pasa de 20× la brecha, o el experto más cargado pasa de 2×).
 - **`load max/mean`** debería rondar 1.5. Si el balanceo se rompe, el turno se detiene solo y guarda (`stopped_balance`): no lo relances."""),
     code(r'''if MODO == "tronco":

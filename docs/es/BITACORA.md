@@ -1289,3 +1289,34 @@ Todo lo que se corre, se mide o se decide, en orden. Cada entrada dice qué se h
   - **El espacio en Hugging Face:** cada checkpoint pesa ~11.5 GB, y un turno sube 4 (cada 3 h y al final), que quedan en el historial hasta el aplastado del final del turno. El turno 1 del `tronco3` empieza con 4 (2 del `tronco` y 2 del `tronco2`) y llega a ~91 GB. Lo que se borra entre turnos sigue ocupando espacio hasta el aplastado del turno siguiente. Por eso el 3131 del `tronco` y el más viejo del `tronco2` se borran antes del turno 1 del `tronco3`: si no, su turno 2 empezaría con 6 checkpoints y pasaría de 100 GB.
 - **El `COMMIT` del `tronco3`** es el de este commit, en todos sus turnos.
 - **Siguiente:** cuando el turno 1 del `tronco2` suelte el candado, guardar sus archivos, borrar en Hugging Face el 3131 del `tronco` y el más viejo del `tronco2`, y lanzar el turno 1 del `tronco3`.
+
+## 2026-11-26 · El piso del router se enciende en el tronco3 (patch 0015)
+
+- **Qué:** la respuesta del chat de diseño al turno 1 del `tronco3` y a su pregunta: el piso del P33 se enciende antes de que haga falta (P34).
+- **Dónde:** chat de diseño, en CPU.
+- **Lo que mostró el turno 1,** según el relevo:
+  - 498 pasos y 130.5M tokens en 10.96 h, a 3,330 tokens/s, con pico de 13.11 GiB y 0 saltos de FP16;
+  - val bpb 2.3009 en el paso 250, contra 2.3015 del `tronco2`;
+  - carga de 1.47–1.79× en los últimos 80 pasos.
+- **El nivel del router sigue bajando:**
+  - `z_router` 15.84 en el paso 0, 15.41 en el 120, 11.71 en el 420 y 10.78 en el 480;
+  - en lse, −0.70 desde el paso 0, contra −1.36 del primer tronco en el mismo paso;
+  - en los últimos 60 pasos, ~0.05 cada 20 pasos, cerca del ~0.06 del primer tronco entre los pasos 250 y 650.
+  - El LR sigue en calentamiento (×0.24 en el paso 480, ×0.50 en el ~990). Si la caída crece con él, la media llega a lse ~1.5 (z ~2.2) al final del turno 2 y a ~1.2 hacia el paso 1,050.
+- **La decisión (P34):** el piso se enciende con τ = 1.5 y peso 0.01, desde el primer turno que corra este commit.
+  - Vale cero mientras el lse medio de cada capa MoE esté sobre τ: la corrida F0 da la misma pérdida, la misma norma del gradiente y los mismos niveles del router que sin piso.
+  - τ = 1.5 y no 1.2: con el piso, cada capa queda en z ≥ ~2.1. Eso está sobre todos los quiebres de la P29, menos el de `lr-x4` (2.2, con un λ 40 veces el del tronco después del paso 500). Y la alarma de `z_router` (1.5) queda como aviso de que el piso falló.
+  - Peso 0.01: a 0.05 bajo τ, empuja hacia arriba más o menos lo que el z-loss del primer tronco empujaba hacia abajo al principio.
+- **Archivos:**
+  - `configs/tronco_v3.json`: `router_floor` 0.01 y `router_floor_lse` 1.5;
+  - el notebook del tronco: qué mirar con el piso encendido;
+  - `scripts/test_train_cpu.py`: la corrida F0.
+- **Resultado:** `test_train_cpu.py` PASS, 48 checks, con F0; `test_relay_cpu.py` y `test_shards_cpu.py` PASS.
+- **Ojo:**
+  - **Si el turno 2 todavía no arrancó,** arranca con este commit. El 272 del `tronco2` se borra antes, entre turnos.
+  - **Si ya arrancó,** en Hugging Face no se toca nada mientras corre, y el piso entra en el turno 3. La excepción: que la evaluación del paso 498 muestre una capa con lse por debajo de 2.8, porque a ese ritmo llegaría a ~1.0 antes del final del turno. Entonces se corta el turno apenas termina esa evaluación, se suelta el candado a mano y se relanza con este commit.
+  - **Desde ahora, en cada evaluación:**
+    - las capas que llegan al piso deben quedar a menos de 0.1 bajo τ; si una queda más abajo, el peso sube ×3;
+    - si una capa sale marcada en dos evaluaciones seguidas (el sesgo decide más del 80% de sus tokens, o su experto más cargado pasa de 2× la media), λ después del paso 500 baja de 0.001 a 5e-4, el de Trinity Large.
+  - En cada paso, `router_floor` vale 0 hasta que una capa llega al piso.
+- **Siguiente:** el turno 2 del `tronco3` con este commit, o el 3 según lo de arriba.

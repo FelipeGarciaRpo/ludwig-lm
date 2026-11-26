@@ -60,6 +60,11 @@
 > 3. **El `tronco3` empieza de cero con 3 capas densas en vez de 1, y 44 expertos por capa MoE en vez de 40:** 1.938B parámetros totales (antes 1.906B) y los mismos 0.491B activos. Los 44 expertos son la condición de Pipe para reiniciar: no menos parámetros totales que el `tronco2`. El resto de la receta del `tronco2` no cambia, y el formato sigue sirviendo en llama.cpp sin cambios (`results/t0_1c_afmoe_d3.json`).
 > 4. **El piso para el nivel del router** (P33) queda listo y apagado.
 
+> **El piso del router, encendido (26 de noviembre de 2026)** (decisión P34 de [`../DECISIONS.md`](../DECISIONS.md)):
+> 1. **En el turno 1 del `tronco3`, el nivel del router siguió bajando** aun sin z-loss: `z_router` pasó de 15.84 a 10.78 en 480 pasos, cada vez más rápido mientras sube el LR.
+> 2. **El piso vale cero mientras el lse medio de cada capa MoE esté sobre τ = 1.5,** así que no cambia nada hasta que hace falta, y actúa solo, también de noche.
+> 3. **Con τ = 1.5, cada capa queda en z ≥ ~2.1,** sobre los quiebres que vimos con λ de 0.01 y 0.02. La alarma de `z_router` (1.5) queda como aviso de que el piso falló.
+
 **Leyenda:** ✅ decidido · ❓ decide Pipe · 📏 se mide antes de fijarlo · 🧪 se prueba en corrida corta · 🟢🟡🔴 licencia de datos (ver 4.8)
 
 ---
