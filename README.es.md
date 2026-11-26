@@ -29,10 +29,10 @@
 | | |
 |---|---|
 | Parámetros | **1.793B totales, 0.491B activos** por token (3 capas densas desde la P32; 1.906B con 1) |
-| Forma | 26 capas × ancho 1024: la primera es densa y las otras 25 son MoE |
+| Forma | 26 capas × ancho 1024: las 3 primeras son densas y las otras 23 son MoE (P32; las dos primeras corridas tenían 1 densa y 25 MoE) |
 | Atención | GQA (16 cabezas de query y 4 de KV, de 64), QK-norm, compuerta sigmoide a la salida |
 | Capas locales y globales | 3 capas locales (ventana deslizante de 2,048 tokens, RoPE θ = 10K) por cada global (sin codificación de posición): 20 locales y 6 globales |
-| FFN | 40 expertos (SwiGLU 512), top-4, + 1 experto compartido (SwiGLU 2048). La primera capa, densa, es un SwiGLU 4096 |
+| FFN | 40 expertos (SwiGLU 512), top-4, + 1 experto compartido (SwiGLU 2048). Cada capa densa es un SwiGLU 4096 |
 | Router | Sigmoide en FP32 con un bias por experto que actualiza SMEBU (el balanceo no necesita pérdida auxiliar), más una pérdida pequeña por secuencia. No descarta tokens |
 | Normas | Sándwich escalada por profundidad: una RMSNorm antes y otra después de cada subcapa |
 | Vocabulario | 64K, BPE propio, embeddings atados (multiplicados por √d a la entrada) |

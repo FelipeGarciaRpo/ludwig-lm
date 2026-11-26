@@ -29,10 +29,10 @@
 | | |
 |---|---|
 | Parameters | **1.793B total, 0.491B active** per token (3 dense layers since P32; 1.906B with 1) |
-| Shape | 26 layers × width 1024: the first is dense, the other 25 are MoE |
+| Shape | 26 layers × width 1024: the first 3 are dense, the other 23 are MoE (P32; the first two runs had 1 dense and 25 MoE) |
 | Attention | GQA (16 query / 4 KV heads of 64), QK-norm, sigmoid output gate |
 | Local and global layers | 3 local layers (sliding window of 2,048 tokens, RoPE θ = 10K) per global layer (no positional encoding): 20 local, 6 global |
-| Feed-forward | 40 routed experts (SwiGLU 512), top-4, + 1 shared expert (SwiGLU 2048). The dense first layer is a SwiGLU 4096 |
+| Feed-forward | 40 routed experts (SwiGLU 512), top-4, + 1 shared expert (SwiGLU 2048). Each dense layer is a SwiGLU 4096 |
 | Router | Sigmoid in FP32 with an expert bias updated by SMEBU (no auxiliary loss needed for balance), plus a small sequence-wise loss. No token dropping |
 | Norms | Depth-scaled sandwich norm: an RMSNorm before and after every sublayer |
 | Vocabulary | 64K, own BPE, tied embeddings (scaled by √d at the input) |
