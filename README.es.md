@@ -6,7 +6,7 @@
 
 ![Licencia](https://img.shields.io/badge/licencia-Apache--2.0-blue)
 ![Estado](https://img.shields.io/badge/estado-fase%20T3-orange)
-![Parámetros](https://img.shields.io/badge/par%C3%A1metros-1.79B%20totales%20%2F%200.49B%20activos-6f42c1)
+![Parámetros](https://img.shields.io/badge/par%C3%A1metros-1.94B%20totales%20%2F%200.49B%20activos-6f42c1)
 ![Hardware](https://img.shields.io/badge/entrenado%20en-Kaggle%202%C3%97T4-20BEFF)
 ![Idiomas](https://img.shields.io/badge/idiomas-ES%20%2B%20EN-2ea44f)
 
@@ -14,7 +14,7 @@
 
 </div>
 
-> **Estado, 25 de noviembre de 2026.** El diseño v1.2 está aprobado: Ludwig 2 se guarda en el formato AFMoE de los modelos Trinity de Arcee, que corre en llama.cpp sin parche. El tronco arrancó el 18 de noviembre, por turnos entre cuentas de Kaggle (checkpoints en Hugging Face con candado y respaldo en Kaggle, [notebook](notebooks/tronco_relevo_2xT4.ipynb)), y pasó la compuerta G0. Desde el paso ~1,250, el balanceo de los expertos se rompió en las primeras 5 capas MoE, donde el sesgo de balanceo terminó eligiendo los expertos de todos los tokens. Empezó cuando bajó el nivel del router, y el z-loss del router lo aceleró ([`docs/DECISIONS.md`](docs/DECISIONS.md), P29–P31). El 25 de noviembre el tronco volvió a empezar desde el paso 0 sin esa pérdida, con el paso del sesgo 10 veces más chico desde el paso 500 y una parada si el balanceo se rompe. Después del primer turno de esa corrida, vuelve a empezar una vez más como `tronco3`, con 3 capas densas antes de la primera capa MoE en vez de 1, como hace DeepSeek-V3 y como hizo Trinity Large para arreglar el mismo colapso (P32). Así el modelo queda en 1.793B parámetros totales, con los mismos 0.491B activos. El entrenamiento va a **3,300–3,600 tokens/s en 2×T4, ~1,900–2,100 h para 25B tokens**, con ×1, el learning rate del Ludwig 1. El tokenizador de 64K quedó fijado ([`tokenizer/`](tokenizer/)), y los datos del tronco son shards pre-tokenizados en la CPU de Kaggle ([notebook](notebooks/t1_shards_cpu.ipynb)). **Todavía no hay pesos.** Este repositorio documenta el proyecto desde la primera prueba.
+> **Estado, 25 de noviembre de 2026.** El diseño v1.2 está aprobado: Ludwig 2 se guarda en el formato AFMoE de los modelos Trinity de Arcee, que corre en llama.cpp sin parche. El tronco arrancó el 18 de noviembre, por turnos entre cuentas de Kaggle (checkpoints en Hugging Face con candado y respaldo en Kaggle, [notebook](notebooks/tronco_relevo_2xT4.ipynb)), y pasó la compuerta G0. Desde el paso ~1,250, el balanceo de los expertos se rompió en las primeras 5 capas MoE, donde el sesgo de balanceo terminó eligiendo los expertos de todos los tokens. Empezó cuando bajó el nivel del router, y el z-loss del router lo aceleró ([`docs/DECISIONS.md`](docs/DECISIONS.md), P29–P31). El 25 de noviembre el tronco volvió a empezar desde el paso 0 sin esa pérdida, con el paso del sesgo 10 veces más chico desde el paso 500 y una parada si el balanceo se rompe. Después del primer turno de esa corrida, vuelve a empezar una vez más como `tronco3`, con 3 capas densas antes de la primera capa MoE en vez de 1, como hace DeepSeek-V3 y como hizo Trinity Large para arreglar el mismo colapso (P32). Con 44 expertos por capa MoE en vez de 40 (la condición de Pipe: no menos parámetros totales), el modelo queda en 1.938B parámetros totales, con los mismos 0.491B activos. El entrenamiento va a **3,300–3,600 tokens/s en 2×T4, ~1,900–2,100 h para 25B tokens**, con ×1, el learning rate del Ludwig 1. El tokenizador de 64K quedó fijado ([`tokenizer/`](tokenizer/)), y los datos del tronco son shards pre-tokenizados en la CPU de Kaggle ([notebook](notebooks/t1_shards_cpu.ipynb)). **Todavía no hay pesos.** Este repositorio documenta el proyecto desde la primera prueba.
 
 ## Por qué Ludwig 2
 
@@ -28,11 +28,11 @@
 
 | | |
 |---|---|
-| Parámetros | **1.793B totales, 0.491B activos** por token (3 capas densas desde la P32; 1.906B con 1) |
+| Parámetros | **1.938B totales, 0.491B activos** por token (3 capas densas y 44 expertos desde la P32; las dos primeras corridas tenían 1 y 40: 1.906B) |
 | Forma | 26 capas × ancho 1024: las 3 primeras son densas y las otras 23 son MoE (P32; las dos primeras corridas tenían 1 densa y 25 MoE) |
 | Atención | GQA (16 cabezas de query y 4 de KV, de 64), QK-norm, compuerta sigmoide a la salida |
 | Capas locales y globales | 3 capas locales (ventana deslizante de 2,048 tokens, RoPE θ = 10K) por cada global (sin codificación de posición): 20 locales y 6 globales |
-| FFN | 40 expertos (SwiGLU 512), top-4, + 1 experto compartido (SwiGLU 2048). Cada capa densa es un SwiGLU 4096 |
+| FFN | 44 expertos (SwiGLU 512; 40 en las dos primeras corridas), top-4, + 1 experto compartido (SwiGLU 2048). Cada capa densa es un SwiGLU 4096 |
 | Router | Sigmoide en FP32 con un bias por experto que actualiza SMEBU (el balanceo no necesita pérdida auxiliar), más una pérdida pequeña por secuencia. No descarta tokens |
 | Normas | Sándwich escalada por profundidad: una RMSNorm antes y otra después de cada subcapa |
 | Vocabulario | 64K, BPE propio, embeddings atados (multiplicados por √d a la entrada) |
@@ -49,7 +49,7 @@ flowchart TB
         ATT --> P1["RMSNorm"]
         P1 --> A1(("+"))
         A1 --> N2["RMSNorm"]
-        N2 --> R["router · sigmoide en FP32 + bias<br/>top-4 de 40 expertos"]
+        N2 --> R["router · sigmoide en FP32 + bias<br/>top-4 de 44 expertos"]
         R --> EX["4 expertos<br/>SwiGLU 512"]
         N2 --> SH["experto compartido<br/>SwiGLU 2048"]
         EX --> A2(("+"))
@@ -70,7 +70,7 @@ Ludwig 2 toma la **forma** de MobileMoE-M de Meta (profunda y delgada) y el **bl
 | | MobileMoE-M (Meta) | Ludwig 2 |
 |---|---|---|
 | Forma | 26 × 1024, GQA 16/4 | Igual |
-| Totales / activos | 2.82B / 528M | 1.79B / 491M |
+| Totales / activos | 2.82B / 528M | 1.94B / 491M |
 | Vocabulario | 128K (Llama 3) | 64K: la cabeza a la mitad |
 | QK-norm y compuerta | No las menciona | Las dos |
 | Router | Sigmoide sin pérdida auxiliar | Sigmoide con un bias por experto que actualiza SMEBU |
@@ -264,7 +264,7 @@ ludwig-lm/
 │                   # · shards.py: los shards de la T1 y su lector · sources.py, build.py: el constructor de shards
 │                   # · relay.py: el candado, las subidas y el respaldo del relevo
 │                   # · checkpoint.py: checkpoints con reanudación verificada · model.py: formato A (respaldo)
-├── configs/        # ludwig2_afmoe_d3.json (el modelo real, 3 capas densas), ludwig2_afmoe.json (con 1, las dos primeras corridas),
+├── configs/        # ludwig2_afmoe_d3.json (el modelo real: 3 capas densas, 44 expertos), ludwig2_afmoe.json (1 y 40: las dos primeras corridas),
 │                   # tiny_afmoe.json, tiny_afmoe_d3.json (pruebas), data_v3.json (los datos del tronco), tronco_v1.json … tronco_v3.json (las corridas del tronco);
 │                   # ludwig2.json, tiny.json (formato A)
 ├── scripts/        # train.py (el bucle de entrenamiento) y test_train_cpu.py, build_shards.py (T1) y test_shards_cpu.py,

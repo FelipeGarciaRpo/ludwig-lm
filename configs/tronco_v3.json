@@ -1,5 +1,5 @@
 {
-  "_nota": "El tronco desde cero por tercera vez (P32): igual que tronco_v2.json, pero el modelo tiene 3 capas densas en vez de 1 (configs/ludwig2_afmoe_d3.json, 1.793B totales, 0.491B activos). El piso para el nivel del router (P33) está listo y apagado (router_floor 0): encenderlo es un cambio de config y un commit nuevo. La etiqueta nueva separa sus checkpoints de los de tronco y tronco2.",
+  "_nota": "El tronco desde cero por tercera vez (P32): igual que tronco_v2.json, pero el modelo tiene 3 capas densas en vez de 1 y 44 expertos por capa MoE en vez de 40 (configs/ludwig2_afmoe_d3.json, 1.938B totales, 0.491B activos). Los 44 expertos son la condición de Pipe: no menos parámetros totales que el tronco2. El piso para el nivel del router (P33) está listo y apagado (router_floor 0): encenderlo es un cambio de config y un commit nuevo. La etiqueta nueva separa sus checkpoints de los de tronco y tronco2.",
   "tag": "tronco3",
   "args": {
     "config": "configs/ludwig2_afmoe_d3.json",

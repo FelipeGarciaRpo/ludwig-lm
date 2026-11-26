@@ -1257,3 +1257,35 @@ Todo lo que se corre, se mide o se decide, en orden. Cada entrada dice qué se h
     - que el lse de sus primeras capas MoE no baje más rápido que el de las demás;
     - que el sesgo no decida más del ~80% de sus tokens.
 - **Siguiente:** aplicar 0014, que no toca el turno que corre porque ese usa su propio `COMMIT`. Cuando el turno 1 del `tronco2` suelte el candado, el turno 1 del `tronco3`.
+
+## 2026-11-25 · El 0014 aplicado con 44 expertos, la condición de Pipe
+
+- **Qué:** se aplicó el patch 0014 (P32–P33). Pipe aprobó reiniciar con una condición: que el modelo no tenga menos parámetros totales que el `tronco2` (1.906B). Con 3 capas densas y 40 expertos quedaba en 1.793B. Con 44 expertos por capa MoE queda en **1.938B**, con los mismos 0.491B activos (P32).
+- **Dónde:** el PC.
+- **Las opciones,** contadas con `LudwigAfmoe` en `meta`, todas con 3 capas densas salvo donde se dice:
+
+  | Opción | Totales | Activos |
+  |---|---|---|
+  | 40 expertos (el 0014) | 1.793B | 0.491B |
+  | 43 expertos | 1.902B | 0.491B |
+  | **44 expertos** | **1.938B** | 0.491B |
+  | 46 expertos | 2.010B | 0.491B |
+  | 2 capas densas y 42 expertos | 1.925B | 0.491B |
+  | 40 expertos y 28 capas | 1.939B | 0.523B |
+
+- **Por qué 44:**
+  - Es el número más chico que pasa de 1.906B.
+  - El cálculo por token es el mismo: cada token sigue pasando por 4 expertos. En el banco v1, los matmul de expertos rindieron 27.0 TFLOPS con 40 y 26.7 con 60 (`results/banco_t4_v1/reporte.txt`).
+  - La memoria sube ~0.15 GiB por GPU (estimado con 5.26 bytes por parámetro y por GPU): ~13.1 GiB reservados a 2K, donde el primer tronco llegó a 12.91, y ~13.5 a 16K, donde la G0-1 midió 13.40 (`results/g0/g0_1_salida_kaggle.txt`). 13.5 es el límite de la G0. Con 46 expertos, 16K iría a ~13.9.
+- **Pruebas en el PC:**
+  - pyflakes y notebooks en sincronía;
+  - `test_train_cpu.py`: PASS, 47 checks, con los conteos de 1.906B y 1.938B y el piso, que sube el lse medio de 2.077 a 2.665;
+  - `test_relay_cpu.py`: PASS, 30 checks, con una etiqueta nueva que empieza de cero;
+  - la prueba lógica de `bench_afmoe.py`, con `tiny_afmoe.json` y `tiny_afmoe_d3.json`: checkpoint exacto.
+- **Además:**
+  - Las filas "Forma" y "FFN" de los README todavía decían 1 capa densa y 25 MoE.
+  - **El turno 1 del `tronco2` no llega al paso 500.** A ~80 s por paso, sus 11 h terminan cerca del paso 490, y al final de un turno no se evalúa. Su control son las evaluaciones de los pasos 0 y 250 y las líneas `[train]`.
+  - **En Hugging Face no se toca nada mientras corre un turno.** Un commit externo, como borrar un archivo desde la web, hace fallar la renovación del candado (`parent_commit`): el relevo lo toma como candado perdido y detiene el entrenamiento sin respaldo final.
+  - **El espacio en Hugging Face:** cada checkpoint pesa ~11.5 GB, y un turno sube 4 (cada 3 h y al final), que quedan en el historial hasta el aplastado del final del turno. El turno 1 del `tronco3` empieza con 4 (2 del `tronco` y 2 del `tronco2`) y llega a ~91 GB. Lo que se borra entre turnos sigue ocupando espacio hasta el aplastado del turno siguiente. Por eso el 3131 del `tronco` y el más viejo del `tronco2` se borran antes del turno 1 del `tronco3`: si no, su turno 2 empezaría con 6 checkpoints y pasaría de 100 GB.
+- **El `COMMIT` del `tronco3`** es el de este commit, en todos sus turnos.
+- **Siguiente:** cuando el turno 1 del `tronco2` suelte el candado, guardar sus archivos, borrar en Hugging Face el 3131 del `tronco` y el más viejo del `tronco2`, y lanzar el turno 1 del `tronco3`.

@@ -57,7 +57,7 @@
 >    - Sigma-MoE-Tiny vio ahí crecer el sesgo hasta que decidía solo, y lo arregló activando más expertos en esas capas;
 >    - Trinity Large pasó de 3 a 6 capas densas como parte del arreglo de un colapso igual al nuestro;
 >    - DeepSeek-V3 usa 3.
-> 3. **El `tronco3` empieza de cero con 3 capas densas en vez de 1:** 1.793B parámetros totales (antes 1.906B) y los mismos 0.491B activos. El resto de la receta del `tronco2` no cambia, y el formato sigue sirviendo en llama.cpp sin cambios (`results/t0_1c_afmoe_d3.json`).
+> 3. **El `tronco3` empieza de cero con 3 capas densas en vez de 1, y 44 expertos por capa MoE en vez de 40:** 1.938B parámetros totales (antes 1.906B) y los mismos 0.491B activos. Los 44 expertos son la condición de Pipe para reiniciar: no menos parámetros totales que el `tronco2`. El resto de la receta del `tronco2` no cambia, y el formato sigue sirviendo en llama.cpp sin cambios (`results/t0_1c_afmoe_d3.json`).
 > 4. **El piso para el nivel del router** (P33) queda listo y apagado.
 
 **Leyenda:** ✅ decidido · ❓ decide Pipe · 📏 se mide antes de fijarlo · 🧪 se prueba en corrida corta · 🟢🟡🔴 licencia de datos (ver 4.8)

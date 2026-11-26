@@ -170,13 +170,13 @@ def test_trunk_model():
     from ludwig_lm.afmoe import LudwigAfmoe, load_config, moe_blocks
 
     print("the trunk's model", flush=True)
-    for name, dense, total in (("ludwig2_afmoe.json", 1, 1.906), ("ludwig2_afmoe_d3.json", 3, 1.793)):
+    for name, dense, total in (("ludwig2_afmoe.json", 1, 1.906), ("ludwig2_afmoe_d3.json", 3, 1.938)):
         cfg = load_config(ROOT / "configs" / name)
         with torch.device("meta"):
             m = LudwigAfmoe(cfg)
         n = sum(p.numel() for p in m.parameters()) / 1e9
         check(cfg.num_dense_layers == dense and len(moe_blocks(m.lm)) == cfg.num_hidden_layers - dense
-              and round(n, 3) == total, f"{name}: {dense} dense layers, {cfg.num_hidden_layers - dense} MoE, {n:.3f}B")
+              and round(n, 3) == total, f"{name}: {dense} dense layers, {cfg.num_hidden_layers - dense} MoE of {cfg.num_experts} experts, {n:.3f}B")
 
 
 def test_public_paths():
