@@ -1354,3 +1354,26 @@ Todo lo que se corre, se mide o se decide, en orden. Cada entrada dice qué se h
 - **Conclusión:** el turno está sano. El nivel del router sigue bajando, a ~la mitad del ritmo del primer tronco, y el chat de diseño encendió el piso desde el turno 2 (P34, patch 0015).
 - **Pregunta abierta para el chat de diseño:** el aviso por capa marca las 23 capas desde el paso 250 por el criterio del 80% (el sesgo decide el 96–99%), con el experto más cargado bajo 1.6×. La regla de la P34 que baja λ a 5e-4 tras dos evaluaciones marcadas se cumpliría en la del paso 498 sin que ninguna capa esté desbalanceada.
 - **Siguiente:** borrar el 272 del `tronco2` en Hugging Face y lanzar el turno 2 con el `COMMIT` `e074712`. Revisar por qué Kaggle rechaza el respaldo.
+
+## 2026-11-26 · tronco3: turno 2, pasos 498–944, detenido por balanceo roto
+
+- **Qué:** el segundo turno del `tronco3`, con el piso del router encendido (P34).
+- **Dónde:** Kaggle 2×T4, cuenta 1, código `e074712`. Siguió desde el 498 de Hugging Face, con el estado y el primer batch idénticos.
+- **Archivos:** `results/tronco/tronco3/turno02_cuenta-1.jsonl` y `.relevo.json`. Se restauraron de CRLF, y el usuario de Kaggle del error del respaldo queda como `<usuario>`.
+- **Resultado:**
+  - 447 pasos en 9.26 h, a 3,554 tokens/s de media, con pico de 13.13 GiB y 0 saltos de FP16. Un pico de pérdida saltado, en el paso 731.
+  - λ pasó de 0.01 a 0.001 en el paso 500.
+  - **Desde el paso 500 subió el experto más cargado por paso.** Su media en tramos de 50 pasos fue 1.87 (pasos 498–547), 2.16, 2.37, 2.66, 2.54, 2.62, 2.84, 3.08 y 3.33 (898–944). La del menos cargado bajó de 0.42 a 0.15.
+  - **Vista en una ventana de pasos, la carga parece pareja.** En la evaluación del paso 750, la ventana da de 1.17 a 1.38× por capa, y el batch de validación, hasta 2.61× (capa MoE 0). Los expertos que acaparan se turnan, como en el primer tronco (P29).
+  - **El router en el paso 750:** lse de 1.84 a 3.02 por capa, con el más alto en la MoE 0 y el más bajo en la MoE 16. El sesgo decide el 94–100% de los tokens.
+  - **El sesgo más grande siguió creciendo:** 0.54 en el paso 500, 0.62 en el 750 y 0.66 en el 944.
+  - **El piso empezó a actuar hacia el paso 850** (`router_floor` mayor que 0).
+  - Val bpb 1.7911 en el paso 498, 1.7878 en el 500 y 1.3715 en el 750. 0 expertos muertos.
+  - **La parada:** en el paso 944, el experto más cargado pasaba de 3× en 40 de los últimos 50 pasos (alarma `expert_balance_broke`). El turno guardó el 945 y se detuvo.
+  - **Hugging Face se llenó.** Subieron el 644 y el 790. Las subidas siguientes fallaron 6 veces: "Private storage limit reached for org ludwig-v2-lm". El respaldo de Kaggle volvió a fallar con 403, así que el 945 se perdió. En Hugging Face quedan el 644 y el 790 del `tronco3`.
+  - El candado se soltó al primer reintento.
+- **Pregunta abierta:** el balanceo se rompió con dos recetas distintas.
+  - El primer tronco, con λ 0.01, se rompió cuando bajó el nivel del router.
+  - El `tronco3`, con λ 0.001, se rompió con el nivel todavía alto.
+  - En los dos, el sesgo decide casi todos los tokens de todas las capas desde los primeros cientos de pasos. Pipe pide una revisión independiente del código y de los datos.
+- **Siguiente:** no se lanza el turno 3 hasta tener el diagnóstico. Antes hay que liberar espacio en Hugging Face y arreglar el respaldo de Kaggle.

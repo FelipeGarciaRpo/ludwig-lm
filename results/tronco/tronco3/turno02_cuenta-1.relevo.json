@@ -1,0 +1,133 @@
+{
+ "session": "bd36a6d86df942619bae2018a376a0b7",
+ "by": "cuenta 1",
+ "train_exit": 0,
+ "lock_lost": null,
+ "resumed_from": {
+  "where": "hf",
+  "step": 498
+ },
+ "uploaded_step": 790,
+ "last_local": "step_000945",
+ "events": [
+  {
+   "kind": "lock",
+   "time": 1795709785.8,
+   "by": "cuenta 1",
+   "session": "bd36a6d8",
+   "until": 1795716986
+  },
+  {
+   "kind": "resume_from",
+   "time": 1795709788.8,
+   "by": "cuenta 1",
+   "session": "bd36a6d8",
+   "where": "hf",
+   "step": 498
+  },
+  {
+   "kind": "download",
+   "time": 1795709834.9,
+   "by": "cuenta 1",
+   "session": "bd36a6d8",
+   "step": 498,
+   "seconds": 46.1
+  },
+  {
+   "kind": "free",
+   "time": 1795720878.7,
+   "by": "cuenta 1",
+   "session": "bd36a6d8",
+   "what": "start",
+   "GiB": 11.46
+  },
+  {
+   "kind": "upload",
+   "time": 1795720995.1,
+   "by": "cuenta 1",
+   "session": "bd36a6d8",
+   "step": 644,
+   "GiB": 11.46,
+   "seconds": 116.4,
+   "kept": [
+    498,
+    644
+   ]
+  },
+  {
+   "kind": "upload",
+   "time": 1795731853.6,
+   "by": "cuenta 1",
+   "session": "bd36a6d8",
+   "step": 790,
+   "GiB": 11.46,
+   "seconds": 115.6,
+   "kept": [
+    644,
+    790
+   ]
+  },
+  {
+   "kind": "upload_failed",
+   "time": 1795742773.0,
+   "by": "cuenta 1",
+   "session": "bd36a6d8",
+   "error": "BadRequestError: (Request ID: Root=1-6b08dc34-1498fd915105bb352880e33a;55eaa076-6eb2-467e-82b1-ca2897af9adc)\n\nBad request for commit endpoint:\nPrivate storage limit reached for org ludwig-v2-lm, please upgrade your pl"
+  },
+  {
+   "kind": "upload_failed",
+   "time": 1795742919.9,
+   "by": "cuenta 1",
+   "session": "bd36a6d8",
+   "error": "BadRequestError: (Request ID: Root=1-6b08dcc7-5c6accdc111301b03a7eb87c;5cf505f3-ce8e-4d53-a79f-ec84f31abb8d)\n\nBad request for commit endpoint:\nPrivate storage limit reached for org ludwig-v2-lm, please upgrade your pl"
+  },
+  {
+   "kind": "upload_failed",
+   "time": 1795743067.1,
+   "by": "cuenta 1",
+   "session": "bd36a6d8",
+   "error": "BadRequestError: (Request ID: Root=1-6b08dd5a-01fe78a84ee425233c3fb88d;cb4356f7-2138-4db9-ab98-e30c86f7e57f)\n\nBad request for commit endpoint:\nPrivate storage limit reached for org ludwig-v2-lm, please upgrade your pl"
+  },
+  {
+   "kind": "upload_failed",
+   "time": 1795743242.3,
+   "by": "cuenta 1",
+   "session": "bd36a6d8",
+   "error": "BadRequestError: (Request ID: Root=1-6b08de0a-51af3b2e7a99568859931255;e5386d8c-eab4-4c75-8fd2-77d46aba021f)\n\nBad request for commit endpoint:\nPrivate storage limit reached for org ludwig-v2-lm, please upgrade your pl"
+  },
+  {
+   "kind": "upload_failed",
+   "time": 1795743380.3,
+   "by": "cuenta 1",
+   "session": "bd36a6d8",
+   "error": "BadRequestError: (Request ID: Root=1-6b08de94-7e4f4e524bb5ebc41c58f28a;a0f00fba-97c8-4950-a288-5f4c653dd4b1)\n\nBad request for commit endpoint:\nPrivate storage limit reached for org ludwig-v2-lm, please upgrade your pl"
+  },
+  {
+   "kind": "upload_failed",
+   "time": 1795743430.2,
+   "by": "cuenta 1",
+   "session": "bd36a6d8",
+   "error": "BadRequestError: (Request ID: Root=1-6b08dec5-75cafe8764b8506161e1499a;c893f0b3-7984-4e01-875a-971b066f0e7b)\n\nBad request for commit endpoint:\nPrivate storage limit reached for org ludwig-v2-lm, please upgrade your pl"
+  },
+  {
+   "kind": "backup_failed",
+   "time": 1795743646.2,
+   "by": "cuenta 1",
+   "session": "bd36a6d8",
+   "error": "RuntimeError: kaggle datasets version <usuario>/ludwig2-respaldo-a2 (exit 1): Upload successful: checkpoint.json (6KB) | Starting upload for file checkpoint.tar | Upload successful: checkpoint.tar (11GB) | 403 Client Error: Forbidden for url: https://api.kaggle.com/v1/datasets.DatasetApiService/CreateDatasetVersion"
+  },
+  {
+   "kind": "squash",
+   "time": 1795743646.5,
+   "by": "cuenta 1",
+   "session": "bd36a6d8"
+  },
+  {
+   "kind": "release_failed",
+   "time": 1795743646.8,
+   "by": "cuenta 1",
+   "session": "bd36a6d8",
+   "error": "Conflict: ludwig-v2-lm/ludwig-v2-lm-1 moved from a4fd8292"
+  }
+ ]
+}
