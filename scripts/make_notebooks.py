@@ -684,7 +684,7 @@ Un turno: toma el candado en Hugging Face, sigue desde el checkpoint más nuevo 
 | `prueba-arreglo` | Sigue 26 pasos desde un checkpoint de Hugging Face con el arreglo de la P35, sin guardar ni subir nada, y dice si el balanceo vuelve y la pérdida sigue su curva | ~40 min |"""),
     code(r'''MODO = "tronco"          # tronco · sonda · prueba-arreglo · prueba-relevo · prueba-respaldo · g0-16k
 CUENTA = "cuenta 1"      # tu etiqueta en el relevo: nunca el usuario de Kaggle ni el correo
-COMMIT = "e074712283d359452be26956c4c08c55bd305d00"  # el commit del tronco3 desde su turno 2 (P34; el turno 1 corrió 020ba9c)
+COMMIT = "4a57879b24363224049e9d2d461aa5abb26bbce8"  # P35: la sonda y la prueba-arreglo; el tronco4 fija el suyo antes de su turno 1
 REPO_URL = "https://github.com/FelipeGarciaRpo/ludwig-lm"
 HF_REPO = "ludwig-v2-lm/ludwig-v2-lm-1"                       # privado, de la organización
 HF_REPO_PRUEBA = "ludwig-v2-lm/ludwig-v2-lm-1-relevo-prueba"  # privado: solo para prueba-relevo
