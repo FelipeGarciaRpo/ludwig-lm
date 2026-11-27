@@ -109,7 +109,14 @@ def parse(argv=None):
                    help="the LR Muon's weight decay follows. adamw (Ludwig 1): each step removes adamw_lr x wd "
                         "of every matrix; muon: lr x wd, 3x faster with these peaks")
     g.add_argument("--clip", type=float, default=1.0)
-    g.add_argument("--balance", default="smebu", choices=["smebu", "sign"])
+    g.add_argument("--balance", default="smebu", choices=["smebu", "sign", "quantile"],
+                   help="how the expert bias follows the load. smebu and sign take steps of a fixed size (--lam, "
+                        "--gamma); quantile (P35) moves the bias toward the value that would balance a sample of the "
+                        "step's tokens, and ignores both")
+    g.add_argument("--balance-damp", type=float, default=0.5,
+                   help="quantile: the fraction of the way to that value the bias moves each step")
+    g.add_argument("--balance-sample", type=int, default=512,
+                   help="quantile: tokens per GPU and micro-step in its sample (2 GPUs × 8 micro-steps: 8,192 a step)")
     g.add_argument("--lam", type=float, default=1e-2, help="SMEBU step (T0.2 v2: 0.01 balanced best)")
     g.add_argument("--lam-final", type=float, default=None,
                    help="SMEBU step from --lam-steps on (P30: 0.01 balances the start fast, then DeepSeek-V3's 0.001)")
@@ -238,6 +245,8 @@ class Alarms:
         self.weak = self.weak + 1 if bal["load_min_over_mean"] < 0.1 else 0
         if self.weak >= 1000:
             self._fire(step, "expert_below_10pct_of_mean_for_1000_steps", 1000)
+        if not bal.get("bias_ranks_equal", True):          # each GPU updates its own copy of the bias (P35)
+            self._fire(step, "expert_bias_differs_between_gpus", 1000)
         if tps is not None and tps < 2500:
             self._fire(step, "tokens_per_s_below_2500", 200, tokens_per_s=round(tps))
         if peak_reserved > 13.5:
@@ -313,7 +322,8 @@ class Trainer:
         self.opts = [self.muon, self.adamw]
         self.params = [p for p in self.model.parameters() if p.requires_grad]
         self.scaler = DynamicLossScaler(init_scale=2.0 ** 15 if self.use_cuda else 1.0)
-        self.balancer = ExpertBalancer(self.model, rule=a.balance, lam=a.lam, gamma=a.gamma)
+        self.balancer = ExpertBalancer(self.model, rule=a.balance, lam=a.lam, gamma=a.gamma, damp=a.balance_damp,
+                                       sample=a.balance_sample)
         self.weights = LossWeights(output_z=a.output_z, seq_aux=a.seq_aux, router_z=a.router_z,
                                    router_floor=a.router_floor, router_floor_lse=a.router_floor_lse)
         self.amp_dtype = torch.float16 if self.use_cuda else torch.bfloat16   # bf16 only exercises the CPU path
@@ -372,13 +382,15 @@ class Trainer:
         with torch.autocast(device_type=self.device.type, dtype=self.amp_dtype, enabled=self.fp32_residual):
             loss, mets = self.model(ids, self.weights, ce_chunk=self.args.ce_chunk, loss_mask=mask)
         (loss * (self.scaler.scale / ga)).backward()
-        self.balancer.accumulate(mets["chosen"])
+        self.balancer.accumulate(mets["chosen"], mets["router_logits"])
         self.health += torch.stack([mets["router_margin"], mets["bias_decides"]])
         return torch.stack([mets["ce"], mets["z_out"], mets["seq_aux"], mets["z_router"], mets["router_entropy"],
                             mets["router_floor"]])
 
     def lam_at(self, step):
         a = self.args
+        if a.balance == "quantile":                       # no step size: logged as 0, and λ over the gap with it
+            return 0.0
         return a.lam_final if (a.lam_final is not None and step >= a.lam_steps) else a.lam
 
     def router_health(self):
@@ -672,6 +684,7 @@ class Trainer:
             acc = torch.zeros(6, device=self.device)
             self.health = torch.zeros(2, len(self.balancer.blocks), device=self.device)
             self.balancer.lam = self.lam_at(step)
+            self.balancer.at_step = step                   # the quantile rule's sample follows the step, not chance
             sha = None
             for m in range(ga):
                 ids = self.reader.next()
@@ -696,7 +709,8 @@ class Trainer:
                 self.zero_grad()
                 self.balancer.skip()
                 gnorm, found_inf, bal = None, False, {"load_max_over_mean": 0.0, "load_min_over_mean": 1.0,
-                                                      "dead_experts": 0, "bias_abs_max": 0.0}
+                                                      "dead_experts": 0, "bias_abs_max": 0.0, "bias_step_max": 0.0,
+                                                      "bias_ranks_equal": True}
                 spikes.append(step)
                 spikes_total += 1
                 while spikes and spikes[0] <= step - a.spike_window:
@@ -722,8 +736,9 @@ class Trainer:
                    "z_router": round(float(acc[3]), 3), "router_entropy": round(float(acc[4]), 4),
                    "router_floor": round(float(acc[5]), 6),
                    "grad_norm": None if gnorm is None else round(gnorm, 4), "scale": self.scaler.scale,
-                   "skipped_inf": found_inf, "skipped_spike": spike, **{k: (round(v, 4) if isinstance(v, float) else v)
-                                                                        for k, v in bal.items()},
+                   "skipped_inf": found_inf, "skipped_spike": spike,
+                   **{k: (round(v, 6 if k == "bias_step_max" else 4) if isinstance(v, float) else v)
+                      for k, v in bal.items()},
                    **self.router_health(),
                    "step_s": round(dt, 2), "tokens_per_s": round(tps_now / dt), "grad_accum": ga,
                    "peak_alloc_GiB": peak[0], "peak_reserved_GiB": peak[1], "batch_sha": sha}

@@ -7,7 +7,9 @@
    1,000-token byte-level BPE tokenizer on them, in work/test_train_cpu/.
 2. Reader (and Muon's weight decay): same windows on every run; a reader restarted from a saved state continues exactly; the two
    ranks get different data; epochs wrap; raw text never yields the EOS id; validation windows are fixed.
-3. Training, 2 processes on CPU with configs/tiny_afmoe.json:
+3. The quantile rule of the balancer on a fixed batch (P35): it balances scores around 0.5 and scores 250 times
+   smaller with the same setting.
+4. Training, 2 processes on CPU with configs/tiny_afmoe.json:
    A  8 steps with WSD decay, saves before step 3 and before the decay (step 5);
    B  resumes A at step 3: its steps 3–7 and evaluations must equal A's bit for bit, the restored state must
       match its fingerprint and the first batch its saved hash;
@@ -19,6 +21,8 @@
    E  evaluates A's step-3 checkpoint with --eval-only: B's evaluation there, bit for bit, and no step;
    F  turns on the floor for the router's level above the level, which must rise against A's (P33).
    F0 turns it on below the level, as the trunk runs it: nothing may change against A (P34).
+   Q  balances with the quantile rule (P35): better than A's SMEBU from the second step, the same bias on both
+      processes, and QR resumes it at step 3 bit for bit.
    Before the training: the trunk's models build with their dense layers and parameter counts (P32).
    Every step logs the router's health, and every evaluation logs it per MoE layer (P29), with the router's
    level as z and signed lse; L also sets the z_router alarm (P30) so that it must fire.
@@ -180,6 +184,52 @@ def test_trunk_model():
               and round(n, 3) == total, f"{name}: {dense} dense layers, {cfg.num_hidden_layers - dense} MoE of {cfg.num_experts} experts, {n:.3f}B")
 
 
+def test_balancer():
+    import torch
+
+    from ludwig_lm.afmoe import bias_targets
+
+    print("the quantile rule (P35)", flush=True)
+    g = torch.Generator().manual_seed(0)
+    n, e, k = 4096, 8, 2
+    # each expert has its own offset, common to all tokens, next to what each token prefers
+    logits = torch.randn(e, generator=g) + 0.6 * torch.randn(n, e, generator=g)
+    for what, level in (("around 0.5", 0.0), ("around 0.002", -6.0)):
+        scores = torch.sigmoid(logits + level)
+
+        def load(bias):
+            c = torch.bincount(torch.topk(scores + bias, k, dim=1).indices.reshape(-1), minlength=e).float()
+            return c / c.mean()
+
+        bias = torch.zeros(e)
+        before = load(bias)
+        for _ in range(20):
+            bias = bias + 0.5 * (bias_targets(scores, bias, k) - bias)
+            bias = bias - bias.mean()
+        after = load(bias)
+        check(float(before.max()) > 2 and float(after.max()) < 1.05 and float(after.min()) > 0.95,
+              f"scores {what}: 20 half-way moves take the busiest expert from {float(before.max()):.2f}× the mean to "
+              f"{float(after.max()):.2f}× and the least busy to {float(after.min()):.2f}× (bias range "
+              f"{float(bias.max() - bias.min()):.4f})")
+
+    from ludwig_lm.afmoe import ExpertBalancer, LudwigAfmoe, load_config
+
+    cfg = load_config(ROOT / "configs" / "tiny_afmoe.json")
+    torch.manual_seed(0)
+    balancer = ExpertBalancer(LudwigAfmoe(cfg), rule="quantile")
+    lg = [torch.randn(64, cfg.num_experts, generator=g) for _ in balancer.blocks]
+    chosen = [torch.topk(x, cfg.num_experts_per_tok, dim=1).indices for x in lg]
+    balancer.accumulate(chosen, lg)
+    balancer.step()
+    held = [b.expert_bias.clone() for b in balancer.blocks]
+    lg[0][0, 0] = float("nan")
+    balancer.accumulate(chosen, lg)
+    balancer.step()
+    check(all(float(h.abs().max()) > 0 for h in held)
+          and all(torch.equal(b.expert_bias, h) for b, h in zip(balancer.blocks, held)),
+          "a step with a non-finite score leaves the bias as it was")
+
+
 def test_public_paths():
     sys.path.insert(0, str(ROOT / "scripts"))
     from train import public
@@ -301,6 +351,31 @@ def test_training():
                   for k in sa)
           and e0[8]["val_bpb"] == ea[8]["val_bpb"] and e0[8]["router_lse"] == ea[8]["router_lse"],
           "F0: a floor below the level changes nothing: the same loss, gradient norm and router levels as A (P34)")
+    check(all(r["bias_ranks_equal"] and 0 < r["bias_step_max"] < 2 * r["lam"] for r in sa.values()),
+          "A: both processes hold the same bias after every step, and SMEBU never moves it by 2λ or more (λ from "
+          "its clamp, and as much again from the re-centring)")
+    code, q = torchrun("Q", WORK / "q.jsonl", "--balance", "quantile", "--save-dir", str(WORK / "ckpt_q"),
+                       "--save-at", "3")
+    sq = {r["step"]: r for r in by(q, "step")}
+    check(code == 0 and sorted(sq) == list(range(8)) and all(r["ce"] == r["ce"] and r["lam"] == 0 for r in sq.values()),
+          "Q: the quantile rule runs to the end, with no step size to log (λ 0)")
+    check(all(r["bias_ranks_equal"] and r["bias_step_max"] > 0 for r in sq.values())
+          and not any(r.get("alarm") == "expert_bias_differs_between_gpus" for r in by(q, "alarm")),
+          "Q: both processes reach the same bias at every step, from the same pooled sample")
+    late = range(2, 8)
+    q_min, a_min = mean([sq[i]["load_min_over_mean"] for i in late]), mean([sa[i]["load_min_over_mean"] for i in late])
+    q_max, a_max = mean([sq[i]["load_max_over_mean"] for i in late]), mean([sa[i]["load_max_over_mean"] for i in late])
+    check(q_min > a_min + 0.1 and q_max < a_max,
+          f"Q balances faster than A's SMEBU: over steps 2–7 its least busy expert has {q_min:.2f}× the mean "
+          f"({a_min:.2f}× in A) and its busiest {q_max:.2f}× ({a_max:.2f}×)")
+    code, qr = torchrun("QR", WORK / "qr.jsonl", "--balance", "quantile", "--resume",
+                        str(WORK / "ckpt_q" / "step_000003"), "--save-dir", str(WORK / "ckpt_qr"))
+    sqr = {r["step"]: r for r in by(qr, "step")}
+    check(code == 0 and sorted(sqr) == [3, 4, 5, 6, 7] and by(qr, "resume")[0]["state_exact"]
+          and by(qr, "resume_check")[0]["batch_exact"]
+          and all(same(sq[i], sqr[i], keys + ["load_min_over_mean", "bias_step_max"]) for i in sqr),
+          "QR: a run resumed with the quantile rule equals the uninterrupted one bit for bit (its sample needs no "
+          "random numbers)")
     code, e = torchrun("E", WORK / "e.jsonl", "--resume", str(WORK / "ckpt_a" / "step_000003"), "--eval-only")
     ee = by(e, "eval")
     check(code == 0 and (by(e, "end") or [{}])[-1].get("status") == "evaluated" and not by(e, "step")
@@ -317,6 +392,7 @@ def main():
     test_optimizer()
     test_trunk_model()
     test_public_paths()
+    test_balancer()
     test_training()
     print("PASS" if not FAILS else f"FAIL: {len(FAILS)} checks", flush=True)
     sys.exit(1 if FAILS else 0)

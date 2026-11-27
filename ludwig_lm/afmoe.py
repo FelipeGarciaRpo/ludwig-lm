@@ -13,7 +13,8 @@ Everything here works around the model, never changes its parameters or their na
 * ``expert_bias`` becomes a replicated buffer: FSDP2 then leaves it whole on every rank, and the
   balancer updates it the same way everywhere. The state-dict key does not change.
 * ``ExpertBalancer``: aux-loss-free balancing. SMEBU (Arcee Trinity: tanh-clamped, re-centred,
-  momentum) or the plain sign update, for comparison.
+  momentum), the plain sign update, or the quantile rule (P35): move the bias toward the value that would
+  balance a sample of the step's tokens, a move in the scores' own units.
 * ``LudwigAfmoe.forward``: chunked cross-entropy with the tied head, output z-loss,
   sequence-wise auxiliary loss (DeepSeek-V3), router z-loss (0 since P30), and the router's health per
   MoE layer (P29). With ``fp32_residual`` the residual stream stays in FP32 when the caller runs it under
@@ -293,7 +294,7 @@ class LudwigAfmoe(nn.Module):
                    "router_floor": floor.detach(),
                    "router_entropy": ent, "router_margin": margin, "bias_decides": decides,
                    "router_z_layers": z_layers, "router_lse_layers": lse_layers,
-                   "chosen": [c for _, c in records]}
+                   "chosen": [c for _, c in records], "router_logits": [lg.detach() for lg, _ in records]}
         return loss, metrics
 
 
@@ -316,53 +317,128 @@ def flops_per_token(cfg: AfmoeConfig, active: int, seq: int) -> float:
 
 
 # --------------------------------------------------------------------------- balancing
+@torch.no_grad()
+def bias_targets(scores, bias, k: int):
+    """Per expert, the bias that would give it its share of these tokens (k of every E assignments) while the other
+    experts keep theirs (P35). ``scores`` (N, E): the router's sigmoid scores; ``bias`` (E,).
+
+    With the others fixed, expert i takes token t iff bias_i > need[t, i], where need is what it has to beat (the
+    k-th best score + bias among the others) minus its own score. The share it wants is the k/E quantile of need
+    over the tokens. The move this asks for is in the scores' own units: large while the scores are large and
+    their offsets move, fine once the scores are small."""
+    tot = scores + bias
+    top = torch.topk(tot, k + 1, dim=1).values                        # (N, k+1), descending
+    inside = tot >= top[:, k - 1:k]                                    # the token's experts now
+    beat = torch.where(inside, top[:, k:k + 1], top[:, k - 1:k])       # the best total among the others at the edge
+    need = beat - scores
+    kth = min(need.shape[0], max(1, round(need.shape[0] * k / need.shape[1])))
+    return torch.sort(need, dim=0).values[kth - 1]
+
+
 class ExpertBalancer:
     """Updates every MoE layer's expert_bias once per optimizer step from the tokens it got.
 
-    smebu (Arcee Trinity): v = (mean - n_i) / mean;  d = lam * tanh(kappa * v), re-centred;
-                           m = beta * m + (1 - beta) * d;  b += m
-    sign  (Wang et al. 2024, used by DeepSeek-V3): b += gamma * sign(mean - n_i)
-    """
+    smebu    (Arcee Trinity): v = (mean - n_i) / mean;  d = lam * tanh(kappa * v), re-centred;
+                              m = beta * m + (1 - beta) * d;  b += m
+    sign     (Wang et al. 2024, used by DeepSeek-V3): b += gamma * sign(mean - n_i)
+    quantile (P35): b += damp * (target - b), re-centred, where target is the bias that would balance a sample
+             of the step's tokens exactly (``bias_targets``). smebu and sign take steps of a fixed size in score
+             units: too slow while the scores are large and what the bias cancels moves (tronco3, step 500), too
+             coarse once the scores are small (the first trunk, step ~1200). This rule has no step size.
+
+    The quantile rule's sample is ``sample`` tokens per micro-step and rank, taken at a fixed stride whose first
+    token depends on the step and the micro-step: no random numbers, so a resumed run takes the same tokens. At the
+    step, every rank receives every rank's sample (an all-reduce of a buffer that is zero outside the rank's own
+    part), so all ranks sort the same tensor and reach the same bias, bit for bit. The rule keeps nothing between
+    steps: the checkpoint has the same keys as with smebu."""
 
     def __init__(self, model, rule: str = "smebu", lam: float = 1e-3, beta: float = 0.5, kappa: float = 2.0,
-                 gamma: float = 1e-3):
+                 gamma: float = 1e-3, damp: float = 0.5, sample: int = 512):
         lm = model.lm if hasattr(model, "lm") else model
         self.blocks = moe_blocks(lm)
-        self.n_exp = lm.config.num_experts
+        self.n_exp, self.k = lm.config.num_experts, lm.config.num_experts_per_tok
         self.rule, self.lam, self.beta, self.kappa, self.gamma = rule, lam, beta, kappa, gamma
+        self.damp, self.sample = damp, sample
         dev = self.blocks[0].expert_bias.device if self.blocks else torch.device("cpu")
         self.momentum = torch.zeros(len(self.blocks), self.n_exp, device=dev)
         self.counts = torch.zeros(len(self.blocks), self.n_exp, device=dev)
         self.window = torch.zeros(len(self.blocks), self.n_exp, device=dev)   # since the last window_stats()
+        self.scores = [[] for _ in self.blocks]       # quantile: this step's sampled scores, per MoE layer
+        self.at_step = self.micro = 0                 # the optimizer step (set by the loop) and its micro-step
 
     @torch.no_grad()
-    def accumulate(self, chosen_per_layer):
+    def accumulate(self, chosen_per_layer, logits_per_layer=None):
         for i, c in enumerate(chosen_per_layer):
             self.counts[i] += torch.bincount(c.reshape(-1), minlength=self.n_exp).float()
+        if self.rule == "quantile":
+            if logits_per_layer is None:
+                raise ValueError("the quantile rule needs the router's logits of each micro-step")
+            for i, lg in enumerate(logits_per_layer):
+                stride = max(1, lg.shape[0] // self.sample)
+                first = (31 * self.at_step + 17 * self.micro) % stride
+                self.scores[i].append(torch.sigmoid(lg[first::stride][:self.sample].float()))
+            self.micro += 1
+
+    def _pooled_scores(self, distributed: bool):
+        """(layers, tokens, experts): the step's sample of every rank, the same tensor on every rank."""
+        local = torch.stack([torch.cat(s) for s in self.scores])
+        if not distributed:
+            return local
+        buf = local.new_zeros((dist.get_world_size(),) + tuple(local.shape))
+        buf[dist.get_rank()] = local
+        dist.all_reduce(buf)                               # x + 0 is exact: each rank's part arrives unchanged
+        return buf.permute(1, 0, 2, 3).reshape(local.shape[0], -1, local.shape[2])
 
     @torch.no_grad()
     def step(self) -> dict:
         c = self.counts
-        if dist.is_available() and dist.is_initialized():
+        distributed = dist.is_available() and dist.is_initialized()
+        if distributed:
             dist.all_reduce(c)
         mean = c.mean(1, keepdim=True).clamp_min(1.0)
         v = (mean - c) / mean                              # > 0: the expert got fewer tokens than the mean
-        if self.rule == "smebu":
-            d = self.lam * torch.tanh(self.kappa * v)
-            d = d - d.mean(1, keepdim=True)
-            self.momentum.mul_(self.beta).add_(d, alpha=1.0 - self.beta)
-            delta = self.momentum
+        before = [b.expert_bias.clone() for b in self.blocks]
+        if self.rule == "quantile":
+            pooled = self._pooled_scores(distributed) if self.scores and self.scores[0] else None
+            if pooled is not None and bool(torch.isfinite(pooled).all()):   # a NaN here would stay in the bias for good
+                for i, block in enumerate(self.blocks):
+                    b = block.expert_bias
+                    b.add_((self.damp * (bias_targets(pooled[i], b.float(), self.k) - b.float())).to(b.dtype))
+                    b.sub_(b.mean())                       # the top-k only sees differences
         else:
-            delta = self.gamma * torch.sign(v)
-        for i, block in enumerate(self.blocks):
-            block.expert_bias.add_(delta[i].to(block.expert_bias.dtype))
+            if self.rule == "smebu":
+                d = self.lam * torch.tanh(self.kappa * v)
+                d = d - d.mean(1, keepdim=True)
+                self.momentum.mul_(self.beta).add_(d, alpha=1.0 - self.beta)
+                delta = self.momentum
+            else:
+                delta = self.gamma * torch.sign(v)
+            for i, block in enumerate(self.blocks):
+                block.expert_bias.add_(delta[i].to(block.expert_bias.dtype))
         load = c / mean
         stats = {"load_max_over_mean": float(load.max()), "load_min_over_mean": float(load.min()),
                  "dead_experts": int((c == 0).sum()),
-                 "bias_abs_max": float(max(b.expert_bias.abs().max() for b in self.blocks))}
+                 "bias_abs_max": float(max(b.expert_bias.abs().max() for b in self.blocks)),
+                 "bias_step_max": float(max((b.expert_bias - o).abs().max() for b, o in zip(self.blocks, before))),
+                 "bias_ranks_equal": self._ranks_equal(distributed)}
         self.window += c
-        self.counts.zero_()
+        self._clear()
         return stats
+
+    def _ranks_equal(self, distributed: bool) -> bool:
+        """The bias is a replicated buffer that every rank updates by itself: do they all hold the same one?"""
+        if not distributed or not self.blocks:
+            return True
+        flat = torch.cat([b.expert_bias.double().reshape(-1) for b in self.blocks])
+        s = torch.stack([flat.sum(), (flat * torch.arange(1, flat.numel() + 1, device=flat.device)).sum()])
+        t = torch.cat([s, -s])
+        dist.all_reduce(t, op=dist.ReduceOp.MAX)           # the largest of each sum and of its negative
+        return bool((t[:2] == -t[2:]).all())
+
+    def _clear(self):
+        self.counts.zero_()
+        self.scores = [[] for _ in self.blocks]
+        self.micro = 0
 
     @torch.no_grad()
     def window_stats(self) -> dict:
@@ -382,7 +458,7 @@ class ExpertBalancer:
 
     def skip(self):
         """Forget the counts of a step that is not applied (a skipped loss spike)."""
-        self.counts.zero_()
+        self._clear()
 
     def state_dict(self):
         return {"momentum": self.momentum.clone(), "rule": self.rule, "lam": self.lam, "gamma": self.gamma}
