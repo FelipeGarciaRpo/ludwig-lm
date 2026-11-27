@@ -661,7 +661,9 @@ tronco.cells = [
 
 Un turno: toma el candado en Hugging Face, sigue desde el checkpoint más nuevo (de Hugging Face o de uno de los dos respaldos de Kaggle), entrena ~11 h, sube un checkpoint cada 3 h mientras entrena, deja el último en el respaldo que toca, aplasta el historial y suelta el candado (`ludwig_lm/relay.py`, D15, P26).
 
-**Desde el 25 de noviembre de 2026 en la noche, el tronco es `tronco3`** (`configs/tronco_v3.json`, P32): empieza de cero con 3 capas densas en vez de 1 y la receta del router del `tronco2` (P30). Desde el 26 de noviembre, con el piso del router encendido (P34): vale cero mientras el lse medio de cada capa MoE esté sobre 1.5. El balanceo de los expertos del primer intento (`tronco`) se rompió en el paso ~1250, en sus primeras capas MoE (P29). Los checkpoints de `tronco` y `tronco2` quedan en Hugging Face bajo su etiqueta: cada corrida rota solo los suyos.
+**Desde el 27 de noviembre de 2026, el tronco es `tronco4`** (`configs/tronco_v4.json`, P35): empieza de cero con el modelo y la receta del `tronco3` (3 capas densas y 44 expertos, P32; el piso del router, P34) y dos cambios desde el paso 0: el sesgo de los expertos sigue la regla por cuantiles en vez de SMEBU, y los offsets del router se mantienen iguales. Las corridas anteriores terminaron con el balanceo de los expertos roto: `tronco` desde su paso ~1250 (P29) y `tronco3`, que se detuvo solo en el 944 (P35); `tronco2` se reemplazó después de un turno (P32). Sus checkpoints quedan en Hugging Face bajo su etiqueta: cada corrida rota solo los suyos.
+
+**Antes del primer turno del `tronco4`** corren, en este orden y cada una en su notebook, la `sonda` del checkpoint 790 del `tronco3` y la `prueba-arreglo` sobre ese mismo checkpoint. Miden en el modelo real lo que el diagnóstico sacó de los logs y de un modelo chico en CPU, y ninguna toma el candado ni guarda o sube nada.
 
 **Una vez por cuenta:**
 1. Cuenta de Hugging Face, invitada a la organización del proyecto con rol *write*. Un token *fine-grained* con escritura solo en el repo del relevo.
@@ -678,8 +680,9 @@ Un turno: toma el candado en Hugging Face, sigue desde el checkpoint más nuevo 
 | `prueba-relevo` | **G0-0:** el relevo completo con un modelo diminuto, contra `HF_REPO_PRUEBA`: candado, subida, aplastado, respaldo y reanudación exacta. Solo antes del primer turno del tronco | ~15 min |
 | `prueba-respaldo` | Sigue desde el respaldo que dejó la última `prueba-relevo`, sin Hugging Face (como `SIN_CANDADO`): lo lee donde Kaggle lo montó y respalda en el otro dataset. Solo antes del primer turno del tronco | ~5 min |
 | `g0-16k` | **G0-1:** 50 pasos del modelo real a 16K de contexto, sin guardar (condición 5 de la G0) | ~30–60 min |
-| `sonda` | Mide el router de un checkpoint guardado en Hugging Face, por capa (P29), sin entrenar ni escribir nada | ~10 min |"""),
-    code(r'''MODO = "tronco"          # tronco · sonda · prueba-relevo · prueba-respaldo · g0-16k
+| `sonda` | Mide el router de un checkpoint guardado en Hugging Face, por capa (P29, P35), sin entrenar ni escribir nada | ~10 min |
+| `prueba-arreglo` | Sigue 26 pasos desde un checkpoint de Hugging Face con el arreglo de la P35, sin guardar ni subir nada, y dice si el balanceo vuelve y la pérdida sigue su curva | ~40 min |"""),
+    code(r'''MODO = "tronco"          # tronco · sonda · prueba-arreglo · prueba-relevo · prueba-respaldo · g0-16k
 CUENTA = "cuenta 1"      # tu etiqueta en el relevo: nunca el usuario de Kaggle ni el correo
 COMMIT = "e074712283d359452be26956c4c08c55bd305d00"  # el commit del tronco3 desde su turno 2 (P34; el turno 1 corrió 020ba9c)
 REPO_URL = "https://github.com/FelipeGarciaRpo/ludwig-lm"
@@ -687,7 +690,9 @@ HF_REPO = "ludwig-v2-lm/ludwig-v2-lm-1"                       # privado, de la o
 HF_REPO_PRUEBA = "ludwig-v2-lm/ludwig-v2-lm-1-relevo-prueba"  # privado: solo para prueba-relevo
 RESPALDO = ["DUENO/ludwig2-respaldo-a", "DUENO/ludwig2-respaldo-b"]   # los dos datasets privados de Pipe
 SIN_CANDADO = False      # True solo si Hugging Face está caído y se coordinó por WhatsApp: sigue desde Kaggle
-SONDA = ("tronco", 3270)  # MODO sonda: la etiqueta y el paso del checkpoint que se mide
+SONDA = ("tronco3", 790)  # MODO sonda: la etiqueta y el paso del checkpoint que se mide
+PRUEBA = ("tronco3", 790, 26)   # MODO prueba-arreglo: la etiqueta, el paso del checkpoint y cuántos pasos entrena
+PRUEBA_SOLO_A = False    # True: solo la regla por cuantiles, sin igualar los offsets del router (si la prueba falla, P35)
 import time
 T_SESION = time.time()'''),
     code(r'''import os, subprocess, sys, json, glob, shutil
@@ -707,8 +712,37 @@ for k in ("HF_TOKEN", "KAGGLE_USERNAME", "KAGGLE_KEY"):
 os.environ["PYTORCH_CUDA_ALLOC_CONF"] = "expandable_segments:True"
 sys.path.insert(0, ".")
 from ludwig_lm.relay import HFStore, KaggleBackup, Lock, LocalStore, Session, train_command, Busy
-TRONCO = json.load(open("configs/tronco_v3.json"))       # P32: desde cero, con 3 capas densas y el router del P30
-CONFIG_DE = {"tronco": "configs/tronco_v1.json", "tronco2": "configs/tronco_v2.json"}   # para la sonda
+TRONCO = json.load(open("configs/tronco_v4.json"))       # P35: desde cero, con cuantiles y offsets iguales
+CONFIG_DE = {"tronco": "configs/tronco_v1.json", "tronco2": "configs/tronco_v2.json",
+             "tronco3": "configs/tronco_v3.json"}        # la receta de cada corrida anterior: sonda y prueba-arreglo
+
+
+def checkpoint_de_hf(etiqueta, paso, destino):
+    """Baja un checkpoint de Hugging Face. Solo lee: ni candado ni commits."""
+    tienda = HFStore(HF_REPO, os.environ.get("HF_TOKEN"))
+    cabeza = tienda.head()
+    idx = json.loads(tienda.read("checkpoints/index.json", cabeza))["checkpoints"]
+    elegido = [c for c in idx if c.get("tag") == etiqueta and c["step"] == paso]
+    if not elegido:
+        raise SystemExit(f"⛔ {HF_REPO} no tiene {etiqueta} {paso}; tiene: "
+                         + ", ".join(f"{c.get('tag')} {c['step']}" for c in idx))
+    t = time.time()
+    ruta = tienda.download(elegido[0]["path"], cabeza, destino)
+    print(f"checkpoint {etiqueta} {paso}: bajado en {time.time() - t:.0f} s")
+    return ruta
+
+
+def tabla_router(e):
+    """El router de una evaluación, por capa MoE (P29, P35)."""
+    print(f"paso {e['step']} · val bpb {e['val_bpb']}"
+          + (f" · λ de SMEBU {e['lam']}" if e["lam"] else " · regla por cuantiles (sin λ)"))
+    print("capa | parte común | offsets | entre tokens | score medio mín–máx | corr. sesgo–score | rango del sesgo "
+          "| el sesgo decide | más cargado |  lse")
+    for i in range(len(e["router_margin"])):
+        print(f"{i:4d} | {e['router_common'][i]:11.0%} | {e['router_offset_std'][i]:7.3f} | "
+              f"{e['router_specific_std'][i]:12.3f} | {e['score_mean_min'][i]:9.3f}–{e['score_mean_max'][i]:.3f}     | "
+              f"{e['bias_score_corr'][i]:+17.2f} | {e['bias_range'][i]:15.3f} | {e['bias_decides'][i]:15.0%} | "
+              f"{e['val_load_max_over_mean'][i]:10.2f}× | {e['router_lse'][i]:4.2f}")
 manifiestos = sorted(glob.glob("/kaggle/input/**/manifest.json", recursive=True),
                      key=lambda m: len(json.load(open(m))["shards"]))
 MANIFIESTO = manifiestos[-1] if manifiestos else None
@@ -866,24 +900,16 @@ Pasa si sigue desde Kaggle en el paso del respaldo, sin copiarlo, con el estado 
 Baja de Hugging Face el checkpoint de `SONDA` (etiqueta y paso) y lo evalúa con `train.py --eval-only`, en las dos GPUs: la validación y, por capa MoE, el estado del router (P29). No toma el candado ni escribe nada en Hugging Face ni en Kaggle, así que puede correr mientras otra cuenta tiene un turno.
 
 Por capa imprime:
-- **la brecha:** la mediana, sobre los tokens, de la diferencia entre el score del experto k-ésimo y el del (k+1)-ésimo;
-- **λ/brecha:** cuánto puede mover SMEBU esa elección en un paso. Con más de ~5, un paso del sesgo re-enruta a casi todos los tokens a la vez (en el modelo de juguete del P29: estable hasta ~4, colapso desde ~10);
+- **la parte común:** qué fracción de la entrada del router es igual para todos los tokens. Esa parte le da a cada experto un puntaje extra fijo, su *offset*, que el sesgo tiene que cancelar (P35);
+- **los offsets:** cuánto difieren entre los expertos, en logits, y al lado cuánto varía el logit de un experto de un token a otro;
+- **el score medio** del experto que menos y del que más tiene, y **la correlación** entre el sesgo de cada experto y su score medio: cerca de −1, el sesgo está cancelando offsets;
 - **el rango del sesgo** y la fracción de tokens cuyos expertos cambian por el sesgo;
-- **el experto más cargado** en la validación, en veces la media.
+- **el experto más cargado** en la validación, en veces la media, y **el lse**, el nivel del router.
 
-En el checkpoint 3270 del primer intento, el diagnóstico del P29 queda confirmado si λ/brecha está alto en las primeras 5 capas MoE y bajo en las otras 20. **Entradas:** los datasets de shards, como en un turno."""),
+**Qué se espera en el 790 del `tronco3`** (P35): una parte común de ~30% o más y una correlación cerca de −0.9 en casi todas las capas. Eso es medir en el modelo real lo que el diagnóstico sacó de un ajuste a los logs. Si la parte común sale por debajo de ~10%, el diagnóstico no vale para este modelo: avisa antes de correr la `prueba-arreglo`. **Entradas:** los datasets de shards, como en un turno."""),
     code(r'''if MODO == "sonda":
     etiqueta, paso = SONDA
-    tienda = HFStore(HF_REPO, os.environ.get("HF_TOKEN"))          # solo lee: ni candado ni commits
-    cabeza = tienda.head()
-    idx = json.loads(tienda.read("checkpoints/index.json", cabeza))["checkpoints"]
-    elegido = [c for c in idx if c.get("tag") == etiqueta and c["step"] == paso]
-    if not elegido:
-        raise SystemExit(f"⛔ {HF_REPO} no tiene {etiqueta} {paso}; tiene: "
-                         + ", ".join(f"{c.get('tag')} {c['step']}" for c in idx))
-    t = time.time()
-    ruta = tienda.download(elegido[0]["path"], cabeza, "/tmp/sonda")
-    print(f"checkpoint {etiqueta} {paso}: bajado en {time.time() - t:.0f} s")
+    ruta = checkpoint_de_hf(etiqueta, paso, "/tmp/sonda")
     base = json.load(open(CONFIG_DE[etiqueta])) if etiqueta in CONFIG_DE else TRONCO
     LOG = f"/kaggle/working/results/tronco/sonda-{etiqueta}-{paso}.jsonl"
     os.makedirs(os.path.dirname(LOG), exist_ok=True)
@@ -893,22 +919,96 @@ En el checkpoint 3270 del primer intento, el diagnóstico del P29 queda confirma
     ev = [r for r in map(json.loads, open(LOG)) if r["type"] == "eval"][-1:] if os.path.exists(LOG) else []
     if p.returncode or not ev:
         raise SystemExit("⛔ la sonda no terminó: ver el log de arriba")
-    e = ev[0]
-    print(f"\nval bpb {e['val_bpb']} · λ de SMEBU en ese paso {e['lam']}")
-    print("capa MoE |  brecha | λ/brecha | rango del sesgo | el sesgo decide | más cargado")
-    for i, (m, d, b, c) in enumerate(zip(e["router_margin"], e["bias_decides"], e["bias_range"],
-                                         e["val_load_max_over_mean"])):
-        print(f"{i:8d} | {m:7.1e} | {e['lam'] / max(m, 1e-12):8.1f} | {b:15.3f} | {d:15.0%} | {c:9.2f}×")'''),
+    print()
+    tabla_router(ev[0])'''),
+    md("""## Prueba del arreglo · `prueba-arreglo`
+
+Baja de Hugging Face el checkpoint de `PRUEBA` (el 790 del `tronco3`) y entrena 26 pasos con la receta de esa corrida más el arreglo de la P35, con los valores de `configs/tronco_v4.json`: la regla por cuantiles y los offsets del router iguales. Además, al final del primer paso iguala los offsets del todo y pone el sesgo en cero, porque ese sesgo estaba cancelando los offsets que ahí desaparecen; el `tronco4` no lo necesita, porque empieza de cero. **No guarda ni sube nada y no toma el candado:** corre con Hugging Face lleno y mientras otra cuenta tiene un turno. Lo único que deja es su `.jsonl` en la salida del notebook.
+
+Evalúa antes del primer paso y cada 5 pasos (la última vez, después de 25 pasos con el arreglo), y al final imprime cada paso al lado del mismo paso del turno original (los mismos lotes) y cada condición con ✅ o ❌:
+- la reanudación es exacta;
+- el experto más cargado y el menos cargado vuelven a su rango sano: en los últimos 15 pasos, menos de 1.8× y más de 0.45× en promedio. En el turno 1 rondaban 1.5× y 0.6×; en estos mismos pasos del turno original, 2.9× y 0.24×;
+- la pérdida no se aleja de la del turno original en los mismos lotes: hasta +0.10 en promedio en esos 15 pasos. En el banco el cambio no se vio en la pérdida; en el modelo real puede costar algo al principio, y el `tronco4` no pasa por él porque empieza de cero;
+- las dos GPUs tienen el mismo sesgo en todos los pasos;
+- los offsets bajan a menos de la mitad y el sesgo deja de decidir casi todos los tokens (las dos, en la capa mediana);
+- la memoria no pasa de 13.5 GiB.
+
+**Si falla,** el `tronco4` no arranca todavía. El orden es (P35): primero la misma prueba con `PRUEBA_SOLO_A = True`, que deja los offsets como están y usa solo la regla por cuantiles; si pasa, el `tronco4` arranca con `router_offsets` `free`. Si esa también falla, queda SMEBU con λ 0.01 fijo y el piso. En los dos casos se cambia `configs/tronco_v4.json` con su entrada en `DECISIONS.md`, no este notebook. **Entradas:** los datasets de shards, como en un turno."""),
+    code(r'''if MODO == "prueba-arreglo":
+    etiqueta, paso, pasos = PRUEBA
+    ruta = checkpoint_de_hf(etiqueta, paso, "/tmp/prueba")
+    LOG = f"/kaggle/working/results/tronco/prueba-arreglo-{etiqueta}-{paso}{'-solo-a' if PRUEBA_SOLO_A else ''}.jsonl"
+    os.makedirs(os.path.dirname(LOG), exist_ok=True)
+    if os.path.exists(LOG):
+        os.remove(LOG)                                  # train.py agrega filas: una corrida, un archivo
+    base = json.load(open(CONFIG_DE[etiqueta]))         # la receta con la que se entrenó ese checkpoint
+    arreglo = {k: TRONCO["args"][k] for k in ("balance", "balance_damp", "router_offsets", "router_offsets_rate")}  # P35
+    a = dict(base["args"], shards=MANIFIESTO, shard_roots="/kaggle/input", tag=f"prueba-arreglo-{etiqueta}", out=LOG,
+             pause_at_step=paso + pasos, eval_every=5, save_every_hours=0, save_final=False, **arreglo,
+             bias_reset_step=paso)
+    if PRUEBA_SOLO_A:
+        a.update(router_offsets="free", bias_reset_step=-1)
+    print("receta:", base["tag"], "más", {k: a[k] for k in (*arreglo, "bias_reset_step")})
+    p = subprocess.run(train_command(a, str(ruta), ""))  # sin carpeta de guardado: train.py no guarda nada
+    filas = [json.loads(x) for x in open(LOG)] if os.path.exists(LOG) else []
+    nuevo = {r["step"]: r for r in filas if r["type"] == "step"}
+    evs = [r for r in filas if r["type"] == "eval"]
+    if p.returncode or len(nuevo) < pasos or len(evs) < 2:
+        raise SystemExit("⛔ la prueba no terminó: ver el log de arriba")
+    viejo = {}                                          # el turno original, del repo: los mismos pasos y lotes
+    for f in sorted(glob.glob(f"results/tronco/{etiqueta}/turno*.jsonl")):
+        viejo.update({r["step"]: r for r in map(json.loads, open(f)) if r["type"] == "step"})
+    print("\npaso |   ce   | ce original | más cargado (original) | menos cargado (original) | sesgo máx | mayor paso del sesgo")
+    for s in sorted(nuevo):
+        r, v = nuevo[s], viejo.get(s, {})
+        mismo = v.get("batch_sha") == r["batch_sha"]
+        print(f"{s:4d} | {r['ce']:6.3f} | {v['ce'] if mismo else float('nan'):11.3f} | {r['load_max_over_mean']:11.2f} "
+              f"({v.get('load_max_over_mean', float('nan')):5.2f})   | {r['load_min_over_mean']:13.2f} "
+              f"({v.get('load_min_over_mean', float('nan')):5.2f})   | {r['bias_abs_max']:9.3f} | {r['bias_step_max']:.4f}")
+    print("\nprimera evaluación, antes del primer paso:")
+    tabla_router(evs[0])
+    print(f"\núltima evaluación, después de {evs[-1]['step'] - paso} pasos con el arreglo:")
+    tabla_router(evs[-1])
+    media = lambda xs: sum(xs) / len(xs)
+    cola = sorted(nuevo)[-15:]
+    mx, mn = media([nuevo[s]["load_max_over_mean"] for s in cola]), media([nuevo[s]["load_min_over_mean"] for s in cola])
+    mismos = [s for s in cola if s in viejo and viejo[s]["batch_sha"] == nuevo[s]["batch_sha"]]
+    d_ce = media([nuevo[s]["ce"] - viejo[s]["ce"] for s in mismos]) if mismos else float("nan")
+    res = [r for r in filas if r["type"] == "resume"][-1:]
+    lote = [r for r in filas if r["type"] == "resume_check"][-1:]
+    pico = max(r["peak_reserved_GiB"] for r in nuevo.values())
+    pruebas = {
+        "reanudación exacta: el estado y el primer lote": bool(res and res[0]["state_exact"] and lote and lote[0]["batch_exact"]),
+        f"el más cargado, media de los últimos 15 pasos: {mx:.2f}× (≤ 1.8×)": mx <= 1.8,
+        f"el menos cargado, media de los últimos 15 pasos: {mn:.2f}× (≥ 0.45×)": mn >= 0.45,
+        f"la pérdida contra el turno original, en {len(mismos)} lotes iguales: {d_ce:+.3f} (≤ +0.10)": d_ce <= 0.10,
+        "ningún pico de pérdida saltado": not any(r["skipped_spike"] for r in nuevo.values()),
+        "las dos GPUs tienen el mismo sesgo en todos los pasos": all(r["bias_ranks_equal"] for r in nuevo.values()),
+        f"memoria reservada: {pico} GiB (≤ 13.5)": pico <= 13.5,
+    }
+    if not PRUEBA_SOLO_A:
+        dec = sorted(evs[-1]["bias_decides"])
+        quedan = sorted(x / max(y, 1e-9) for x, y in zip(evs[-1]["router_offset_std"], evs[0]["router_offset_std"]))
+        pruebas[f"de los offsets queda el {quedan[len(quedan) // 2]:.0%} en la capa mediana (< 50%; por capa, de "
+                f"{quedan[0]:.0%} a {quedan[-1]:.0%})"] = quedan[len(quedan) // 2] < 0.5
+        pruebas[f"el sesgo decide el {dec[len(dec) // 2]:.0%} de los tokens en la capa mediana (< 80%)"] = \
+            dec[len(dec) // 2] < 0.8
+    print()
+    for k, v in pruebas.items():
+        print(" ", "✅" if v else "❌", k)
+    print("\nPrueba del arreglo:", "✅ el arreglo de la P35 funciona en el modelo real" if all(pruebas.values())
+          else "❌ no lances el turno: pasa esta salida y el .jsonl, y mira qué sigue en el texto de arriba")'''),
     md("""## Tronco · un turno
 
 Entrena hasta ~11 h desde que empezó la sesión y deja ~45 min para la subida final, el respaldo (~11 GB a Kaggle) y el aplastado. Cada línea `[relevo]` es un evento: candado, de dónde siguió, cada subida, lo que se borra del disco, el respaldo y la entrega.
 
 En `/tmp` nunca hay más de dos checkpoints a la vez (~23 GiB). El de partida se borra después del primer guardado nuevo, se guarda localmente solo el periódico más nuevo, y antes del respaldo solo queda el último.
 
-**Qué mirar mientras corre** (P30). Si pasa alguna de estas cosas, avisa por WhatsApp; el turno sigue solo:
-- **`z_router`** en cada línea `[train]`: el nivel del router. Baja despacio mientras sube el LR, y el piso (P34) sostiene cada capa sobre lse 1.5, así que no debería bajar de ~2. Si sale `[alarm] … z_router_below_alarm`, quedó por debajo de 1.5 durante 50 pasos: el piso no está sosteniendo, y eso fue lo que anticipó el quiebre del primer tronco.
-- **`[eval] watch: MoE layer …`**, en las evaluaciones (cada 250 pasos): una capa se acerca a las rotas del primer tronco (el sesgo decide más del 80% de los tokens, su rango pasa de 20× la brecha, o el experto más cargado pasa de 2×).
-- **`load max/mean`** debería rondar 1.5. Si el balanceo se rompe, el turno se detiene solo y guarda (`stopped_balance`): no lo relances."""),
+**Qué mirar mientras corre** (P35). Si pasa alguna de estas cosas, avisa por WhatsApp; el turno sigue solo:
+- **`load max/mean`** en cada línea `[train]`: después de los primeros pasos debería rondar 1.4–1.6 y saltar de un paso al otro como ruido. Las dos señales de que el balanceo se está yendo son que suba varios pasos seguidos (olas, como en el `tronco3` desde su paso 500) o que alterne arriba y abajo en cada paso (zig-zag, como en el primer tronco). Si se rompe, el turno se detiene solo y guarda (`stopped_balance`): no lo relances.
+- **`[alarm] … expert_bias_differs_between_gpus`:** las dos GPUs dejaron de tener el mismo sesgo. No debería pasar nunca: avisa y no relances.
+- **`[eval] watch: MoE layer …`**, en las evaluaciones (cada 250 pasos): en esa capa el sesgo decide más del 80% de los tokens, su rango pasa de 20× la brecha o el experto más cargado pasa de 2×. Con los offsets iguales no debería salir; en el `tronco3` salía en las 23 capas desde el paso 250.
+- **`z_router`**, el nivel del router: va a seguir bajando hasta que el piso (P34) sostenga cada capa en lse ~1.5, y con la regla por cuantiles eso ya no amenaza el balanceo. `[alarm] … z_router_below_alarm` quiere decir que el piso no sostiene: avisa, pero no es urgente."""),
     code(r'''if MODO == "tronco":
     LOG = f"/kaggle/working/results/tronco/{time.strftime('%Y%m%d-%H%M')}-{CUENTA.replace(' ', '-')}.jsonl"
     os.makedirs(os.path.dirname(LOG), exist_ok=True)
@@ -968,7 +1068,7 @@ En `/tmp` nunca hay más de dos checkpoints a la vez (~23 GiB). El de partida se
 1. **Del turno:**
    - De la salida (`results/tronco/`): el `.jsonl` del turno y su `.relevo.json`, con los eventos del relevo.
    - Van al repo en `results/tronco/`, con su fila en `results/README.md` y una entrada en la bitácora. El log también queda en `logs/` del repo de Hugging Face.
-   - De una `sonda`: su `.jsonl` (`results/tronco/sonda-<etiqueta>-<paso>.jsonl`) y la tabla que imprimió, igual.
+   - De una `sonda` o una `prueba-arreglo`: su `.jsonl` (`results/tronco/sonda-<etiqueta>-<paso>.jsonl`, `results/tronco/prueba-arreglo-<etiqueta>-<paso>.jsonl`) y lo que imprimió, igual.
 2. **WhatsApp:** "relevo libre, paso N". Si el resumen dice `lock_lost`, otra sesión tomó el candado después de que este venciera, y esta paró sola: avisa.
 3. **La G0** está completa cuando:
    - el primer turno del tronco pasa las condiciones 1–4 (menos la reanudación);

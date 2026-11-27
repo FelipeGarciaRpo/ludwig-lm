@@ -28,6 +28,8 @@
       for bit. O4 takes a quarter per step: its offsets end between A's and O's.
    X  runs both and zeroes the bias at step 4 (--bias-reset-step); XR resumes it before that step and must equal
       it through the reset. XS skips that step as a loss spike: the offsets and the bias are still reset.
+   T  does what the trunk notebook's test of the fix does on a trunk checkpoint: it resumes A's step-3 checkpoint
+      (SMEBU, free offsets) with the quantile rule, equal offsets and the reset at that step, and saves nothing.
    Before the training: the trunk's models build with their dense layers and parameter counts (P32).
    Every step logs the router's health, and every evaluation logs it per MoE layer (P29), with the router's
    level as z and signed lse; L also sets the z_router alarm (P30) so that it must fire.
@@ -465,6 +467,26 @@ def test_training():
           and all(v < 0.5 * y for v, y in zip(exe["router_offset_std"], ea[0]["router_offset_std"])),
           "XS: when the reset step is skipped as a loss spike, the offsets are still equalised and the bias zeroed "
           "(the stop's checkpoint has no bias and small offsets)")
+    code, t = torchrun("T", WORK / "t.jsonl", "--balance", "quantile", "--router-offsets", "equal",
+                       "--bias-reset-step", "3", "--resume", str(WORK / "ckpt_a" / "step_000003"), "--save-dir", "",
+                       "--pause-at-step", "7")
+    st, et = {r["step"]: r for r in by(t, "step")}, {r["step"]: r for r in by(t, "eval")}
+    res = (by(t, "resume") or [{}])[0]
+    check(code == 0 and sorted(st) == [3, 4, 5, 6] and res.get("state_exact") and by(t, "resume_check")[0]["batch_exact"]
+          and {"balance", "router_offsets", "bias_reset_step"} <= set(res["changed_args"])
+          and same(sa[3], st[3], ["ce", "grad_norm", "batch_sha", "load_max_over_mean", "load_min_over_mean"])
+          and et[3]["val_bpb"] == eb[3]["val_bpb"],
+          "T: A's checkpoint (SMEBU, free offsets) resumes bit-exact under the quantile rule and equal offsets, as "
+          "the trunk notebook's test of the fix does: the same first batch, loss and evaluation as A, and the changed "
+          "settings in the log")
+    before, after = et[3]["router_offset_std"], et[4]["router_offset_std"]
+    check(st[3]["bias_abs_max"] == 0 and st[3]["bias_step_max"] > 0 and all(d == 0 for d in et[4]["bias_decides"])
+          and all(y < 0.5 * x for x, y in zip(before, after)) and st[4]["bias_abs_max"] > 0
+          and all(r["bias_ranks_equal"] for r in st.values())
+          and not by(t, "save") and (by(t, "end") or [{}])[-1].get("status") == "paused",
+          f"T: its first step ends with A's bias at zero and the offsets equalised in full (on the validation text "
+          f"they go from {mean(before):.3f} to {mean(after):.3f}, mean of the MoE layers); the rule takes it from "
+          f"there, and the run pauses without saving anything")
     code, e = torchrun("E", WORK / "e.jsonl", "--resume", str(WORK / "ckpt_a" / "step_000003"), "--eval-only")
     ee = by(e, "eval")
     check(code == 0 and (by(e, "end") or [{}])[-1].get("status") == "evaluated" and not by(e, "step")
