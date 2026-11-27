@@ -1,0 +1,168 @@
+The lab's runs (moe_lab.py on a PC's CPU, code 015d2c0), summarised with lab_table.py, lab_report.py and lab_extra.py.
+Each section starts with the command that printed it, run from results/diagnostico_moe/.
+Loads are each step's busiest and least busy expert over the mean, the max and min over the 5 MoE layers.
+
+## python lab_extra.py start runs/A_base.jsonl
+A_base, step 0, per MoE layer, before any bias:
+  level (lse): 3.953, 3.969, 4.054, 4.010, 3.983
+  median gap between the 4th and 5th score: 0.014, 0.014, 0.013, 0.013, 0.013
+  busiest expert over the mean: 3.625, 3.004, 3.048, 2.585, 2.763
+  share of the router's input common to all tokens: 0.121, 0.120, 0.110, 0.113, 0.100
+  spread of the experts' offsets, logits: 0.262, 0.225, 0.216, 0.226, 0.226
+  spread between tokens, logits: 0.608, 0.600, 0.612, 0.611, 0.610
+
+## python lab_table.py <the six runs below> --from 300 --to 500
+## A: SMEBU 0.01. D: SMEBU 0.01, then 0.001 from step 150 (stopped by hand at step 446). Q: the quantile rule (prototype,
+## damp 0.3). QC: Q with equal offsets (prototype: all the difference along a 10-step running mean of the input).
+## M: A until step 250, then QC with the bias zeroed. C: equal offsets (prototype) with D's schedule.
+steps 300-500: load = each step's busiest (least busy) expert over the mean, max (min) over the MoE layers
+run                      busiest mean  p95   max | least mean  min | ac1   zigzag(min) flips | bias range  decides | b* speed rms/max  | lse min..max | val ce (step)
+A_base                       1.62    1.90  2.17 |    0.53    0.30 | -0.07   -0.45      0.65  |   0.378     0.94   | 0.00077 0.00196 | 3.65..3.92  | 3.157 (500)
+D_lamswitch                  2.25    2.85  3.63 |    0.24    0.12 | +0.09   -0.46      0.67  |   0.386     0.95   | 0.00079 0.00203 | 3.70..3.89  | 3.523 (400)
+Q_quantile                   1.60    1.86  2.17 |    0.54    0.33 | +0.02   -0.46      0.66  |   0.372     0.93   | 0.00078 0.00203 | 3.66..3.89  | 3.522 (400)
+QC_quantile_nodiff           1.60    1.86  2.13 |    0.54    0.35 | -0.04   -0.51      0.65  |   0.134     0.53   | 0.00053 0.00142 | 3.57..3.81  | 3.523 (400)
+M_midrun                     1.59    1.87  2.00 |    0.55    0.26 | -0.10   -0.51      0.70  |   0.131     0.54   | 0.00056 0.00144 | 3.59..3.83  | 3.529 (400)
+C_nodiff_lamswitch           1.66    1.99  2.45 |    0.52    0.29 | +0.09   -0.42      0.60  |   0.121     0.50   | 0.00056 0.00145 | 3.56..3.82  | 3.517 (400)
+
+## the same six, --from 300 --to 400 (the last column is the validation loss at step 400)
+steps 300-400: load = each step's busiest (least busy) expert over the mean, max (min) over the MoE layers
+run                      busiest mean  p95   max | least mean  min | ac1   zigzag(min) flips | bias range  decides | b* speed rms/max  | lse min..max | val ce (step)
+A_base                       1.63    1.86  2.07 |    0.52    0.30 | -0.15   -0.35      0.62  |   0.382     0.95   | 0.00082 0.00213 | 3.72..3.92  | 3.520 (400)
+D_lamswitch                  2.31    2.93  3.16 |    0.23    0.12 | -0.02   -0.48      0.65  |   0.391     0.95   | 0.00080 0.00206 | 3.74..3.89  | 3.523 (400)
+Q_quantile                   1.61    1.86  2.09 |    0.54    0.33 | -0.07   -0.33      0.60  |   0.377     0.94   | 0.00083 0.00220 | 3.73..3.89  | 3.522 (400)
+QC_quantile_nodiff           1.62    1.86  2.07 |    0.54    0.35 | -0.10   -0.50      0.65  |   0.128     0.54   | 0.00055 0.00151 | 3.64..3.81  | 3.523 (400)
+M_midrun                     1.61    1.88  1.95 |    0.54    0.26 | -0.17   -0.43      0.69  |   0.127     0.54   | 0.00059 0.00157 | 3.65..3.83  | 3.529 (400)
+C_nodiff_lamswitch           1.70    2.03  2.28 |    0.52    0.34 | -0.03   -0.42      0.63  |   0.112     0.50   | 0.00060 0.00158 | 3.63..3.82  | 3.517 (400)
+
+## python lab_report.py runs/A_base.jsonl
+
+=== runs/A_base.jsonl  balance=smebu lam=0.01->None@0 offsets=free router_lr x1.0 seq_aux=0.001 route_scale=1.0 shared=4 (603 steps)
+probes on fixed tokens (means over the MoE layers; speeds per optimizer step, since the previous probe)
+ step  rho  lvl   off_sd spec_sd | score mean min/med/max | sd min/max  | b_rng  b*_rng err_max dec  gate_eff | b*spd rms/max    off spd  (W only)  lvl spd  | CE lvl push
+    0 0.113 +0.00 0.231 0.608  | 0.374 0.499 0.609  | 0.117 0.171 | 0.000  0.220  0.120 0.00   3.99   | nan nan  nan 0.00002  +nan | -3.20e-06
+   50 0.512 +0.02 0.439 0.442  | 0.295 0.503 0.725  | 0.078 0.129 | 0.393  0.425  0.035 0.98   3.95   | 0.00207 0.00430  0.00857 0.00233  +0.00051 | +8.00e-06
+  100 0.678 +0.01 0.496 0.353  | 0.275 0.495 0.748  | 0.059 0.116 | 0.496  0.506  0.037 1.00   3.91   | 0.00130 0.00326  0.00531 0.00510  -0.00002 | +2.08e-05
+  150 0.566 -0.01 0.479 0.415  | 0.292 0.483 0.756  | 0.072 0.128 | 0.481  0.482  0.040 0.99   3.92   | 0.00112 0.00270  0.00453 0.00515  -0.00070 | +6.04e-05
+  200 0.429 -0.06 0.450 0.484  | 0.292 0.469 0.740  | 0.086 0.149 | 0.475  0.471  0.040 0.99   3.93   | 0.00107 0.00262  0.00406 0.00504  -0.00111 | +1.22e-04
+  250 0.336 -0.12 0.383 0.527  | 0.307 0.459 0.692  | 0.095 0.162 | 0.426  0.418  0.049 0.98   3.94   | 0.00100 0.00265  0.00386 0.00454  -0.00137 | +2.44e-04
+  300 0.254 -0.16 0.340 0.570  | 0.318 0.448 0.659  | 0.103 0.169 | 0.388  0.387  0.042 0.96   3.95   | 0.00084 0.00200  0.00306 0.00314  -0.00065 | +2.18e-04
+  350 0.217 -0.21 0.318 0.589  | 0.323 0.444 0.644  | 0.105 0.174 | 0.389  0.369  0.043 0.95   3.95   | 0.00082 0.00200  0.00281 0.00301  -0.00078 | +3.58e-04
+  400 0.199 -0.25 0.307 0.603  | 0.319 0.434 0.634  | 0.109 0.174 | 0.366  0.368  0.032 0.93   3.95   | 0.00079 0.00228  0.00292 0.00259  -0.00095 | +3.39e-04
+  450 0.179 -0.27 0.299 0.613  | 0.319 0.431 0.615  | 0.110 0.178 | 0.370  0.351  0.048 0.92   3.95   | 0.00076 0.00178  0.00267 0.00217  -0.00034 | +2.92e-04
+  500 0.166 -0.30 0.296 0.622  | 0.320 0.422 0.616  | 0.112 0.177 | 0.378  0.358  0.042 0.93   3.94   | 0.00068 0.00184  0.00250 0.00231  -0.00054 | +4.82e-04
+  550 0.156 -0.33 0.296 0.633  | 0.313 0.413 0.615  | 0.110 0.181 | 0.383  0.370  0.052 0.91   3.94   | 0.00073 0.00179  0.00257 0.00228  -0.00049 | +3.82e-04
+  600 0.149 -0.36 0.303 0.639  | 0.306 0.403 0.624  | 0.113 0.183 | 0.402  0.389  0.045 0.93   3.94   | 0.00070 0.00176  0.00255 0.00197  -0.00016 | +3.76e-04
+training steps, 50-step windows (load: max over layers and experts of that step's load / mean)
+ from   ce    val   lr   lam    load_max(mean,p95) load_min  ac1(load_max)  bias_max  lse(min..max)  decides
+    0 8.195 8.329 0.20 0.0100   2.10  3.08        0.33      +0.73        0.152    3.90..4.07   0.81
+   50 7.559 nan 0.40 0.0100   1.94  2.20        0.39      +0.13        0.294    3.86..4.05   0.99
+  100 6.606 7.077 0.60 0.0100   1.88  2.27        0.42      -0.21        0.289    3.87..4.03   0.99
+  150 5.731 nan 0.80 0.0100   1.83  2.15        0.45      +0.16        0.304    3.88..4.03   0.99
+  200 4.964 5.322 1.00 0.0100   1.73  2.00        0.47      -0.08        0.310    3.86..3.98   0.98
+  250 4.393 nan 1.00 0.0100   1.72  1.93        0.48      -0.01        0.282    3.80..3.92   0.97
+  300 3.929 4.162 1.00 0.0100   1.63  1.83        0.53      -0.24        0.282    3.77..3.92   0.95
+  350 3.597 nan 1.00 0.0100   1.64  1.88        0.51      -0.06        0.268    3.72..3.89   0.94
+  400 3.449 3.520 1.00 0.0100   1.60  1.89        0.53      -0.03        0.269    3.69..3.83   0.93
+  450 3.302 nan 1.00 0.0100   1.62  1.87        0.54      +0.00        0.270    3.65..3.83   0.93
+  500 3.142 3.157 1.00 0.0100   1.59  1.85        0.52      +0.02        0.267    3.59..3.81   0.92
+  550 3.033 nan 1.00 0.0100   1.62  1.97        0.53      +0.28        0.291    3.55..3.79   0.92
+
+## python lab_extra.py offsets runs/Q_quantile.jsonl
+Q_quantile: what moved the experts' offsets, in logits per optimizer step since the previous probe (fixed tokens, means over the MoE layers)
+ step | offsets: total   by the router's rows   by its mean input | level: by rows   by input | common share of the input | cos(mean input, 25 steps before)
+   50 |          0.00858        0.00077             0.00852  |      +0.00002   +0.00048 |          0.512            |       0.9248
+  100 |          0.00521        0.00359             0.00361  |      -0.00003   -0.00003 |          0.678            |       0.9842
+  150 |          0.00432        0.00404             0.00222  |      -0.00087   +0.00012 |          0.567            |       0.9951
+  200 |          0.00376        0.00328             0.00234  |      -0.00135   +0.00021 |          0.430            |       0.9939
+  250 |          0.00374        0.00260             0.00247  |      -0.00141   +0.00016 |          0.336            |       0.9872
+  300 |          0.00316        0.00224             0.00244  |      -0.00117   +0.00048 |          0.252            |       0.9839
+  350 |          0.00300        0.00183             0.00236  |      -0.00101   +0.00031 |          0.218            |       0.9840
+  400 |          0.00289        0.00165             0.00245  |      -0.00099   +0.00008 |          0.200            |       0.9790
+  450 |          0.00249        0.00147             0.00213  |      -0.00086   +0.00025 |          0.177            |       0.9818
+  500 |          0.00275        0.00146             0.00213  |      -0.00082   +0.00042 |          0.166            |       0.9814
+
+## python lab_extra.py switch runs/A_base.jsonl runs/M_midrun.jsonl 250
+A_base against M_midrun around step 250 (ce: training loss; load: busiest / least busy expert over the mean)
+ step |                 A_base: ce   load      bias max  decides |               M_midrun: ce   load      bias max  decides
+  246 |                        4.852   1.84/0.52  0.306     0.98    |                        4.851   1.86/0.52  0.342     0.98
+  247 |                        4.531   1.58/0.46  0.306     0.98    |                        4.536   1.64/0.48  0.341     0.98
+  248 |                        4.496   1.50/0.60  0.303     0.98    |                        4.502   1.47/0.56  0.338     0.98
+  249 |                        4.920   1.83/0.54  0.299     0.98    |                        4.920   1.77/0.52  0.333     0.98
+  250 |                        4.605   1.90/0.47  0.295     0.98    |                        4.610   1.70/0.38  0.092     0.98
+  251 |                        4.612   1.61/0.56  0.293     0.98    |                        4.619   2.54/0.06  0.074     0.60
+  252 |                        4.637   1.79/0.37  0.290     0.98    |                        4.644   1.83/0.18  0.066     0.54
+  253 |                        4.852   1.82/0.39  0.286     0.98    |                        4.861   2.24/0.33  0.068     0.52
+  254 |                        4.441   1.54/0.60  0.281     0.98    |                        4.449   1.64/0.46  0.082     0.53
+  255 |                        4.460   1.94/0.52  0.276     0.97    |                        4.467   1.75/0.57  0.083     0.52
+  256 |                        4.612   1.61/0.58  0.273     0.98    |                        4.614   1.53/0.52  0.091     0.52
+  257 |                        4.639   1.72/0.64  0.270     0.98    |                        4.653   1.62/0.66  0.086     0.51
+  258 |                        4.558   1.44/0.50  0.267     0.98    |                        4.563   1.46/0.67  0.091     0.54
+  259 |                        4.359   1.64/0.51  0.264     0.98    |                        4.357   1.53/0.57  0.090     0.52
+  260 |                        4.239   2.19/0.28  0.264     0.98    |                        4.244   1.99/0.38  0.096     0.53
+  261 |                        4.582   1.77/0.55  0.262     0.97    |                        4.590   1.63/0.68  0.101     0.53
+  262 |                        4.636   1.66/0.65  0.261     0.98    |                        4.639   1.47/0.66  0.103     0.54
+  263 |                        4.699   1.68/0.44  0.260     0.97    |                        4.706   1.54/0.51  0.109     0.52
+  264 |                        4.296   1.85/0.44  0.263     0.97    |                        4.301   1.88/0.26  0.119     0.54
+  265 |                        4.476   1.74/0.41  0.267     0.97    |                        4.476   1.64/0.44  0.125     0.55
+  270 |                        4.273   1.61/0.40  0.291     0.97    |                        4.281   1.66/0.60  0.143     0.57
+  280 |                        4.655   1.96/0.56  0.284     0.97    |                        4.654   1.81/0.49  0.149     0.57
+  290 |                        4.258   1.79/0.55  0.288     0.97    |                        4.264   1.69/0.59  0.128     0.57
+  300 |                        4.058   1.52/0.51  0.289     0.95    |                        4.055   1.42/0.53  0.130     0.55
+
+## The level forced down with a router z-loss of 0.003. Z: SMEBU 0.01. Z4: SMEBU 0.04. ZQ: the quantile rule (prototype,
+## damp 0.3). ZC6: the quantile rule (damp 0.6) with equal offsets (prototype).
+## python lab_table.py <the four> --from 100 --to 300, then --from 300 --to 500
+steps 100-300: load = each step's busiest (least busy) expert over the mean, max (min) over the MoE layers
+run                      busiest mean  p95   max | least mean  min | ac1   zigzag(min) flips | bias range  decides | b* speed rms/max  | lse min..max | val ce (step)
+Z_smebu_zloss                1.84    2.32  2.71 |    0.46    0.17 | +0.14   -0.58      0.72  |   0.169     0.83   | 0.00076 0.00190 | 0.83..3.12  | 4.155 (300)
+Z4_smebu004_zloss            2.95    4.34  4.94 |    0.25    0.02 | +0.21   -0.34      0.62  |   0.170     0.85   | 0.00076 0.00191 | 0.83..3.12  | 4.161 (300)
+ZQ_quantile_zloss            1.94    2.61  3.18 |    0.45    0.19 | +0.54   -0.49      0.68  |   0.169     0.83   | 0.00076 0.00193 | 0.82..3.12  | 4.158 (300)
+ZC6_quantile06_nodiff_zloss     1.75    2.10  2.56 |    0.49    0.21 | -0.07   -0.53      0.70  |   0.046     0.54   | 0.00031 0.00083 | 0.80..3.04  | 4.154 (300)
+steps 300-500: load = each step's busiest (least busy) expert over the mean, max (min) over the MoE layers
+run                      busiest mean  p95   max | least mean  min | ac1   zigzag(min) flips | bias range  decides | b* speed rms/max  | lse min..max | val ce (step)
+Z_smebu_zloss                1.66    1.95  2.12 |    0.51    0.24 | +0.05   -0.54      0.70  |   0.077     0.65   | 0.00036 0.00093 | 0.66..1.71  | 3.515 (400)
+Z4_smebu004_zloss            2.47    3.32  4.03 |    0.36    0.10 | +0.02   -0.41      0.64  |   0.078     0.69   | 0.00036 0.00099 | 0.60..1.70  | 3.519 (400)
+ZQ_quantile_zloss            1.63    1.90  2.05 |    0.53    0.21 | -0.06   -0.53      0.67  |   0.074     0.63   | 0.00034 0.00088 | 0.64..1.72  | 3.512 (400)
+ZC6_quantile06_nodiff_zloss     1.64    1.96  2.19 |    0.52    0.28 | -0.01   -0.53      0.73  |   0.049     0.48   | 0.00023 0.00064 | 0.58..1.69  | 3.518 (400)
+
+## route_scale. R: 4.0 from step 0. RS1: 1.0, then 4.0 from step 250 at once. RS2: 1.0 to 4.0 over steps 250-349.
+## RS3: 4.0 from step 250 with every expert's down_proj divided by 4 at that step (the same function there).
+## python lab_table.py runs/A_base.jsonl runs/R_routescale4.jsonl --from 300 --to 400
+steps 300-400: load = each step's busiest (least busy) expert over the mean, max (min) over the MoE layers
+run                      busiest mean  p95   max | least mean  min | ac1   zigzag(min) flips | bias range  decides | b* speed rms/max  | lse min..max | val ce (step)
+A_base                       1.63    1.86  2.07 |    0.52    0.30 | -0.15   -0.35      0.62  |   0.382     0.95   | 0.00082 0.00213 | 3.72..3.92  | 3.520 (400)
+R_routescale4                1.64    1.87  1.96 |    0.52    0.29 | -0.07   -0.48      0.65  |   0.318     0.87   | 0.00080 0.00205 | 3.70..3.85  | 3.499 (400)
+## python lab_extra.py compare 250 runs/A_base.jsonl runs/R_routescale4.jsonl runs/RS1_abrupt_250.jsonl runs/RS2_ramp100_250.jsonl runs/RS3_keep_250.jsonl
+training loss around step 250
+ step |               A_base |        R_routescale4 |       RS1_abrupt_250 |      RS2_ramp100_250 |         RS3_keep_250
+  248 |                4.496 |                4.462 |                4.494 |                4.495 |                4.498
+  249 |                4.920 |                4.903 |                4.923 |                4.922 |                4.921
+  250 |                4.605 |                4.590 |                4.690 |                4.608 |                4.607
+  251 |                4.612 |                4.578 |                4.680 |                4.611 |                4.608
+  252 |                4.637 |                4.625 |                4.698 |                4.637 |                4.634
+  253 |                4.852 |                4.834 |                4.915 |                4.854 |                4.851
+  254 |                4.441 |                4.424 |                4.495 |                4.438 |                4.439
+  255 |                4.460 |                4.434 |                4.520 |                4.460 |                4.455
+  256 |                4.612 |                4.603 |                4.665 |                4.610 |                4.611
+  257 |                4.639 |                4.620 |                4.689 |                4.644 |                4.644
+  258 |                4.558 |                4.545 |                4.590 |                4.563 |                4.560
+  259 |                4.359 |                4.336 |                4.400 |                4.358 |                4.364
+  260 |                4.239 |                4.210 |                4.291 |                4.247 |                4.237
+  265 |                4.476 |                4.447 |                4.497 |                4.477 |                4.484
+  270 |                4.273 |                4.255 |                4.297 |                4.274 |                4.279
+  280 |                4.655 |                4.635 |                4.663 |                4.654 |                4.656
+  300 |                4.058 |                4.023 |                4.053 |                4.058 |                4.055
+  350 |                3.527 |                3.509 |                3.513 |                3.525 |                3.529
+50-step means of the training loss
+  200 |                4.964 |                4.948 |                4.965 |                4.965 |                4.964
+  250 |                4.393 |                4.368 |                4.416 |                4.394 |                4.397
+  300 |                3.929 |                3.903 |                3.927 |                3.928 |                3.928
+  350 |                3.597 |                3.574 |                3.586 |                3.590 |                3.593
+  400 |                3.449 |                3.422 |                3.435 |                3.436 |                3.441
+  450 |                3.302 |                3.284 |                3.292 |                3.293 |                3.295
+validation loss
+  200 |                5.322 |                5.308 |                5.322 |                5.322 |                5.322
+  300 |                4.162 |                4.137 |                4.159 |                4.162 |                4.165
+  400 |                3.520 |                3.499 |                3.513 |                3.509 |                3.522
+busiest / least busy expert over the mean, steps 300-499
+      |          1.62 / 0.53 |          1.63 / 0.53 |          1.62 / 0.53 |          1.63 / 0.53 |          1.62 / 0.53

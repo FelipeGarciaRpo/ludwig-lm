@@ -1,0 +1,8 @@
+power of the routed experts' output over the shared experts' output, one MoE block at initialisation
+  tronco3: 4 shared, top-4 of 44, route_scale 1.0: 0.062  (route_scale^2 / (k * shared) = 0.062)
+  the same with route_scale 2.5: 0.392  (route_scale^2 / (k * shared) = 0.391)
+  the same with route_scale 4.0: 1.000  (route_scale^2 / (k * shared) = 1.000)
+  1 shared, top-4 of 44, route_scale 1.0: 0.250  (route_scale^2 / (k * shared) = 0.250)
+  1 shared, top-4 of 44, route_scale 2.448 (the value in the request for this review, Trinity Large): 1.512  (route_scale^2 / (k * shared) = 1.498)
+  1 shared, top-8 of 44, route_scale 2.5 (DeepSeek-V3's value, with its 8 active experts): 0.787  (route_scale^2 / (k * shared) = 0.781)
+  1 shared, top-8 of 44, route_scale 2.826: 0.996  (route_scale^2 / (k * shared) = 0.998)

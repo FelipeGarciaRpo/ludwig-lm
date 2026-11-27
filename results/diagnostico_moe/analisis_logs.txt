@@ -1,0 +1,47 @@
+== tronco3 around step 500, where SMEBU's step went from 0.01 to 0.001 (results/tronco/tronco3/)
+what changed at step 500: lam 0.01 -> 0.001 | the floor's term (router_floor) is 0 until step 813
+  steps 485-494: least busy expert 0.605x the mean, busiest 1.509x
+  steps 495-504: least busy expert 0.602x the mean, busiest 1.587x
+  steps 505-514: least busy expert 0.463x the mean, busiest 1.775x
+  steps 515-524: least busy expert 0.427x the mean, busiest 1.865x
+  50-step means from step 500: busiest 1.88, 2.18, 2.38, 2.67, 2.61, 2.64, 2.85, 3.07, 3.33 | least busy 0.42, 0.38, 0.37, 0.27, 0.22, 0.24, 0.20, 0.18, 0.15
+lag-1 autocorrelation of load_max_over_mean:
+  steps 300-497: -0.006
+  steps 500-699: +0.845
+  steps 700-944: +0.926 without the skipped spike of step 731; +0.836 with that row (logged as 0.0)
+
+== tronco3: the bias between evaluations (rows eval, per MoE layer)
+  bias range, step 250 -> 498: mean +0.144, from +0.020 to +0.301; it shrank in 0 of 23 layers
+  bias range, step 498 -> 750: mean -0.113, from -0.221 to -0.027; it shrank in 23 of 23 layers
+  the 250 steps before step 250 (lam 0.01): per layer, the window's busiest expert had 1.04-1.09x the mean and the least busy 0.93-0.97x. SMEBU's rule, lam*tanh(2v) per step, moves their bias 0.200-0.465 and 0.155-0.333 in that window; the most it allows is 2.50
+  the 249 steps before step 750 (lam 0.001): per layer, the window's busiest expert had 1.17-1.38x the mean and the least busy 0.64-0.83x. SMEBU's rule, lam*tanh(2v) per step, moves their bias 0.081-0.158 and 0.082-0.155 in that window; the most it allows is 0.25
+  largest bias (bias_abs_max): step 60: 0.24, step 100: 0.30, step 240: 0.30, step 400: 0.41, step 497: 0.54, step 750: 0.62, step 944: 0.66
+
+== tronco3: the router's level (lse), without a router z-loss
+  mean lse over the MoE layers: step 0: 3.98, step 250: 3.70, step 498: 3.23, step 500: 3.22, step 750: 2.29
+  at step 750 by layer: 1.84 to 3.02
+  tronco3: mean z_router of steps 0-9 15.83 (lse ~3.98), of steps 935-944 3.53 (lse ~1.88): a fall of ~2.10
+  first trunk (router z-loss 1e-4): mean z_router of steps 0-9 15.12 (lse ~3.89), of steps 935-944 1.49 (lse ~1.22): a fall of ~2.67
+
+== tronco3 at step 0, before any bias (for calib_init.py)
+  busiest expert on the validation text, per MoE layer: 1.83x to 3.88x the mean, median 2.48x; router_margin 0.0132, lse 3.978
+  step 250: router_margin 0.015-0.022 (median 0.017), bias_range 0.34-0.55 (median 0.44), bias_decides 0.957-0.994 (median 0.981), lse 3.59-3.85; busiest on the validation text 1.16-1.56x
+  step 498: router_margin 0.018-0.040 (median 0.024), bias_range 0.46-0.79 (median 0.57), bias_decides 0.969-0.998 (median 0.990), lse 3.06-3.52; busiest on the validation text 1.19-1.80x
+  step 750: router_margin 0.015-0.030 (median 0.017), bias_range 0.33-0.76 (median 0.46), bias_decides 0.938-0.999 (median 0.967), lse 1.84-3.02; busiest on the validation text 1.48-2.61x
+
+== the first trunk at its break (SMEBU's step 0.01 throughout; results/tronco/turno0*_cuenta-1.jsonl)
+sign flips of the step-to-step changes of load_min_over_mean (independent steps: 0.667):
+  steps 600-1149: 0.653 (357 of 547); for load_max_over_mean 0.642; mean z_router 2.13, mean bias_abs_max 0.210, least busy 0.62x
+  steps 1150-1199: 0.565 (26 of 46); for load_max_over_mean 0.652; mean z_router 0.94, mean bias_abs_max 0.158, least busy 0.53x
+  steps 1200-1229: 0.964 (27 of 28); for load_max_over_mean 0.964; mean z_router 0.90, mean bias_abs_max 0.151, least busy 0.33x
+  steps 1200-1230: 0.931 (27 of 29); for load_max_over_mean 0.966; mean z_router 0.90, mean bias_abs_max 0.150, least busy 0.34x
+  steps 1230-1259: 0.750 (21 of 28); for load_max_over_mean 0.714; mean z_router 0.85, mean bias_abs_max 0.136, least busy 0.13x
+  steps 1260-1299: 0.553 (21 of 38); for load_max_over_mean 0.737; mean z_router 0.81, mean bias_abs_max 0.143, least busy 0.06x
+lag-1 autocorrelation of load_max_over_mean: steps 300-548: +0.04, steps 700-999: +0.13, steps 1150-1249: +0.52, steps 1350-1499: +0.65
+
+== T2's lr-x1-1200 at its break (SMEBU's step 0.01, router z-loss 1e-4; results/t0_3_t2/lr-x1-1200.jsonl)
+  steps 400-479: sign flips of load_min_over_mean 0.628 (49 of 78); mean z_router 1.12, least busy 0.42x
+  steps 480-519: sign flips of load_min_over_mean 0.632 (24 of 38); mean z_router 0.94, least busy 0.18x
+  steps 520-559: sign flips of load_min_over_mean 0.895 (34 of 38); mean z_router 0.87, least busy 0.17x
+  steps 560-599: sign flips of load_min_over_mean 0.763 (29 of 38); mean z_router 0.82, least busy 0.04x
+  steps 600-639: sign flips of load_min_over_mean 0.711 (27 of 38); mean z_router 0.79, least busy 0.03x

@@ -1377,3 +1377,50 @@ Todo lo que se corre, se mide o se decide, en orden. Cada entrada dice qué se h
   - El `tronco3`, con λ 0.001, se rompió con el nivel todavía alto.
   - En los dos, el sesgo decide casi todos los tokens de todas las capas desde los primeros cientos de pasos. Pipe pide una revisión independiente del código y de los datos.
 - **Siguiente:** no se lanza el turno 3 hasta tener el diagnóstico. Antes hay que liberar espacio en Hugging Face y arreglar el respaldo de Kaggle.
+
+## 2026-11-27 · Por qué se rompe el balanceo: una revisión independiente de los dos troncos
+
+- **Qué:** la revisión independiente que pidió Pipe después del turno 2 del `tronco3` (la pregunta abierta de la entrada anterior): el código del router y del balanceador, los logs de los dos troncos y de la T2, y un banco de pruebas en CPU con un modelo chico.
+- **Dónde:** el PC (CPU de 6 núcleos, torch 2.15.0, transformers 5.22.2), con el código `015d2c0`. Nada corrió en Kaggle.
+- **Archivos:** `results/diagnostico_moe/`, con su fila en `results/README.md`:
+  - `analisis_logs.py` y `analisis_logs.txt`: cada número que el diagnóstico saca de `results/tronco/` y de `results/t0_3_t2/`;
+  - `calib_init.py`, `calib_real.py` y sus `.txt`: qué parte común de los logits del router reproduce los números de las evaluaciones del `tronco3`;
+  - `potencia_elegidos.py` y su `.txt`: cuánto pesan los expertos elegidos frente a los compartidos en un bloque MoE del tamaño real;
+  - `moe_lab.py`, con `prep_data.py`, `lab_report.py`, `lab_table.py` y `lab_extra.py`: el banco. Entrena un AFMoE de 7M parámetros (ancho 128, 1 capa densa y 5 MoE, 44 expertos, top-4 y 4 compartidos) con el router, las pérdidas, Muon/AdamW y el `ExpertBalancer` del repo, sobre texto local, y mide el router por experto;
+  - `runs/`, un `.jsonl` por corrida del banco, y `banco_resumen.txt`, sus tablas;
+  - `referencia_arreglo.py`: el arreglo como se escribió primero, antes de implementarlo.
+  - **Rutas enmascaradas:** la fila `config` de cada corrida traía dos rutas locales del PC, la de los datos y la del repo. Se guardan como `<datos>` y `<repo en 015d2c0>`, y es lo único que cambia en esos archivos. El corpus no entra al repo: es texto y código de terceros que estaba en el PC.
+- **El código:** no hay bug en el balanceador. Se revisó el signo de la actualización, el conteo entre micro-pasos y entre las dos GPUs, los tokens enmascarados (cuentan para la carga, y está bien: ocupan expertos), el centrado, el momentum, el momento en que se aplica, la precisión (FP32) y la reanudación.
+- **Lo que dicen los logs** (`analisis_logs.txt`):
+  - **El `tronco3` se rompió con el cambio de λ.** En el paso 500, λ pasó de 0.01 a 0.001. El piso valió cero hasta el paso 813, así que fue lo único que cambió. El experto menos cargado de cada paso bajó de 0.60× la media (pasos 495–504) a 0.46× (505–514).
+  - **La carga dejó de ser ruido.** La autocorrelación de `load_max_over_mean` entre un paso y el siguiente pasó de −0.01 (pasos 300–497) a 0.85 (500–699) y 0.93 (700–944). El 0.93 es sin la fila del paso 731, un pico de pérdida saltado que `train.py` registra con carga 0.0; con esa fila da 0.84.
+  - **El sesgo iba hacia donde debía, pero lento.** Entre las evaluaciones de los pasos 250 y 498, con λ 0.01, su rango creció en las 23 capas MoE (0.14 en promedio); entre el 498 y el 750 se achicó en las 23 (0.11 en promedio). En la ventana de los pasos 500–749, los expertos extremos de cada capa (1.17–1.38× y 0.64–0.83×) recorrieron 0.08–0.16 según la propia regla de SMEBU, y λ 0.001 da como máximo 0.25.
+  - **El primer tronco se rompió por el otro lado.** En los pasos 1200–1229, 27 de 28 cambios seguidos de `load_min_over_mean` invierten el signo; hasta el 1230 inclusive, 27 de 29. En los pasos 600–1149 lo hace el 65%, y pasos independientes dan 67%. `lr-x1-1200` hace lo mismo en los pasos 520–559 (34 de 38). Es un lazo que se pasa de largo en cada paso: λ 0.01 quedó grueso cuando los scores se achicaron.
+  - **El nivel baja sin z-loss.** El lse medio del `tronco3` va de 3.98 a 3.23 en el paso 498 y a 2.29 en el 750. Hasta el paso 944 bajó ~2.1, contra ~2.7 del primer tronco, que sí tenía z-loss del router.
+- **El mecanismo:**
+  - El router es lineal y sin bias: el logit del experto i para el token t es w_i · x_t. La parte de x que es igual para todos los tokens (su media) le da a cada experto un puntaje extra fijo, w_i · x_media: su *offset*. Son las "preferencias comunes a todos los tokens" de la P31, y no se aprenden.
+  - El sesgo existe para cancelar las diferencias entre los offsets. Por eso decide el 94–100% de los tokens también en una corrida sana.
+  - Los offsets se mueven mientras la red aprende, y se achican cuando baja el nivel. SMEBU los sigue con pasos de tamaño fijo en unidades de score: hace falta un paso grande mientras los scores son grandes y los offsets se mueven, y uno chico cuando los scores son chicos. Ningún λ fijo sirve todo el camino.
+  - **En el `tronco3`** (`calib_init.txt`, `calib_real.txt`): la carga sin sesgo del paso 0 (1.83–3.88× por capa) sale con ~5–10% de parte común. La brecha, el rango del sesgo y la fracción de tokens que decide el sesgo salen, en el paso 250, con ~41% de la varianza de los logits, y en el 498, con ~50–64%. Es un ajuste, no una medición.
+- **El banco** (`banco_resumen.txt`). Las cargas son la del experto más cargado y la del menos cargado de cada paso, en veces la media, promediadas sobre los pasos 300–500. Su piso es ~1.6× porque sus pasos son de 4,096 tokens.
+  - Arranca como el `tronco3`: lse 3.95–4.05, brecha 0.013 y carga inicial 2.6–3.6×.
+  - La parte común de la entrada del router pasa de 11% a 68% en 100 pasos y baja a 17% en el paso 500. La dispersión de los offsets va de 0.23 a 0.50 logits.
+  - En los primeros 50 pasos, a los offsets los mueve la entrada: 0.0085 logits por paso, contra 0.0008 de las filas del router. Después pesan parecido. El nivel lo bajan las filas del router, y el gradiente de la entropía cruzada sola ya empuja hacia abajo.
+  - El sesgo que balancearía el lote se mueve ~0.001 por paso en promedio, y 0.002–0.004 en los expertos más rápidos.
+  - SMEBU con λ 0.01: 1.62× / 0.53×. Con λ 0.001 desde el paso 150, la receta del `tronco3`: 2.25× / 0.24×.
+  - Con los offsets iguales y ese mismo calendario: 1.66× / 0.52×. Es la prueba causal: sin offsets, el paso lento alcanza.
+  - La regla por cuantiles con los offsets iguales: 1.60× / 0.54×. El rango del sesgo baja de 0.38 a 0.13, y el sesgo decide el 53% de los tokens en vez del 94%. Aplicada en el paso 250 de una corrida con SMEBU: 1.59× / 0.55×, con un paso de transición (2.54× / 0.06×) y la pérdida igual.
+  - Forzando la caída del nivel (z-loss del router 0.003: el lse va de 3.1 a 0.8 entre los pasos 100 y 300), en esos 200 pasos: SMEBU 0.01 da 1.84× / 0.46×; SMEBU 0.04 se rompe (2.95× / 0.25×, con picos de 4.9×); la regla por cuantiles con los offsets iguales, 1.75× / 0.49×.
+  - La pérdida de validación en el paso 400 está entre 3.51 y 3.53 en todas esas corridas.
+- **Las hipótesis del pedido:**
+  - (a) λ 0.001 es lento: confirmada. Es lo que detuvo al `tronco3`.
+  - (b) El router aprende preferencias comunes: las tiene, pero no las aprende. Salen de la parte común de su entrada.
+  - (c) `route_scale` 1.0 deja a los elegidos con poco peso: cierto, pero no causa la rotura. Con 4 compartidos y 1.0, los 4 elegidos salen de un bloque con el 6% de la potencia de los compartidos (`potencia_elegidos.txt`); la configuración de DeepSeek-V3 da 78%. En el banco, 4.0 da el mismo balance y una pérdida de validación 0.6% menor en el paso 400 (3.499 contra 3.520). Subirlo en el paso 250 cuesta +0.085 de pérdida durante ~50 pasos si se hace de golpe, y nada visible con una rampa de 100 pasos.
+  - (d) La caída del nivel: real, y no la causa el z-loss, que solo la aceleraba.
+  - (e) Un bug en el balanceador: descartada.
+- **Conclusión:** las dos roturas son el mismo lazo por lados opuestos, y la raíz está en lo que el sesgo tiene que cancelar. El arreglo tiene dos piezas: que el paso del sesgo salga en las unidades de los propios scores (la regla por cuantiles), y que el router no tenga offsets distintos por experto.
+- **Lo que no se pudo comprobar:**
+  - La parte común del modelo real es un ajuste a sus logs. La mide la sonda del checkpoint 790.
+  - El banco es un modelo de 7M parámetros con texto local. No reproduce el colapso total del primer tronco con λ 0.01, solo con 0.04, porque sus scores no se achican tanto. Esa parte se apoya en los logs reales.
+  - Las corridas del banco no son reproducibles bit a bit (hilos): dos corridas iguales difieren en ~0.005 de pérdida.
+- **Siguiente:** el patch con las dos piezas, sus pruebas y los dos modos del notebook, en la entrada que sigue.
