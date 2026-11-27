@@ -1,0 +1,102 @@
+The lab's runs with the repo's own implementation of P35 (moe_lab.py --impl repo, on the code of the patch): the
+quantile rule with --balance-damp 0.5 and all 4,096 tokens of each step as its sample, and equal offsets.
+Each section starts with the command that printed it, run from results/diagnostico_moe/.
+
+## P35_from0: the patch's first version of the equal offsets, which took all the difference at every step, from step 0.
+## P35b_from0: the final version, a tenth per step (--router-offsets-rate 0.1), from step 0.
+## P35b_midrun_250: SMEBU 0.01 and free offsets until step 250, then the final version, with the offsets equalised in
+## full and the bias zeroed at the end of step 250 (--bias-reset-step).
+## A_base: SMEBU 0.01. QC and M: the prototypes of the diagnosis (banco_resumen.txt).
+## python lab_table.py runs/A_base.jsonl runs/QC_quantile_nodiff.jsonl runs/P35_from0.jsonl runs/P35b_from0.jsonl runs/M_midrun.jsonl runs/P35b_midrun_250.jsonl --from 0 --to 100
+steps 0-100: load = each step's busiest (least busy) expert over the mean, max (min) over the MoE layers
+run                      busiest mean  p95   max | least mean  min | ac1   zigzag(min) flips | bias range  decides | b* speed rms/max  | lse min..max | val ce (step)
+A_base                       2.02    2.54  4.15 |    0.36    0.05 | +0.64   -0.52      0.66  |   0.323     0.77   | 0.00156 0.00372 | 3.86..4.07  | 7.077 (100)
+QC_quantile_nodiff           1.89    2.17  3.57 |    0.41    0.05 | +0.16   -0.46      0.68  |   0.073     0.49   | 0.00102 0.00251 | 3.75..4.07  | 7.077 (100)
+P35_from0                    2.33    2.97  3.57 |    0.27    0.05 | +0.21   -0.59      0.66  |   0.058     0.42   | 0.00094 0.00229 | 3.75..4.07  | 7.077 (100)
+P35b_from0                   1.91    2.29  3.57 |    0.41    0.05 | +0.17   -0.44      0.69  |   0.082     0.53   | 0.00107 0.00265 | 3.75..4.07  | 7.076 (100)
+M_midrun                     2.02    2.54  4.15 |    0.36    0.05 | +0.64   -0.51      0.65  |   0.324     0.77   | 0.00156 0.00372 | 3.86..4.07  | 7.077 (100)
+P35b_midrun_250              2.02    2.54  4.15 |    0.36    0.05 | +0.64   -0.52      0.66  |   0.323     0.77   | 0.00155 0.00372 | 3.86..4.07  | 7.077 (100)
+## python lab_table.py runs/A_base.jsonl runs/QC_quantile_nodiff.jsonl runs/P35_from0.jsonl runs/P35b_from0.jsonl runs/M_midrun.jsonl runs/P35b_midrun_250.jsonl --from 100 --to 300
+steps 100-300: load = each step's busiest (least busy) expert over the mean, max (min) over the MoE layers
+run                      busiest mean  p95   max | least mean  min | ac1   zigzag(min) flips | bias range  decides | b* speed rms/max  | lse min..max | val ce (step)
+A_base                       1.79    2.16  2.49 |    0.45    0.19 | +0.09   -0.50      0.67  |   0.454     0.99   | 0.00106 0.00265 | 3.80..4.03  | 4.162 (300)
+QC_quantile_nodiff           1.71    2.01  2.35 |    0.50    0.22 | +0.10   -0.51      0.71  |   0.101     0.59   | 0.00055 0.00143 | 3.70..3.96  | 4.155 (300)
+P35_from0                    1.99    2.49  3.10 |    0.40    0.13 | +0.29   -0.44      0.66  |   0.086     0.54   | 0.00055 0.00138 | 3.68..3.95  | 4.156 (300)
+P35b_from0                   1.73    2.10  2.50 |    0.49    0.24 | +0.03   -0.53      0.68  |   0.116     0.65   | 0.00069 0.00179 | 3.69..3.95  | 4.150 (300)
+M_midrun                     1.78    2.19  2.56 |    0.46    0.06 | +0.13   -0.41      0.69  |   0.393     0.89   | 0.00131 0.00338 | 3.71..4.04  | 4.163 (300)
+P35b_midrun_250              1.78    2.13  2.53 |    0.46    0.19 | +0.15   -0.47      0.66  |   0.397     0.90   | 0.00132 0.00339 | 3.70..4.04  | 4.159 (300)
+## python lab_table.py runs/A_base.jsonl runs/QC_quantile_nodiff.jsonl runs/P35_from0.jsonl runs/P35b_from0.jsonl runs/M_midrun.jsonl runs/P35b_midrun_250.jsonl --from 300 --to 500
+steps 300-500: load = each step's busiest (least busy) expert over the mean, max (min) over the MoE layers
+run                      busiest mean  p95   max | least mean  min | ac1   zigzag(min) flips | bias range  decides | b* speed rms/max  | lse min..max | val ce (step)
+A_base                       1.62    1.90  2.17 |    0.53    0.30 | -0.07   -0.45      0.65  |   0.378     0.94   | 0.00077 0.00196 | 3.65..3.92  | 3.157 (500)
+QC_quantile_nodiff           1.60    1.86  2.13 |    0.54    0.35 | -0.04   -0.51      0.65  |   0.134     0.53   | 0.00053 0.00142 | 3.57..3.81  | 3.523 (400)
+P35_from0                    1.73    2.07  2.38 |    0.49    0.23 | +0.12   -0.42      0.62  |   0.102     0.48   | 0.00056 0.00146 | 3.54..3.80  | 3.534 (400)
+P35b_from0                   1.62    1.94  2.23 |    0.54    0.26 | -0.01   -0.53      0.74  |   0.144     0.55   | 0.00062 0.00161 | 3.55..3.80  | 3.515 (400)
+M_midrun                     1.59    1.87  2.00 |    0.55    0.26 | -0.10   -0.51      0.70  |   0.131     0.54   | 0.00056 0.00144 | 3.59..3.83  | 3.529 (400)
+P35b_midrun_250              1.62    1.87  2.07 |    0.53    0.28 | -0.02   -0.52      0.69  |   0.138     0.56   | 0.00063 0.00167 | 3.59..3.84  | 3.524 (400)
+## python lab_table.py runs/A_base.jsonl runs/QC_quantile_nodiff.jsonl runs/P35_from0.jsonl runs/P35b_from0.jsonl runs/M_midrun.jsonl runs/P35b_midrun_250.jsonl --from 300 --to 400
+steps 300-400: load = each step's busiest (least busy) expert over the mean, max (min) over the MoE layers
+run                      busiest mean  p95   max | least mean  min | ac1   zigzag(min) flips | bias range  decides | b* speed rms/max  | lse min..max | val ce (step)
+A_base                       1.63    1.86  2.07 |    0.52    0.30 | -0.15   -0.35      0.62  |   0.382     0.95   | 0.00082 0.00213 | 3.72..3.92  | 3.520 (400)
+QC_quantile_nodiff           1.62    1.86  2.07 |    0.54    0.35 | -0.10   -0.50      0.65  |   0.128     0.54   | 0.00055 0.00151 | 3.64..3.81  | 3.523 (400)
+P35_from0                    1.77    2.11  2.31 |    0.47    0.23 | +0.08   -0.48      0.61  |   0.103     0.49   | 0.00058 0.00151 | 3.62..3.80  | 3.534 (400)
+P35b_from0                   1.64    1.94  2.23 |    0.53    0.26 | -0.05   -0.55      0.74  |   0.139     0.56   | 0.00067 0.00176 | 3.62..3.80  | 3.515 (400)
+M_midrun                     1.61    1.88  1.95 |    0.54    0.26 | -0.17   -0.43      0.69  |   0.127     0.54   | 0.00059 0.00157 | 3.65..3.83  | 3.529 (400)
+P35b_midrun_250              1.63    1.86  1.97 |    0.53    0.28 | -0.01   -0.47      0.69  |   0.137     0.57   | 0.00067 0.00183 | 3.64..3.84  | 3.524 (400)
+
+## python lab_extra.py switch runs/A_base.jsonl runs/P35b_midrun_250.jsonl 250
+A_base against P35b_midrun_250 around step 250 (ce: training loss; load: busiest / least busy expert over the mean)
+ step |                 A_base: ce   load      bias max  decides |        P35b_midrun_250: ce   load      bias max  decides
+  246 |                        4.852   1.84/0.52  0.306     0.98    |                        4.854   1.78/0.53  0.324     0.98
+  247 |                        4.531   1.58/0.46  0.306     0.98    |                        4.534   1.62/0.47  0.324     0.98
+  248 |                        4.496   1.50/0.60  0.303     0.98    |                        4.496   1.42/0.61  0.321     0.98
+  249 |                        4.920   1.83/0.54  0.299     0.98    |                        4.922   1.84/0.53  0.316     0.98
+  250 |                        4.605   1.90/0.47  0.295     0.98    |                        4.607   1.86/0.51  0.000     0.99
+  251 |                        4.612   1.61/0.56  0.293     0.98    |                        4.622   2.41/0.26  0.050     0.00
+  252 |                        4.637   1.79/0.37  0.290     0.98    |                        4.642   1.93/0.53  0.072     0.35
+  253 |                        4.852   1.82/0.39  0.286     0.98    |                        4.855   1.75/0.45  0.087     0.48
+  254 |                        4.441   1.54/0.60  0.281     0.98    |                        4.444   1.68/0.53  0.092     0.53
+  255 |                        4.460   1.94/0.52  0.276     0.97    |                        4.463   1.61/0.60  0.110     0.53
+  256 |                        4.612   1.61/0.58  0.273     0.98    |                        4.612   1.64/0.43  0.097     0.54
+  257 |                        4.639   1.72/0.64  0.270     0.98    |                        4.645   1.71/0.67  0.089     0.54
+  258 |                        4.558   1.44/0.50  0.267     0.98    |                        4.562   1.49/0.61  0.084     0.55
+  259 |                        4.359   1.64/0.51  0.264     0.98    |                        4.365   1.47/0.57  0.082     0.53
+  260 |                        4.239   2.19/0.28  0.264     0.98    |                        4.245   1.96/0.40  0.095     0.55
+  261 |                        4.582   1.77/0.55  0.262     0.97    |                        4.587   1.82/0.60  0.104     0.58
+  262 |                        4.636   1.66/0.65  0.261     0.98    |                        4.635   1.55/0.65  0.101     0.58
+  263 |                        4.699   1.68/0.44  0.260     0.97    |                        4.703   1.64/0.48  0.110     0.55
+  264 |                        4.296   1.85/0.44  0.263     0.97    |                        4.298   1.91/0.23  0.125     0.58
+  265 |                        4.476   1.74/0.41  0.267     0.97    |                        4.471   1.61/0.47  0.133     0.60
+  270 |                        4.273   1.61/0.40  0.291     0.97    |                        4.278   1.70/0.57  0.149     0.62
+  280 |                        4.655   1.96/0.56  0.284     0.97    |                        4.655   1.68/0.48  0.164     0.62
+  290 |                        4.258   1.79/0.55  0.288     0.97    |                        4.262   1.70/0.52  0.150     0.61
+  300 |                        4.058   1.52/0.51  0.289     0.95    |                        4.058   1.53/0.47  0.155     0.60
+
+## python lab_report.py runs/P35b_from0.jsonl
+
+=== runs/P35b_from0.jsonl  balance=quantile lam=0.01->None@0 offsets=nodiff router_lr x1.0 seq_aux=0.001 route_scale=1.0 shared=4 (500 steps)
+probes on fixed tokens (means over the MoE layers; speeds per optimizer step, since the previous probe)
+ step  rho  lvl   off_sd spec_sd | score mean min/med/max | sd min/max  | b_rng  b*_rng err_max dec  gate_eff | b*spd rms/max    off spd  (W only)  lvl spd  | CE lvl push
+    0 0.113 +0.00 0.231 0.608  | 0.374 0.499 0.609  | 0.117 0.171 | 0.000  0.220  0.120 0.00   3.99   | nan nan  nan 0.00002  +nan | -3.20e-06
+   50 0.513 +0.02 0.072 0.432  | 0.466 0.505 0.543  | 0.084 0.127 | 0.092  0.108  0.032 0.61   3.99   | 0.00074 0.00180  0.00276 0.00234  +0.00047 | +8.40e-06
+  100 0.677 +0.01 0.063 0.344  | 0.469 0.502 0.536  | 0.063 0.112 | 0.102  0.105  0.036 0.73   3.99   | 0.00084 0.00215  0.00318 0.00540  -0.00009 | +3.78e-05
+  150 0.565 -0.02 0.061 0.399  | 0.468 0.495 0.530  | 0.077 0.125 | 0.109  0.104  0.030 0.72   3.99   | 0.00056 0.00158  0.00198 0.00544  -0.00077 | +8.16e-05
+  200 0.425 -0.07 0.056 0.467  | 0.460 0.483 0.517  | 0.089 0.146 | 0.116  0.124  0.025 0.64   3.98   | 0.00062 0.00149  0.00204 0.00499  -0.00109 | +1.36e-04
+  250 0.332 -0.13 0.058 0.511  | 0.443 0.466 0.500  | 0.094 0.158 | 0.134  0.125  0.045 0.62   3.98   | 0.00066 0.00152  0.00222 0.00426  -0.00142 | +2.75e-04
+  300 0.252 -0.18 0.061 0.549  | 0.429 0.458 0.491  | 0.101 0.164 | 0.132  0.139  0.043 0.57   3.98   | 0.00073 0.00205  0.00243 0.00350  -0.00065 | +2.65e-04
+  350 0.219 -0.23 0.053 0.566  | 0.420 0.447 0.474  | 0.104 0.164 | 0.148  0.133  0.054 0.57   3.97   | 0.00064 0.00156  0.00198 0.00302  -0.00082 | +3.56e-04
+  400 0.205 -0.26 0.044 0.578  | 0.418 0.439 0.464  | 0.106 0.170 | 0.159  0.144  0.054 0.54   3.97   | 0.00062 0.00164  0.00212 0.00283  -0.00092 | +3.99e-04
+  450 0.181 -0.28 0.050 0.588  | 0.411 0.434 0.459  | 0.108 0.170 | 0.140  0.152  0.048 0.52   3.97   | 0.00058 0.00146  0.00192 0.00233  -0.00072 | +3.97e-04
+  500 0.169 -0.31 0.044 0.595  | 0.410 0.427 0.453  | 0.107 0.172 | 0.165  0.155  0.053 0.57   3.97   | 0.00055 0.00142  0.00183 nan  -0.00078 | +3.40e-04
+training steps, 50-step windows (load: max over layers and experts of that step's load / mean)
+ from   ce    val   lr   lam    load_max(mean,p95) load_min  ac1(load_max)  bias_max  lse(min..max)  decides
+    0 8.195 8.329 0.20 0.0100   1.97  2.46        0.39      +0.28        0.072    3.85..4.07   0.59
+   50 7.559 nan 0.40 0.0100   1.85  2.21        0.42      -0.16        0.096    3.75..3.97   0.70
+  100 6.605 7.076 0.60 0.0100   1.80  2.14        0.46      -0.02        0.082    3.78..3.95   0.71
+  150 5.731 nan 0.80 0.0100   1.75  2.10        0.48      -0.07        0.092    3.77..3.93   0.67
+  200 4.964 5.321 1.00 0.0100   1.71  2.10        0.51      -0.05        0.114    3.74..3.89   0.63
+  250 4.394 nan 1.00 0.0100   1.64  1.91        0.51      -0.05        0.135    3.69..3.84   0.60
+  300 3.928 4.150 1.00 0.0100   1.64  1.97        0.54      -0.14        0.158    3.66..3.80   0.57
+  350 3.594 nan 1.00 0.0100   1.64  1.92        0.52      +0.07        0.154    3.62..3.79   0.55
+  400 3.443 3.515 1.00 0.0100   1.62  1.92        0.52      +0.01        0.166    3.60..3.77   0.55
+  450 3.302 nan 1.00 0.0100   1.59  1.81        0.55      -0.02        0.180    3.55..3.75   0.54

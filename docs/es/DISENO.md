@@ -65,6 +65,19 @@
 > 2. **El piso vale cero mientras el lse medio de cada capa MoE esté sobre τ = 1.5,** así que no cambia nada hasta que hace falta, y actúa solo, también de noche.
 > 3. **Con τ = 1.5, cada capa queda en z ≥ ~2.1,** sobre los quiebres que vimos con λ de 0.01 y 0.02. La alarma de `z_router` (1.5) queda como aviso de que el piso falló.
 
+> **El sesgo sigue a los scores, y el router pierde sus offsets (27 de noviembre de 2026)** ([`results/diagnostico_moe/`](../../results/diagnostico_moe/); decisión P35 de [`../DECISIONS.md`](../DECISIONS.md)):
+> 1. **El `tronco3` se detuvo solo en el paso 944,** con el balanceo roto: la segunda corrida que se rompe, y con otra receta. Una revisión independiente del código y de los logs no encontró ningún bug en el balanceador.
+> 2. **Las dos roturas son el mismo lazo, por lados opuestos.** SMEBU mueve el sesgo con pasos de tamaño fijo. Con λ 0.001 (el `tronco3` desde su paso 500), el sesgo no alcanza a lo que tiene que cancelar. Con λ 0.01 y el nivel del router ya bajo (el primer tronco, paso ~1200), cada paso se pasa de largo y la carga sube y baja en pasos alternos.
+> 3. **Lo que el sesgo cancela son offsets.** El router es lineal y sin bias, y una parte de su entrada es igual para todos los tokens. Esa parte le da a cada experto un puntaje extra fijo, su *offset*. No se aprende: sale del arranque al azar de las filas del router, se mueve mientras la red aprende y se achica cuando baja el nivel. Un ajuste a las evaluaciones del `tronco3` la pone en ~7% de la varianza de los logits en el paso 0 y en ~50–64% en el 498.
+> 4. **El tronco vuelve a empezar como `tronco4`** (`configs/tronco_v4.json`), con el modelo y la receta del `tronco3` y dos cambios desde el paso 0:
+>    - **la regla por cuantiles** en vez de SMEBU: en cada paso, el sesgo recorre la mitad del camino hacia el valor que balancearía una muestra de los tokens del paso. No tiene tamaño de paso;
+>    - **offsets iguales:** después de cada paso del optimizador, las filas del router pierden un décimo de las diferencias entre los offsets de los expertos. El nivel queda libre.
+>
+>    El formato AFMoE no cambia: no hay tensores nuevos.
+> 5. **Se quedan** el piso (P34), la alarma de `z_router` y la parada por balanceo. **Se van** el calendario de λ de la P30 y las dos palancas de la P34. El nivel del router deja de ser la señal de salud del balanceo: la señal es la carga del experto más cargado y del menos cargado de cada paso.
+> 6. **Antes del primer turno** corren, sobre el checkpoint 790 del `tronco3`, la sonda del router y una prueba de 26 pasos con el arreglo, sin guardar ni subir nada.
+> 7. **Queda abierto `route_scale`:** el experto compartido tiene el ancho de 4 expertos y, con `route_scale` 1.0, los 4 elegidos salen de cada bloque MoE con el 6% de su potencia. No causó la rotura; se decide aparte.
+
 **Leyenda:** ✅ decidido · ❓ decide Pipe · 📏 se mide antes de fijarlo · 🧪 se prueba en corrida corta · 🟢🟡🔴 licencia de datos (ver 4.8)
 
 ---
@@ -472,7 +485,8 @@ Esto sigue siendo una estimación: la cifra que vale es la que mida la T0.2 (`sc
 | Escalador de pérdida | Por debajo de 1 | Alarma (desborde de FP16) |
 | Carga por experto | Máx/media > 3 durante 500 pasos | Subir el coeficiente de balanceo |
 | Balanceo roto | Experto más cargado > 3× la media en el 80% de 50 pasos, desde el paso 200 | Detener y guardar (P30) |
-| Brecha del router | λ de SMEBU > 5× la brecha más chica entre las capas (la mediana entre el 4.º y el 5.º score de cada token) durante 50 pasos | Alarma: revisar λ y el nivel del router (P29) |
+| Sesgo distinto entre las GPUs | El sesgo de los expertos, que cada GPU actualiza por su cuenta, deja de ser igual en las dos | Alarma: avisar y no relanzar (P35) |
+| Brecha del router | λ de SMEBU > 5× la brecha más chica entre las capas (la mediana entre el 4.º y el 5.º score de cada token) durante 50 pasos | Alarma: revisar λ y el nivel del router (P29). Con la regla por cuantiles no hay λ, y no salta (P35) |
 | Experto muerto | < 10% de la carga media durante 1,000 pasos | Alarma; revisar |
 | Logit máximo de atención | Crece sin parar | Revisar QK-norm |
 | Tokens/s | < ~2,500 | Revisar kernels y sincronización |
@@ -691,7 +705,7 @@ Se agregan a medida que existan: `tokenizer/`, `data/` (recetas, lector, descont
 | T0.3 + T2 | ✅ **LR y estabilidad en FP16** (`notebooks/t0_3_t2_lr_2xT4.ipynb`): dos rondas, todas estables. El tronco va a ×1, la receta del Ludwig 1 (P25) | 2×T4 | ~3 × 9.5 + 4 × 11 | Hecho el 15 nov |
 | T1 | **Datos:** fuentes cerradas (4.2, mezcla v3); pre-tokenizado con descontaminación y manifiestos. El código está listo y probado (P18–P24). La sesión 1 hizo 28 shards en 10.4 h; faltan unas 5 sesiones, que pueden correr mientras corre el tronco (`notebooks/t1_shards_cpu.ipynb`) | CPU | ~10 min + ~6 × 11 | Los 168 shards del tronco, con sus manifiestos |
 | G0 | ✅ **Compuerta G0** (5.7, P27): G0-0 (ensayo del relevo) y G0-1 (16K) el 17 nov, las condiciones 1–4 en el turno 1 del tronco y la reanudación en otra cuenta en el turno 5 | 2×T4 | ~1 + los dos primeros turnos | Hecho en el primer tronco; el `tronco2` usa el mismo relevo y no la repite |
-| T3 | **Tronco** hasta 22.5B. El primer intento llegó al paso 3348 con el balanceo de los expertos roto desde el ~1250 (P29); el 25 nov, `tronco2` desde cero (P30), y desde su segundo turno `tronco3`, con 3 capas densas (P32) | Relevo | ~1,550–2,450 | — |
+| T3 | **Tronco** hasta 22.5B. El primer intento llegó al paso 3348 con el balanceo de los expertos roto desde el ~1250 (P29); el 25 nov, `tronco2` desde cero (P30), y desde su segundo turno `tronco3`, con 3 capas densas (P32), que se detuvo en el paso 944; el 27 nov, `tronco4` desde cero, con la regla por cuantiles y los offsets del router iguales (P35) | Relevo | ~1,550–2,450 | — |
 | T4 | **Rama de la v1** (2.5B, con 16K y MTP) | Relevo | ~225–355 | Base lista |
 | T5 | **SFT, MTP, GGUF y evaluación** | 2×T4 | ~60–150 | Ludwig 2 · 25B publicado |
 
