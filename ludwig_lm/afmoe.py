@@ -14,7 +14,9 @@ Everything here works around the model, never changes its parameters or their na
   balancer updates it the same way everywhere. The state-dict key does not change.
 * ``ExpertBalancer``: aux-loss-free balancing. SMEBU (Arcee Trinity: tanh-clamped, re-centred,
   momentum), the plain sign update, or the quantile rule (P35): move the bias toward the value that would
-  balance a sample of the step's tokens, a move in the scores' own units.
+  balance a sample of the step's tokens, a move in the scores' own units. It can also keep the router's
+  experts at equal offsets (P35): a router logit is w_i · x, and the part of x common to all tokens gives each
+  expert the same extra on every token, which the bias would otherwise have to cancel while it moves.
 * ``LudwigAfmoe.forward``: chunked cross-entropy with the tied head, output z-loss,
   sequence-wise auxiliary loss (DeepSeek-V3), router z-loss (0 since P30), and the router's health per
   MoE layer (P29). With ``fp32_residual`` the residual stream stays in FP32 when the caller runs it under
@@ -321,6 +323,11 @@ def flops_per_token(cfg: AfmoeConfig, active: int, seq: int) -> float:
 
 
 # --------------------------------------------------------------------------- balancing
+def _rows(p):
+    """This rank's rows of a parameter that FSDP2 may have sharded."""
+    return p.to_local() if hasattr(p, "to_local") else p
+
+
 @torch.no_grad()
 def bias_targets(scores, bias, k: int):
     """Per expert, the bias that would give it its share of these tokens (k of every E assignments) while the other
@@ -354,16 +361,21 @@ class ExpertBalancer:
     token depends on the step and the micro-step: no random numbers, so a resumed run takes the same tokens. At the
     step, every rank receives every rank's sample (an all-reduce of a buffer that is zero outside the rank's own
     part), so all ranks sort the same tensor and reach the same bias, bit for bit. The rule keeps nothing between
-    steps: the checkpoint has the same keys as with smebu."""
+    steps: the checkpoint has the same keys as with smebu.
+
+    ``offsets="equal"`` (P35) removes what the bias mostly had to cancel: see ``equalise_offsets``. It works with
+    any rule and adds nothing to the checkpoint either."""
 
     def __init__(self, model, rule: str = "smebu", lam: float = 1e-3, beta: float = 0.5, kappa: float = 2.0,
-                 gamma: float = 1e-3, damp: float = 0.5, sample: int = 512):
+                 gamma: float = 1e-3, damp: float = 0.5, sample: int = 512, offsets: str = "free",
+                 offsets_rate: float = 0.1):
         lm = model.lm if hasattr(model, "lm") else model
         self.blocks = moe_blocks(lm)
         self.n_exp, self.k = lm.config.num_experts, lm.config.num_experts_per_tok
         self.rule, self.lam, self.beta, self.kappa, self.gamma = rule, lam, beta, kappa, gamma
-        self.damp, self.sample = damp, sample
+        self.damp, self.sample, self.offsets, self.offsets_rate = damp, sample, offsets, offsets_rate
         dev = self.blocks[0].expert_bias.device if self.blocks else torch.device("cpu")
+        self.xsum = torch.zeros(len(self.blocks), lm.config.hidden_size, device=dev)   # the step's router inputs
         self.momentum = torch.zeros(len(self.blocks), self.n_exp, device=dev)
         self.counts = torch.zeros(len(self.blocks), self.n_exp, device=dev)
         self.window = torch.zeros(len(self.blocks), self.n_exp, device=dev)   # since the last window_stats()
@@ -371,9 +383,14 @@ class ExpertBalancer:
         self.at_step = self.micro = 0                 # the optimizer step (set by the loop) and its micro-step
 
     @torch.no_grad()
-    def accumulate(self, chosen_per_layer, logits_per_layer=None):
+    def accumulate(self, chosen_per_layer, logits_per_layer=None, xsum_per_layer=None):
         for i, c in enumerate(chosen_per_layer):
             self.counts[i] += torch.bincount(c.reshape(-1), minlength=self.n_exp).float()
+        if self.offsets == "equal":
+            if xsum_per_layer is None:
+                raise ValueError("equal offsets need the sum of the router's input of each micro-step")
+            for i, x in enumerate(xsum_per_layer):
+                self.xsum[i] += x
         if self.rule == "quantile":
             if logits_per_layer is None:
                 raise ValueError("the quantile rule needs the router's logits of each micro-step")
@@ -394,7 +411,54 @@ class ExpertBalancer:
         return buf.permute(1, 0, 2, 3).reshape(local.shape[0], -1, local.shape[2])
 
     @torch.no_grad()
-    def step(self) -> dict:
+    def equalise_offsets(self, full: bool = False):
+        """After the optimizers: pull every expert's offset along the step's mean router input together (P35).
+
+        logit[t, i] = w_i · x_t = w_i · x_mean + w_i · (x_t - x_mean). The first term is the same on every token:
+        the expert's offset. It is there from the first step (the rows start random and x has a mean) and it moves
+        whenever the layers below or the rows move, so a bias that cancels it chases a moving target. Taking
+        r (c_i - mean c) u from each row, with u the unit vector of x_mean and c_i = w_i · u, shrinks the
+        differences between the offsets by r and leaves the part of the logits orthogonal to u untouched; the
+        level (the same shift for every expert) stays free.
+
+        r is ``offsets_rate``, a fraction: one step's mean is what is common to all tokens plus what is particular
+        to that step's text. Taking all of it every step makes the rows, and the bias behind them, follow each
+        step's text (in the lab the balance got worse than with free offsets); a fraction removes in ~1/r steps
+        what persists and averages the rest out, with nothing to keep between steps. ``full`` takes all of it
+        once: for the step where the bias is reset.
+
+        x_mean is the mean over the step's tokens, of all micro-steps and ranks; FSDP2 shards the rows over the
+        ranks, so each rank edits its own with the sums reduced over all of them."""
+        if self.offsets != "equal" or not self.blocks:
+            return
+        rate = 1.0 if full else self.offsets_rate
+        distributed = dist.is_available() and dist.is_initialized()
+        if distributed:
+            dist.all_reduce(self.xsum)
+        if not bool(torch.isfinite(self.xsum).all()):       # not into the rows: the same decision on every rank
+            self.xsum.zero_()
+            return
+        unit = self.xsum / torch.linalg.vector_norm(self.xsum, dim=1, keepdim=True).clamp_min(1e-30)
+        rows = [_rows(b.router.gate.weight) for b in self.blocks]
+        along = [w.float() @ unit[i].to(w.device) for i, w in enumerate(rows)]             # c_i of this rank's rows
+        total = torch.stack([torch.stack([c.sum(), c.new_tensor(float(c.numel()))]) for c in along])
+        if distributed:
+            dist.all_reduce(total)
+        for i, w in enumerate(rows):
+            away = rate * (along[i] - total[i, 0] / total[i, 1])
+            w.sub_((away[:, None] * unit[i].to(w.device)[None, :]).to(w.dtype))
+        self.xsum.zero_()
+
+    @torch.no_grad()
+    def reset_bias(self):
+        """Zero the bias (and SMEBU's momentum): for the step where the offsets it cancelled go away at once."""
+        for block in self.blocks:
+            block.expert_bias.zero_()
+        self.momentum.zero_()
+
+    @torch.no_grad()
+    def step(self, reset: bool = False) -> dict:
+        """``reset``: this step zeroes the bias instead of updating it (--bias-reset-step)."""
         c = self.counts
         distributed = dist.is_available() and dist.is_initialized()
         if distributed:
@@ -402,7 +466,9 @@ class ExpertBalancer:
         mean = c.mean(1, keepdim=True).clamp_min(1.0)
         v = (mean - c) / mean                              # > 0: the expert got fewer tokens than the mean
         before = [b.expert_bias.clone() for b in self.blocks]
-        if self.rule == "quantile":
+        if reset:
+            self.reset_bias()
+        elif self.rule == "quantile":
             pooled = self._pooled_scores(distributed) if self.scores and self.scores[0] else None
             if pooled is not None and bool(torch.isfinite(pooled).all()):   # a NaN here would stay in the bias for good
                 for i, block in enumerate(self.blocks):
@@ -441,6 +507,7 @@ class ExpertBalancer:
 
     def _clear(self):
         self.counts.zero_()
+        self.xsum.zero_()
         self.scores = [[] for _ in self.blocks]
         self.micro = 0
 

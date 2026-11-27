@@ -23,6 +23,11 @@
    F0 turns it on below the level, as the trunk runs it: nothing may change against A (P34).
    Q  balances with the quantile rule (P35): better than A's SMEBU from the second step, the same bias on both
       processes, and QR resumes it at step 3 bit for bit.
+   O  equalises the router's experts' offsets in full at every step (P35, --router-offsets-rate 1): the offsets on
+      the validation text fall to less than half of A's, the bias decides for fewer tokens, and OR resumes it bit
+      for bit. O4 takes a quarter per step: its offsets end between A's and O's.
+   X  runs both and zeroes the bias at step 4 (--bias-reset-step); XR resumes it before that step and must equal
+      it through the reset. XS skips that step as a loss spike: the offsets and the bias are still reset.
    Before the training: the trunk's models build with their dense layers and parameter counts (P32).
    Every step logs the router's health, and every evaluation logs it per MoE layer (P29), with the router's
    level as z and signed lse; L also sets the z_router alarm (P30) so that it must fire.
@@ -228,6 +233,21 @@ def test_balancer():
     check(all(float(h.abs().max()) > 0 for h in held)
           and all(torch.equal(b.expert_bias, h) for b, h in zip(balancer.blocks, held)),
           "a step with a non-finite score leaves the bias as it was")
+    torch.manual_seed(0)
+    balancer = ExpertBalancer(LudwigAfmoe(cfg), rule="quantile", offsets="equal", offsets_rate=1.0)
+    rows = [b.router.gate.weight for b in balancer.blocks]
+    xs = [torch.randn(cfg.hidden_size, generator=g) for _ in rows]
+    spread = lambda: max(float((w.detach() @ x).std()) for w, x in zip(rows, xs))
+    start = spread()
+    balancer.accumulate(chosen, lg, xs)
+    balancer.equalise_offsets()
+    equal = [w.detach().clone() for w in rows]
+    done = spread()
+    balancer.accumulate(chosen, lg, [x * float("inf") for x in xs])
+    balancer.equalise_offsets()
+    check(start > 0.01 and done < 1e-6 and all(torch.equal(w.detach(), e) for w, e in zip(rows, equal)),
+          f"equal offsets at rate 1 take the spread of w · x_mean from {start:.3f} to {done:.1e} in one step, and a "
+          "non-finite input leaves the rows as they were")
 
 
 def test_public_paths():
@@ -386,6 +406,65 @@ def test_training():
           and all(same(sq[i], sqr[i], keys + ["load_min_over_mean", "bias_step_max"]) for i in sqr),
           "QR: a run resumed with the quantile rule equals the uninterrupted one bit for bit (its sample needs no "
           "random numbers)")
+    more = keys + ["load_min_over_mean", "bias_step_max"]
+    equal = ("--router-offsets", "equal", "--router-offsets-rate", "1")
+    code, o = torchrun("O", WORK / "o.jsonl", *equal, "--save-dir", str(WORK / "ckpt_o"), "--save-at", "3")
+    so, eo = {r["step"]: r for r in by(o, "step")}, {r["step"]: r for r in by(o, "eval")}
+    check(code == 0 and sorted(so) == list(range(8)) and all(r["bias_ranks_equal"] for r in so.values()),
+          "O: equal offsets run to the end under FSDP2, each process editing its own rows of the router")
+    check(all(x < 0.5 * y for i in (4, 5, 8) for x, y in zip(eo[i]["router_offset_std"], ea[i]["router_offset_std"]))
+          and eo[0]["router_offset_std"] == ea[0]["router_offset_std"],
+          f"O: on the validation text every MoE layer's offsets are under half of A's (at step 8: "
+          f"{max(eo[8]['router_offset_std']):.3f} at most, against {min(ea[8]['router_offset_std']):.3f} at least)")
+    o_min = mean([so[i]["load_min_over_mean"] for i in late])
+    check(mean(eo[8]["bias_decides"]) < mean(ea[8]["bias_decides"]) and o_min > a_min + 0.1,
+          f"O: with nothing common to cancel, the bias decides for {mean(eo[8]['bias_decides']):.0%} of the tokens at "
+          f"step 8 ({mean(ea[8]['bias_decides']):.0%} in A), and the same SMEBU balances better (least busy expert "
+          f"{o_min:.2f}× the mean over steps 2–7, {a_min:.2f}× in A)")
+    code, orr = torchrun("OR", WORK / "or.jsonl", *equal, "--resume", str(WORK / "ckpt_o" / "step_000003"),
+                         "--save-dir", str(WORK / "ckpt_or"))
+    sor, eor = {r["step"]: r for r in by(orr, "step")}, {r["step"]: r for r in by(orr, "eval")}
+    check(code == 0 and sorted(sor) == [3, 4, 5, 6, 7] and by(orr, "resume")[0]["state_exact"]
+          and all(same(so[i], sor[i], more) for i in sor)
+          and all(eor[i]["val_bpb"] == eo[i]["val_bpb"] and eor[i]["router_offset_std"] == eo[i]["router_offset_std"]
+                  for i in (4, 5, 8)),
+          "OR: a run resumed with equal offsets equals the uninterrupted one bit for bit (they keep no state)")
+    code, o4 = torchrun("O4", WORK / "o4.jsonl", "--router-offsets", "equal", "--router-offsets-rate", "0.25")
+    eo4 = {r["step"]: r for r in by(o4, "eval")}
+    check(code == 0 and all(lo < x < hi for lo, x, hi in zip(eo[8]["router_offset_std"], eo4[8]["router_offset_std"],
+                                                           ea[8]["router_offset_std"])),
+          f"O4: taking a quarter of the differences per step leaves the offsets between O's and A's at step 8 "
+          f"({max(eo4[8]['router_offset_std']):.3f} at most)")
+    fix = ("--balance", "quantile", "--router-offsets", "equal", "--bias-reset-step", "4")
+    code, x = torchrun("X", WORK / "x.jsonl", *fix, "--save-dir", str(WORK / "ckpt_x"), "--save-at", "3")
+    sx, ex = {r["step"]: r for r in by(x, "step")}, {r["step"]: r for r in by(x, "eval")}
+    check(code == 0 and sorted(sx) == list(range(8)) and sx[3]["bias_abs_max"] > 0 and sx[4]["bias_abs_max"] == 0
+          and sx[5]["bias_abs_max"] > 0 and all(d == 0 for d in ex[5]["bias_decides"])
+          and all(r["bias_ranks_equal"] for r in sx.values()),
+          "X: --bias-reset-step 4 leaves the bias at zero after step 4, on both processes, and the rule takes it "
+          "from there")
+    before, after = ex[4]["router_offset_std"], ex[5]["router_offset_std"]
+    check(all(y < x for x, y in zip(before, after)) and mean(after) < 0.5 * mean(before),
+          f"X: that step also equalises the offsets in full: on the validation text they go from {mean(before):.3f} "
+          f"(after four steps of a tenth each) to {mean(after):.3f}, mean of the MoE layers")
+    code, xr = torchrun("XR", WORK / "xr.jsonl", *fix, "--resume", str(WORK / "ckpt_x" / "step_000003"),
+                        "--save-dir", str(WORK / "ckpt_xr"))
+    sxr, exr = {r["step"]: r for r in by(xr, "step")}, {r["step"]: r for r in by(xr, "eval")}
+    check(code == 0 and sorted(sxr) == [3, 4, 5, 6, 7] and by(xr, "resume")[0]["state_exact"]
+          and all(same(sx[i], sxr[i], more) for i in sxr)
+          and all(exr[i]["val_bpb"] == ex[i]["val_bpb"] for i in (4, 5, 8)),
+          "XR: resumed before the reset, the run equals the uninterrupted one through it, bit for bit: the reset "
+          "belongs to a step, not to the resume")
+    code, xs = torchrun("XS", WORK / "xs.jsonl", "--router-offsets", "equal", "--bias-reset-step", "2",
+                        "--spike-min-history", "2", "--spike-sigma", "-100", "--save-dir", str(WORK / "ckpt_xs"))
+    code2, xe = torchrun("XE", WORK / "xe.jsonl", "--router-offsets", "equal", "--resume", "latest", "--save-dir",
+                         str(WORK / "ckpt_xs"), "--eval-only")
+    exe = (by(xe, "eval") or [{}])[-1]
+    check(code == 0 and code2 == 0 and (by(xs, "end") or [{}])[-1].get("status") == "stopped_spikes"
+          and exe.get("step") == 5 and all(b == 0 for b in exe["bias_range"])
+          and all(v < 0.5 * y for v, y in zip(exe["router_offset_std"], ea[0]["router_offset_std"])),
+          "XS: when the reset step is skipped as a loss spike, the offsets are still equalised and the bias zeroed "
+          "(the stop's checkpoint has no bias and small offsets)")
     code, e = torchrun("E", WORK / "e.jsonl", "--resume", str(WORK / "ckpt_a" / "step_000003"), "--eval-only")
     ee = by(e, "eval")
     check(code == 0 and (by(e, "end") or [{}])[-1].get("status") == "evaluated" and not by(e, "step")

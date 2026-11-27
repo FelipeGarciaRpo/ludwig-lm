@@ -118,6 +118,19 @@ def parse(argv=None):
                    help="quantile: the fraction of the way to that value the bias moves each step")
     g.add_argument("--balance-sample", type=int, default=512,
                    help="quantile: tokens per GPU and micro-step in its sample (2 GPUs × 8 micro-steps: 8,192 a step)")
+    g.add_argument("--router-offsets", default="free", choices=["free", "equal"],
+                   help="equal (P35): after each optimizer step, take from the router's rows part of the differences "
+                        "between the experts' offsets along the step's mean router input, which the bias otherwise "
+                        "has to cancel while they move")
+    g.add_argument("--router-offsets-rate", type=float, default=0.1,
+                   help="the part taken per step. 1 takes it all with one step's mean, and then the rows follow what "
+                        "is particular to each step's text; 0.1 removes what persists in ~10 steps")
+    g.add_argument("--bias-reset-step", type=int, default=-1,
+                   help="at the end of this step the offsets are equalised in full and the expert bias is set to zero "
+                        "instead of updated (-1: never). For the step where --router-offsets equal first applies to "
+                        "a run that had offsets (P35: tronco3's 790): its bias was cancelling them. A step, not an "
+                        "event of the resume: once the run is past it, it does nothing, and a resumed run equals an "
+                        "uninterrupted one")
     g.add_argument("--lam", type=float, default=1e-2, help="SMEBU step (T0.2 v2: 0.01 balanced best)")
     g.add_argument("--lam-final", type=float, default=None,
                    help="SMEBU step from --lam-steps on (P30: 0.01 balances the start fast, then DeepSeek-V3's 0.001)")
@@ -147,7 +160,9 @@ def parse(argv=None):
     g.add_argument("--balance-min-step", type=int, default=200, help="a run from scratch balances first")
     g.add_argument("--z-router-alarm", type=float, default=0.0,
                    help="alarm when the mean router z-loss value stays below this for --z-router-window steps "
-                        "(0: never; P30: 1.5, the level the first trunk crossed ~250 steps before its break)")
+                        "(0: never; P30: 1.5, the level the first trunk crossed ~250 steps before its break). With "
+                        "the floor on (P34) it says the floor is not holding; with the quantile rule a low level "
+                        "does not threaten the balance (P35)")
     g.add_argument("--z-router-window", type=int, default=50)
     g = ap.add_argument_group("checkpoints and time")
     g.add_argument("--save-dir", default="", help="empty: never save")
@@ -324,7 +339,8 @@ class Trainer:
         self.params = [p for p in self.model.parameters() if p.requires_grad]
         self.scaler = DynamicLossScaler(init_scale=2.0 ** 15 if self.use_cuda else 1.0)
         self.balancer = ExpertBalancer(self.model, rule=a.balance, lam=a.lam, gamma=a.gamma, damp=a.balance_damp,
-                                       sample=a.balance_sample)
+                                       sample=a.balance_sample, offsets=a.router_offsets,
+                                       offsets_rate=a.router_offsets_rate)
         self.weights = LossWeights(output_z=a.output_z, seq_aux=a.seq_aux, router_z=a.router_z,
                                    router_floor=a.router_floor, router_floor_lse=a.router_floor_lse)
         self.amp_dtype = torch.float16 if self.use_cuda else torch.bfloat16   # bf16 only exercises the CPU path
@@ -383,7 +399,7 @@ class Trainer:
         with torch.autocast(device_type=self.device.type, dtype=self.amp_dtype, enabled=self.fp32_residual):
             loss, mets = self.model(ids, self.weights, ce_chunk=self.args.ce_chunk, loss_mask=mask)
         (loss * (self.scaler.scale / ga)).backward()
-        self.balancer.accumulate(mets["chosen"], mets["router_logits"])
+        self.balancer.accumulate(mets["chosen"], mets["router_logits"], mets["router_xsum"])
         self.health += torch.stack([mets["router_margin"], mets["bias_decides"]])
         return torch.stack([mets["ce"], mets["z_out"], mets["seq_aux"], mets["z_router"], mets["router_entropy"],
                             mets["router_floor"]])
@@ -410,7 +426,7 @@ class Trainer:
         for opt in self.opts:
             opt.zero_grad(set_to_none=True)
 
-    def opt_step(self, mult):
+    def opt_step(self, mult, step):
         a = self.args
         found_inf = self.scaler.unscale_and_check(self.params)
         gnorm = None
@@ -424,7 +440,9 @@ class Trainer:
             self.adamw.step()
         self.scaler.update(found_inf)
         self.zero_grad()
-        return gnorm, found_inf, self.balancer.step()
+        reset = step == a.bias_reset_step
+        self.balancer.equalise_offsets(full=reset)         # P35: after the optimizers moved the router's rows
+        return gnorm, found_inf, self.balancer.step(reset=reset)
 
     # ------------------------------------------------------------------ evaluation
     @torch.no_grad()
@@ -750,6 +768,9 @@ class Trainer:
                          and ce > float(np.mean(hist)) + a.spike_sigma * max(float(np.std(hist)), 0.01))
             if spike:
                 self.zero_grad()
+                if step == a.bias_reset_step:              # the switch does not depend on this step's gradient
+                    self.balancer.equalise_offsets(full=True)
+                    self.balancer.reset_bias()
                 self.balancer.skip()
                 gnorm, found_inf, bal = None, False, {"load_max_over_mean": 0.0, "load_min_over_mean": 1.0,
                                                       "dead_experts": 0, "bias_abs_max": 0.0, "bias_step_max": 0.0,
@@ -759,7 +780,7 @@ class Trainer:
                 while spikes and spikes[0] <= step - a.spike_window:
                     spikes.popleft()
             else:
-                gnorm, found_inf, bal = self.opt_step(mult)
+                gnorm, found_inf, bal = self.opt_step(mult, step)
                 if math.isfinite(ce):
                     hist.append(ce)
             tokens += tps_now
