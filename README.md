@@ -265,7 +265,7 @@ ludwig-lm/
 │                   # · relay.py: the relay's lock, uploads and backup
 │                   # · checkpoint.py: checkpoints with a verified resume · model.py: format A (fallback)
 ├── configs/        # ludwig2_afmoe_d3.json (the real model: 3 dense layers, 44 experts), ludwig2_afmoe.json (1 and 40: the first two runs),
-│                   # tiny_afmoe.json, tiny_afmoe_d3.json (tests), data_v3.json (the trunk's data), tronco_v1.json … tronco_v4.json (the trunk's runs);
+│                   # tiny_afmoe.json, tiny_afmoe_d3.json, tiny_afmoe_d3_rs4.json (tests), data_v3.json (the trunk's data), tronco_v1.json … tronco_v4.json (the trunk's runs);
 │                   # ludwig2.json, tiny.json (format A)
 ├── scripts/        # train.py (the training loop) and test_train_cpu.py, build_shards.py (T1) and test_shards_cpu.py,
 │                   # test_relay_cpu.py, toy_router_loop.py (P29),

@@ -1467,3 +1467,41 @@ Todo lo que se corre, se mide o se decide, en orden. Cada entrada dice qué se h
   1. Aplicar el patch y fijar el `COMMIT` del notebook.
   2. La `sonda` del 790 (~10 min) y la `prueba-arreglo` (~40 min), cada una en su notebook. Sus `.jsonl` y lo que imprimen van a `results/tronco/`.
   3. Si pasan, el turno 1 del `tronco4`.
+
+## 2026-11-27 · `route_scale`: más corridas del banco, y lo que falta para decidirlo
+
+- **Qué:** la pregunta que la P35 dejó abierta. Cuatro corridas más del banco de `results/diagnostico_moe/`, todas desde el paso 0, y la configuración para probar el formato con un `route_scale` distinto de 1. No cambia el modelo ni la receta del `tronco4`: eso lo decide el chat de diseño.
+- **Dónde:** el PC (CPU de 6 núcleos, torch 2.15.0, transformers 5.22.2). Nada corrió en Kaggle.
+- **Archivos:**
+  - en `results/diagnostico_moe/`, `banco_route_scale.txt` y cuatro corridas en `runs/`: `R25_routescale25` (2.5 con SMEBU), `P35b_from0_rs4` (4.0 con la regla por cuantiles y los offsets iguales, como el `tronco4`), y otra semilla con SMEBU, `A_base_seed1` (1.0) y `R_routescale4_seed1` (4.0). Las rutas locales de su fila `config` van enmascaradas, como en las demás;
+  - `configs/tiny_afmoe_d3_rs4.json`: `tiny_afmoe_d3.json` con `route_scale` 4.0, para la T0.1-C.
+- **Por qué importa:** los pesos de los 4 expertos elegidos suman `route_scale`. Con 1.0 salen de cada bloque MoE con el 6% de la potencia del experto compartido, que tiene el ancho de 4 expertos; con 2.5, con el 39%; con 4.0, con la misma (`potencia_elegidos.txt`, al inicio). La norma de salida del bloque no lo compensa: escala la suma de los dos.
+- **Resultado** (`banco_route_scale.txt`): la pérdida de validación en los pasos 100, 200, 300 y 400.
+
+| Corrida | `route_scale` | Paso 100 | Paso 200 | Paso 300 | Paso 400 |
+|---|---|---|---|---|---|
+| SMEBU 0.01 (`A_base`) | 1.0 | 7.077 | 5.322 | 4.162 | 3.520 |
+| SMEBU 0.01 (`R25_routescale25`) | 2.5 | 7.063 | 5.306 | 4.143 | 3.506 |
+| SMEBU 0.01 (`R_routescale4`) | 4.0 | 7.063 | 5.308 | 4.137 | 3.499 |
+| El arreglo de la P35 (`P35b_from0`) | 1.0 | 7.076 | 5.321 | 4.150 | 3.515 |
+| El arreglo de la P35 (`P35b_from0_rs4`) | 4.0 | 7.063 | 5.304 | 4.132 | 3.496 |
+| SMEBU 0.01, semilla 1 (`A_base_seed1`) | 1.0 | 7.094 | 5.327 | 4.139 | 3.544 |
+| SMEBU 0.01, semilla 1 (`R_routescale4_seed1`) | 4.0 | 7.082 | 5.313 | 4.112 | 3.527 |
+
+- **Lo que se ve:**
+  - En las tres parejas, 4.0 queda por debajo de 1.0 en las cuatro evaluaciones. En el paso 400 la diferencia es de 0.017 a 0.021 (0.5–0.6%).
+  - 2.5 queda entre los dos en los pasos 300 y 400.
+  - El balanceo no cambia: el experto más cargado y el menos cargado de cada paso dan 1.62–1.63× y 0.53–0.54× la media en los pasos 300–500 con la semilla 0, y 1.66× / 0.50–0.51× con la semilla 1.
+- **Cuánto vale ese número:**
+  - Dos corridas iguales del banco difieren en ~0.005 de pérdida, así que cada pareja está fuera de ese ruido.
+  - Entre las dos semillas, la misma receta difiere en 0.024 (con 1.0) y 0.028 (con 4.0) en el paso 400, más que el efecto: lo que se sostiene es la comparación dentro de cada pareja, que comparte la inicialización y el orden de los datos.
+  - Es un modelo de 7M parámetros en 500 pasos. No dice cuánto vale en el modelo real ni a 25B tokens. Sí dice que no se ve un costo, ni en la pérdida ni en el balanceo.
+- **Por qué decidirlo ahora:** es lo único de la receta que solo un paso 0 cambia gratis. Subirlo a mitad de una corrida cambia la función de un paso al siguiente: en el banco, de golpe en el paso 250 costó +0.085 de pérdida durante ~50 pasos; con una rampa de 100 pasos no se vio (`banco_resumen.txt`).
+- **El formato:**
+  - Leído en el código de llama.cpp (rama `master`, 27 de noviembre): `conversion/afmoe.py` escribe `route_scale` en el GGUF como `expert_weights_scale`, y `build_moe_ffn` (`src/llama-graph.cpp`) multiplica por ese valor los pesos de los expertos elegidos después de normalizarlos. Es el mismo orden que usa transformers 5.22.2 (`AfmoeTokenChoiceRouter.forward`) y el router de `ludwig_lm/afmoe.py`.
+  - No está probado: la T0.1-C siempre corrió con 1.0. La prueba es `python scripts/smoke_format_afmoe.py --config configs/tiny_afmoe_d3_rs4.json --out results/t0_1c_afmoe_rs4.json`, donde corre la T0.1: necesita llama.cpp compilado, y eso corre en Kaggle.
+- **Pruebas en el PC:** `python -m pyflakes ludwig_lm scripts` sin errores. La prueba lógica de `bench_afmoe.py` con `configs/tiny_afmoe_d3_rs4.json` da el checkpoint exacto, y en ese modelo los pesos de los expertos elegidos suman 4.0. El patch no toca `ludwig_lm/` ni `scripts/train.py`.
+- **Siguiente:** lo decide el chat de diseño, antes del primer turno del `tronco4`. Si es que sí:
+  1. la T0.1-C de arriba, que tiene que pasar;
+  2. una copia de `configs/ludwig2_afmoe_d3.json` con `route_scale` 4.0, con su línea en `test_trunk_model`, y `configs/tronco_v4.json` apuntando a ella;
+  3. la decisión en `DECISIONS.md`.

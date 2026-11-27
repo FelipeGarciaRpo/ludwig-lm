@@ -1,0 +1,140 @@
+route_scale from step 0 in the lab (moe_lab.py): the weights of the 4 chosen experts add up to route_scale.
+Each section starts with the command that printed it, run from results/diagnostico_moe/.
+
+## A_base: 1.0 (the trunk's value), SMEBU 0.01. R25_routescale25: 2.5. R_routescale4: 4.0, where the chosen experts
+## leave a MoE block with the shared expert's output power (potencia_elegidos.txt).
+## P35b_from0: 1.0 with the repo's quantile rule and equal offsets (P35, as tronco4 runs them). P35b_from0_rs4: the
+## same with 4.0.
+## A_base_seed1 and R_routescale4_seed1: 1.0 and 4.0 with SMEBU and --seed 1 (another initialisation and another
+## order of the data).
+## python lab_table.py runs/A_base.jsonl runs/R25_routescale25.jsonl runs/R_routescale4.jsonl runs/P35b_from0.jsonl runs/P35b_from0_rs4.jsonl --from 0 --to 100
+steps 0-100: load = each step's busiest (least busy) expert over the mean, max (min) over the MoE layers
+run                      busiest mean  p95   max | least mean  min | ac1   zigzag(min) flips | bias range  decides | b* speed rms/max  | lse min..max | val ce (step)
+A_base                       2.02    2.54  4.15 |    0.36    0.05 | +0.64   -0.52      0.66  |   0.323     0.77   | 0.00156 0.00372 | 3.86..4.07  | 7.077 (100)
+R25_routescale25             1.99    2.53  4.15 |    0.37    0.06 | +0.68   -0.50      0.68  |   0.316     0.77   | 0.00155 0.00366 | 3.86..4.07  | 7.063 (100)
+R_routescale4                1.98    2.54  4.15 |    0.38    0.08 | +0.66   -0.55      0.74  |   0.313     0.77   | 0.00156 0.00367 | 3.85..4.07  | 7.063 (100)
+P35b_from0                   1.91    2.29  3.57 |    0.41    0.05 | +0.17   -0.44      0.69  |   0.082     0.53   | 0.00107 0.00265 | 3.75..4.07  | 7.076 (100)
+P35b_from0_rs4               1.87    2.26  3.57 |    0.42    0.08 | +0.24   -0.43      0.67  |   0.078     0.52   | 0.00103 0.00254 | 3.74..4.06  | 7.063 (100)
+## python lab_table.py runs/A_base.jsonl runs/R25_routescale25.jsonl runs/R_routescale4.jsonl runs/P35b_from0.jsonl runs/P35b_from0_rs4.jsonl --from 100 --to 300
+steps 100-300: load = each step's busiest (least busy) expert over the mean, max (min) over the MoE layers
+run                      busiest mean  p95   max | least mean  min | ac1   zigzag(min) flips | bias range  decides | b* speed rms/max  | lse min..max | val ce (step)
+A_base                       1.79    2.16  2.49 |    0.45    0.19 | +0.09   -0.50      0.67  |   0.454     0.99   | 0.00106 0.00265 | 3.80..4.03  | 4.162 (300)
+R25_routescale25             1.76    2.07  2.53 |    0.47    0.18 | +0.14   -0.51      0.72  |   0.405     0.97   | 0.00106 0.00264 | 3.79..4.01  | 4.143 (300)
+R_routescale4                1.75    2.05  2.62 |    0.47    0.12 | +0.01   -0.53      0.68  |   0.380     0.96   | 0.00107 0.00268 | 3.77..4.00  | 4.137 (300)
+P35b_from0                   1.73    2.10  2.50 |    0.49    0.24 | +0.03   -0.53      0.68  |   0.116     0.65   | 0.00069 0.00179 | 3.69..3.95  | 4.150 (300)
+P35b_from0_rs4               1.70    2.04  2.29 |    0.50    0.28 | +0.00   -0.46      0.68  |   0.115     0.62   | 0.00067 0.00167 | 3.69..3.94  | 4.132 (300)
+## python lab_table.py runs/A_base.jsonl runs/R25_routescale25.jsonl runs/R_routescale4.jsonl runs/P35b_from0.jsonl runs/P35b_from0_rs4.jsonl --from 300 --to 400
+steps 300-400: load = each step's busiest (least busy) expert over the mean, max (min) over the MoE layers
+run                      busiest mean  p95   max | least mean  min | ac1   zigzag(min) flips | bias range  decides | b* speed rms/max  | lse min..max | val ce (step)
+A_base                       1.63    1.86  2.07 |    0.52    0.30 | -0.15   -0.35      0.62  |   0.382     0.95   | 0.00082 0.00213 | 3.72..3.92  | 3.520 (400)
+R25_routescale25             1.63    1.90  2.10 |    0.53    0.32 | +0.01   -0.51      0.70  |   0.342     0.89   | 0.00085 0.00207 | 3.72..3.85  | 3.506 (400)
+R_routescale4                1.64    1.87  1.96 |    0.52    0.29 | -0.07   -0.48      0.65  |   0.318     0.87   | 0.00080 0.00205 | 3.70..3.85  | 3.499 (400)
+P35b_from0                   1.64    1.94  2.23 |    0.53    0.26 | -0.05   -0.55      0.74  |   0.139     0.56   | 0.00067 0.00176 | 3.62..3.80  | 3.515 (400)
+P35b_from0_rs4               1.62    1.89  2.12 |    0.53    0.26 | +0.06   -0.50      0.64  |   0.126     0.54   | 0.00065 0.00159 | 3.65..3.82  | 3.496 (400)
+## python lab_table.py runs/A_base.jsonl runs/R25_routescale25.jsonl runs/R_routescale4.jsonl runs/P35b_from0.jsonl runs/P35b_from0_rs4.jsonl --from 300 --to 500
+steps 300-500: load = each step's busiest (least busy) expert over the mean, max (min) over the MoE layers
+run                      busiest mean  p95   max | least mean  min | ac1   zigzag(min) flips | bias range  decides | b* speed rms/max  | lse min..max | val ce (step)
+A_base                       1.62    1.90  2.17 |    0.53    0.30 | -0.07   -0.45      0.65  |   0.378     0.94   | 0.00077 0.00196 | 3.65..3.92  | 3.157 (500)
+R25_routescale25             1.62    1.93  2.19 |    0.53    0.29 | -0.03   -0.51      0.70  |   0.332     0.87   | 0.00078 0.00190 | 3.65..3.85  | 3.506 (400)
+R_routescale4                1.63    1.88  2.29 |    0.53    0.29 | -0.03   -0.51      0.67  |   0.307     0.85   | 0.00076 0.00199 | 3.64..3.85  | 3.499 (400)
+P35b_from0                   1.62    1.94  2.23 |    0.54    0.26 | -0.01   -0.53      0.74  |   0.144     0.55   | 0.00062 0.00161 | 3.55..3.80  | 3.515 (400)
+P35b_from0_rs4               1.62    1.89  2.12 |    0.53    0.26 | +0.03   -0.49      0.64  |   0.126     0.53   | 0.00063 0.00156 | 3.59..3.82  | 3.496 (400)
+
+## python lab_extra.py compare 100 runs/A_base.jsonl runs/R25_routescale25.jsonl runs/R_routescale4.jsonl runs/P35b_from0.jsonl runs/P35b_from0_rs4.jsonl
+training loss around step 100
+ step |               A_base |     R25_routescale25 |        R_routescale4 |           P35b_from0 |       P35b_from0_rs4
+   98 |                7.075 |                7.059 |                7.064 |                7.075 |                7.062
+   99 |                7.161 |                7.150 |                7.151 |                7.161 |                7.150
+  100 |                7.180 |                7.168 |                7.169 |                7.180 |                7.170
+  101 |                6.998 |                6.982 |                6.985 |                6.997 |                6.984
+  102 |                6.946 |                6.929 |                6.930 |                6.946 |                6.930
+  103 |                7.017 |                7.003 |                7.002 |                7.016 |                7.002
+  104 |                7.067 |                7.055 |                7.056 |                7.066 |                7.056
+  105 |                6.938 |                6.923 |                6.923 |                6.937 |                6.923
+  106 |                6.989 |                6.974 |                6.976 |                6.989 |                6.976
+  107 |                6.962 |                6.946 |                6.947 |                6.961 |                6.947
+  108 |                6.972 |                6.959 |                6.957 |                6.973 |                6.957
+  109 |                6.942 |                6.927 |                6.927 |                6.942 |                6.926
+  110 |                6.916 |                6.901 |                6.902 |                6.916 |                6.902
+  115 |                6.750 |                6.732 |                6.732 |                6.749 |                6.734
+  120 |                6.818 |                6.804 |                6.805 |                6.817 |                6.804
+  130 |                6.440 |                6.426 |                6.425 |                6.440 |                6.425
+  150 |                6.111 |                6.094 |                6.094 |                6.109 |                6.094
+  200 |                5.346 |                5.328 |                5.333 |                5.345 |                5.333
+50-step means of the training loss
+   50 |                7.559 |                7.549 |                7.552 |                7.559 |                7.552
+  100 |                6.606 |                6.589 |                6.589 |                6.605 |                6.589
+  150 |                5.731 |                5.714 |                5.718 |                5.731 |                5.715
+  200 |                4.964 |                4.946 |                4.948 |                4.964 |                4.946
+  250 |                4.393 |                4.373 |                4.368 |                4.394 |                4.365
+  300 |                3.929 |                3.910 |                3.903 |                3.928 |                3.901
+  350 |                3.597 |                3.579 |                3.574 |                3.594 |                3.567
+  400 |                3.449 |                3.430 |                3.422 |                3.443 |                3.419
+  450 |                3.302 |                3.288 |                3.284 |                3.302 |                3.281
+validation loss
+  100 |                7.077 |                7.063 |                7.063 |                7.076 |                7.063
+  200 |                5.322 |                5.306 |                5.308 |                5.321 |                5.304
+  300 |                4.162 |                4.143 |                4.137 |                4.150 |                4.132
+  400 |                3.520 |                3.506 |                3.499 |                3.515 |                3.496
+busiest / least busy expert over the mean, steps 150-499
+      |          1.68 / 0.50 |          1.67 / 0.51 |          1.67 / 0.51 |          1.65 / 0.52 |          1.65 / 0.52
+
+## python lab_table.py runs/A_base_seed1.jsonl runs/R_routescale4_seed1.jsonl --from 0 --to 100
+steps 0-100: load = each step's busiest (least busy) expert over the mean, max (min) over the MoE layers
+run                      busiest mean  p95   max | least mean  min | ac1   zigzag(min) flips | bias range  decides | b* speed rms/max  | lse min..max | val ce (step)
+A_base_seed1                 1.96    2.38  2.94 |    0.37    0.04 | +0.31   -0.51      0.62  |   0.309     0.74   | 0.00163 0.00403 | 3.87..4.05  | 7.094 (100)
+R_routescale4_seed1          1.93    2.37  2.85 |    0.40    0.07 | +0.36   -0.44      0.63  |   0.294     0.74   | 0.00164 0.00411 | 3.87..4.05  | 7.082 (100)
+## python lab_table.py runs/A_base_seed1.jsonl runs/R_routescale4_seed1.jsonl --from 100 --to 300
+steps 100-300: load = each step's busiest (least busy) expert over the mean, max (min) over the MoE layers
+run                      busiest mean  p95   max | least mean  min | ac1   zigzag(min) flips | bias range  decides | b* speed rms/max  | lse min..max | val ce (step)
+A_base_seed1                 1.79    2.13  2.85 |    0.46    0.24 | +0.13   -0.44      0.64  |   0.442     0.98   | 0.00105 0.00266 | 3.76..4.02  | 4.139 (300)
+R_routescale4_seed1          1.77    2.14  2.43 |    0.47    0.24 | -0.02   -0.50      0.67  |   0.370     0.96   | 0.00104 0.00272 | 3.70..4.03  | 4.112 (300)
+## python lab_table.py runs/A_base_seed1.jsonl runs/R_routescale4_seed1.jsonl --from 300 --to 400
+steps 300-400: load = each step's busiest (least busy) expert over the mean, max (min) over the MoE layers
+run                      busiest mean  p95   max | least mean  min | ac1   zigzag(min) flips | bias range  decides | b* speed rms/max  | lse min..max | val ce (step)
+A_base_seed1                 1.69    1.96  2.21 |    0.51    0.33 | +0.02   -0.60      0.76  |   0.374     0.94   | 0.00083 0.00215 | 3.74..3.88  | 3.544 (400)
+R_routescale4_seed1          1.69    1.99  2.19 |    0.49    0.24 | +0.14   -0.60      0.68  |   0.289     0.86   | 0.00084 0.00209 | 3.70..3.85  | 3.527 (400)
+## python lab_table.py runs/A_base_seed1.jsonl runs/R_routescale4_seed1.jsonl --from 300 --to 500
+steps 300-500: load = each step's busiest (least busy) expert over the mean, max (min) over the MoE layers
+run                      busiest mean  p95   max | least mean  min | ac1   zigzag(min) flips | bias range  decides | b* speed rms/max  | lse min..max | val ce (step)
+A_base_seed1                 1.66    1.93  2.21 |    0.51    0.29 | +0.06   -0.48      0.70  |   0.368     0.93   | 0.00079 0.00206 | 3.65..3.88  | 3.544 (400)
+R_routescale4_seed1          1.66    1.95  2.19 |    0.50    0.17 | +0.06   -0.58      0.71  |   0.284     0.85   | 0.00079 0.00195 | 3.63..3.85  | 3.527 (400)
+
+## python lab_extra.py compare 100 runs/A_base_seed1.jsonl runs/R_routescale4_seed1.jsonl
+training loss around step 100
+ step |         A_base_seed1 |  R_routescale4_seed1
+   98 |                7.105 |                7.093
+   99 |                7.167 |                7.158
+  100 |                7.166 |                7.157
+  101 |                7.123 |                7.114
+  102 |                7.084 |                7.073
+  103 |                7.009 |                6.998
+  104 |                6.980 |                6.972
+  105 |                7.016 |                7.005
+  106 |                7.028 |                7.017
+  107 |                6.942 |                6.931
+  108 |                6.899 |                6.887
+  109 |                6.919 |                6.908
+  110 |                6.922 |                6.913
+  115 |                6.831 |                6.822
+  120 |                6.824 |                6.816
+  130 |                6.507 |                6.495
+  150 |                6.012 |                5.997
+  200 |                5.226 |                5.205
+50-step means of the training loss
+   50 |                7.582 |                7.576
+  100 |                6.615 |                6.602
+  150 |                5.701 |                5.688
+  200 |                5.008 |                4.988
+  250 |                4.418 |                4.394
+  300 |                3.965 |                3.945
+  350 |                3.666 |                3.646
+  400 |                3.490 |                3.472
+  450 |                3.277 |                3.260
+validation loss
+  100 |                7.094 |                7.082
+  200 |                5.327 |                5.313
+  300 |                4.139 |                4.112
+  400 |                3.544 |                3.527
+busiest / least busy expert over the mean, steps 150-499
+      |          1.71 / 0.49 |          1.70 / 0.49

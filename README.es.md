@@ -265,7 +265,7 @@ ludwig-lm/
 │                   # · relay.py: el candado, las subidas y el respaldo del relevo
 │                   # · checkpoint.py: checkpoints con reanudación verificada · model.py: formato A (respaldo)
 ├── configs/        # ludwig2_afmoe_d3.json (el modelo real: 3 capas densas, 44 expertos), ludwig2_afmoe.json (1 y 40: las dos primeras corridas),
-│                   # tiny_afmoe.json, tiny_afmoe_d3.json (pruebas), data_v3.json (los datos del tronco), tronco_v1.json … tronco_v4.json (las corridas del tronco);
+│                   # tiny_afmoe.json, tiny_afmoe_d3.json, tiny_afmoe_d3_rs4.json (pruebas), data_v3.json (los datos del tronco), tronco_v1.json … tronco_v4.json (las corridas del tronco);
 │                   # ludwig2.json, tiny.json (formato A)
 ├── scripts/        # train.py (el bucle de entrenamiento) y test_train_cpu.py, build_shards.py (T1) y test_shards_cpu.py,
 │                   # test_relay_cpu.py, toy_router_loop.py (P29),
