@@ -18,7 +18,8 @@ the reserved memory under the G0 limit of 13.5 GiB. What a real run adds:
   router       every step logs the router's health (P29): its mean level (z_router; --z-router-alarm warns when
                it stays low, P30) and the smallest median gap between each token's k-th and (k+1)-th expert score;
                each evaluation logs it per MoE layer, with the level as z and signed lse, and flags a layer near
-               the first trunk's broken ones (P31)
+               the first trunk's broken ones (P31). It also logs what the expert bias has to cancel (P35): the part
+               of the router's input common to all tokens and the offset it gives each expert
   checkpoints  ludwig_lm.checkpoint: the full state; each resume checks the state bit for bit and the first
                batch against its saved hash
   time limit   --max-hours: save and stop cleanly, before Kaggle's 12 h
@@ -437,6 +438,11 @@ class Trainer:
         n_moe, n_exp = len(self.balancer.blocks), self.cfg.num_experts
         health = torch.zeros(4, n_moe, dtype=torch.float64, device=self.device)        # margin, bias decides, z, lse
         load = torch.zeros(n_moe, n_exp, dtype=torch.float64, device=self.device)      # tokens per expert
+        # P35, per MoE layer: each expert's sums of logit, logit², score and score² over the tokens; and the
+        # router's input: its sum over the tokens, its summed squared norm, and the number of tokens
+        d_model = self.cfg.hidden_size
+        probe = torch.zeros(n_moe, 4, n_exp, dtype=torch.float64, device=self.device)
+        xin = torch.zeros(n_moe, d_model + 2, dtype=torch.float64, device=self.device)
         n_mb = 0
         for j, name in enumerate(names):
             val_ids, val_bytes = self.val_sets[name]
@@ -452,6 +458,12 @@ class Trainer:
                                        mets["router_lse_layers"]]).double()
                 for li, c in enumerate(mets["chosen"]):
                     load[li] += torch.bincount(c.reshape(-1), minlength=n_exp).double()
+                    lg = mets["router_logits"][li].double()
+                    sc = torch.sigmoid(lg)
+                    probe[li] += torch.stack([lg.sum(0), lg.pow(2).sum(0), sc.sum(0), sc.pow(2).sum(0)])
+                    xin[li, :d_model] += mets["router_xsum"][li].double()
+                    xin[li, d_model] += mets["router_xsq"][li].double()
+                    xin[li, d_model + 1] += lg.shape[0]
                 n_mb += 1
             per[j, 2] += val_bytes
         self.model.train()
@@ -460,12 +472,29 @@ class Trainer:
         tot = torch.cat([per.reshape(-1), (ent / max(1, n_mb)).reshape(1), (health / max(1, n_mb)).reshape(-1),
                          load.reshape(-1)])
         dist.all_reduce(tot)
+        dist.all_reduce(probe)
+        dist.all_reduce(xin)
         k = per.numel()
         per, ent_all = tot[:k].reshape(len(names), 3), float(tot[k])
         health = tot[k + 1:k + 1 + 4 * n_moe].reshape(4, n_moe) / self.world
         load = tot[k + 1 + 4 * n_moe:].reshape(n_moe, n_exp)
         load = load / load.mean(1, keepdim=True).clamp_min(1.0)
         bias_range = [float(b.expert_bias.max() - b.expert_bias.min()) for b in self.balancer.blocks]
+        # P35: a router logit is w_i · x. The part of x common to all tokens (its mean) gives expert i the same
+        # extra on every token, its offset w_i · x_mean = its mean logit; the bias is there to cancel the
+        # differences between the experts' offsets.
+        n_in = xin[:, d_model + 1].clamp_min(1.0)
+        common = (xin[:, :d_model] / n_in[:, None]).pow(2).sum(1) / (xin[:, d_model] / n_in).clamp_min(1e-30)
+        offset = probe[:, 0] / n_in[:, None]                                          # (layers, experts)
+        specific = (probe[:, 1] / n_in[:, None] - offset.pow(2)).clamp_min(0).sqrt()   # spread over the tokens
+        s_mean = probe[:, 2] / n_in[:, None]
+        s_sd = (probe[:, 3] / n_in[:, None] - s_mean.pow(2)).clamp_min(0).sqrt()
+        if n_moe:
+            bias = torch.stack([b.expert_bias.double() for b in self.balancer.blocks])
+            b_c, s_c = bias - bias.mean(1, keepdim=True), s_mean - s_mean.mean(1, keepdim=True)
+            corr = (b_c * s_c).sum(1) / (b_c.norm(dim=1) * s_c.norm(dim=1)).clamp_min(1e-30)
+        else:
+            corr = common
         lam = self.balancer.lam
         nats, n_tok, n_bytes = (float(x) for x in per.sum(0))
         ce = nats / n_tok
@@ -478,6 +507,14 @@ class Trainer:
                "bias_range": [round(x, 5) for x in bias_range],
                "router_z": [round(float(x), 4) for x in health[2]],
                "router_lse": [round(float(x), 4) for x in health[3]],
+               "router_common": [round(float(x), 4) for x in common],
+               "router_offset_std": [round(float(x), 4) for x in offset.std(1)] if n_exp > 1 else [],
+               "router_specific_std": [round(float(x), 4) for x in specific.mean(1)],
+               "score_mean_min": [round(float(x), 4) for x in s_mean.min(1).values],
+               "score_mean_max": [round(float(x), 4) for x in s_mean.max(1).values],
+               "score_sd_min": [round(float(x), 4) for x in s_sd.min(1).values],
+               "score_sd_max": [round(float(x), 4) for x in s_sd.max(1).values],
+               "bias_score_corr": [round(float(x), 3) for x in corr],
                "val_load_max_over_mean": [round(float(x), 3) for x in load.max(1).values], "lam": lam, **extra}
         if names != ["val"]:
             row["val_bpb_by_domain"] = {n: round(float(per[j, 0] / LN2 / per[j, 2]), 5) for j, n in enumerate(names)}
@@ -493,6 +530,12 @@ class Trainer:
             self.log.say(f"[eval] router: level (lse) {min(lse):.2f} to {max(lse):.2f} by layer, lowest in MoE layer "
                          f"{low}; z {min(zl):.2f} to {max(zl):.2f}; the bias decides {min(dec):.0%} to {max(dec):.0%} "
                          f"of tokens; bias range up to {max(over):.0f}× the gap; busiest expert {max(busy):.2f}× the mean")
+            com, ofs, spe = row["router_common"], row["router_offset_std"], row["router_specific_std"]
+            cor = row["bias_score_corr"]
+            self.log.say(f"[eval] router input: {min(com):.0%} to {max(com):.0%} of it is common to all tokens; the "
+                         f"experts' offsets spread {min(ofs):.2f} to {max(ofs):.2f} logits, against {min(spe):.2f} to "
+                         f"{max(spe):.2f} between tokens; bias and mean score correlate {min(cor):+.2f} to "
+                         f"{max(cor):+.2f}")
             # P31's thresholds, from the probe of the first trunk: healthy layers reached 66%, 17× and 1.85×,
             # the broken ones started at 92%, 22× and 4.49×. A layer near them is worth a look before the stop.
             watch = [i for i in range(n_moe) if dec[i] > WATCH_DECIDES or over[i] > WATCH_RANGE_OVER_GAP

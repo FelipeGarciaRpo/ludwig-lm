@@ -7,9 +7,9 @@ Everything here works around the model, never changes its parameters or their na
 * ``padded_bmm``: an experts kernel registered in transformers' experts interface. It sorts the
   token-expert pairs by expert, pads every expert to the largest load and runs two batched matmuls.
   On the T4 it beat one matmul per expert by 16% with balanced routing (bench v1).
-* The router runs in FP32 outside autocast. Each forward records (router logits, chosen experts)
-  for the losses and the load balancing; the recomputation inside activation checkpointing is
-  not recorded twice.
+* The router runs in FP32 outside autocast. Each forward records (router logits, chosen experts, the
+  sum and the squared norm of its input) for the losses, the load balancing and the router's probe (P35);
+  the recomputation inside activation checkpointing is not recorded twice.
 * ``expert_bias`` becomes a replicated buffer: FSDP2 then leaves it whole on every rank, and the
   balancer updates it the same way everywhere. The state-dict key does not change.
 * ``ExpertBalancer``: aux-loss-free balancing. SMEBU (Arcee Trinity: tanh-clamped, re-centred,
@@ -138,7 +138,8 @@ ExpertsInterface.register("padded_bmm", padded_bmm_experts_forward)
 
 
 # --------------------------------------------------------------------------- router
-_RECORD: list | None = None          # set by LudwigAfmoe.forward: [(router_logits, chosen experts), ...]
+_RECORD: list | None = None          # set by LudwigAfmoe.forward: [(router logits, chosen experts, the sum of the
+#                                      router's input over the tokens, its squared norm), ...], one per MoE layer
 
 
 def _router_forward_fp32(self, hidden_states, expert_bias):
@@ -150,7 +151,9 @@ def _router_forward_fp32(self, hidden_states, expert_bias):
         top = scores.gather(1, chosen)
         top = top / (top.sum(dim=-1, keepdim=True) + 1e-20) * self.route_scale
     if _RECORD is not None and torch._C._current_graph_task_id() == -1:              # not a recomputation
-        _RECORD.append((logits, chosen))
+        with torch.no_grad():        # the input's sum and squared norm: how much of it is common to all tokens (P35)
+            xf = x.detach().float()
+            _RECORD.append((logits, chosen, xf.sum(0), torch.linalg.vector_norm(xf).square()))
     return logits, top, chosen
 
 
@@ -238,7 +241,7 @@ def moe_losses(records, batch: int, seq: int, n_exp: int, k: int, floor_lse: flo
     ent = torch.zeros((), device=records[0][0].device)
     fl = torch.zeros((), device=records[0][0].device)
     margins, decides, zs, lses = [], [], [], []
-    for logits, chosen in records:
+    for logits, chosen, *_ in records:
         s = torch.sigmoid(logits)
         pt = s / s.sum(-1, keepdim=True)                                                 # (B*T, E)
         p = pt.view(batch, seq, n_exp).mean(1)                                           # (B, E)
@@ -294,7 +297,8 @@ class LudwigAfmoe(nn.Module):
                    "router_floor": floor.detach(),
                    "router_entropy": ent, "router_margin": margin, "bias_decides": decides,
                    "router_z_layers": z_layers, "router_lse_layers": lse_layers,
-                   "chosen": [c for _, c in records], "router_logits": [lg.detach() for lg, _ in records]}
+                   "chosen": [r[1] for r in records], "router_logits": [r[0].detach() for r in records],
+                   "router_xsum": [r[2] for r in records], "router_xsq": [r[3] for r in records]}
         return loss, metrics
 
 

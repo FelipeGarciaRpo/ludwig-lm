@@ -282,11 +282,21 @@ def test_training():
     check(all(r["ce"] == r["ce"] for r in sa.values()), "no NaN")
     check(all(r["margin_min"] > 0 and 0 <= r["bias_decides_max"] <= 1 and r["lam_over_margin"] > 0 and r["lam"] == 0.01
               for r in sa.values()), "every step logs the router's health: score gap, λ over it, how often the bias decides")
-    per_layer = ("router_margin", "bias_decides", "bias_range", "val_load_max_over_mean", "router_z", "router_lse")
+    per_layer = ("router_margin", "bias_decides", "bias_range", "val_load_max_over_mean", "router_z", "router_lse",
+                 "router_common", "router_offset_std", "router_specific_std", "score_mean_min", "score_mean_max",
+                 "score_sd_min", "score_sd_max", "bias_score_corr")
     check(all(r[k] and len(r[k]) == len(ea[0]["router_margin"]) for r in ea.values() for k in per_layer),
           f"every evaluation logs the router per MoE layer ({len(ea[0]['router_margin'])} layers)")
     check(all(z >= lse * lse - 1e-4 for r in ea.values() for z, lse in zip(r["router_z"], r["router_lse"])),
           "each layer's level: z, the mean of lse², is at least the square of the signed mean lse")
+    check(all(0 < c < 1 and o > 0 and s > 0 and 0 < lo <= hi < 1 and abs(cr) <= 1
+              for r in ea.values() for c, o, s, lo, hi, cr in zip(r["router_common"], r["router_offset_std"],
+                                                                 r["router_specific_std"], r["score_mean_min"],
+                                                                 r["score_mean_max"], r["bias_score_corr"]))
+          and all(cr == 0 for cr in ea[0]["bias_score_corr"]) and all(cr < 0 for cr in ea[8]["bias_score_corr"]),
+          f"every evaluation logs what the bias has to cancel (P35): at step 8, {min(ea[8]['router_common']):.0%} to "
+          f"{max(ea[8]['router_common']):.0%} of the router's input is common to all tokens, and the bias runs against "
+          f"the experts' mean scores (correlation {max(ea[8]['bias_score_corr']):+.2f} at most)")
 
     code, b = torchrun("B", WORK / "b.jsonl", "--resume", str(WORK / "ckpt_a" / "step_000003"),
                        "--save-dir", str(WORK / "ckpt_b"))
@@ -380,7 +390,8 @@ def test_training():
     ee = by(e, "eval")
     check(code == 0 and (by(e, "end") or [{}])[-1].get("status") == "evaluated" and not by(e, "step")
           and len(ee) == 1 and ee[0]["step"] == 3 and ee[0]["val_bpb"] == eb[3]["val_bpb"]
-          and ee[0]["router_margin"] == eb[3]["router_margin"],
+          and ee[0]["router_margin"] == eb[3]["router_margin"] and ee[0]["router_common"] == eb[3]["router_common"]
+          and ee[0]["router_offset_std"] == eb[3]["router_offset_std"],
           "E: --eval-only evaluates A's step 3 as B did after resuming, router included, and takes no step")
 
 
